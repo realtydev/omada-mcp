@@ -32,7 +32,7 @@ import { logger } from '../utils/logger.js';
 
 import { ActionOperations } from './action.js';
 import { ApRadioOperations } from './apRadio.js';
-import { AuthManager } from './auth.js';
+import { AuthManager, type RequestAuthManager, WebAuthManager } from './auth.js';
 import { ClientOperations } from './client.js';
 import { DeviceOperations } from './device.js';
 import { GenericOperations } from './generic.js';
@@ -54,7 +54,7 @@ export type OmadaClientOptions = EnvironmentConfig;
 export class OmadaClient {
     private readonly http: AxiosInstance;
 
-    private readonly auth: AuthManager;
+    private readonly auth: RequestAuthManager;
 
     private readonly request: RequestHandler;
 
@@ -99,7 +99,10 @@ export class OmadaClient {
         this.http = axios.create(axiosOptions);
 
         // Initialize operation modules
-        this.auth = new AuthManager(this.http, options.clientId, options.clientSecret, options.omadacId);
+        this.auth =
+            options.authMode === 'web'
+                ? new WebAuthManager(this.http, options.webUsername ?? '', options.webPassword ?? '', options.omadacId)
+                : new AuthManager(this.http, options.clientId ?? '', options.clientSecret ?? '', options.omadacId);
         this.request = new RequestHandler(this.http, this.auth);
         this.siteOps = new SiteOperations(this.request, this.buildOmadaPath.bind(this), options.siteId);
         this.deviceOps = new DeviceOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));

@@ -36,8 +36,9 @@ const envSchema = z
     .object({
         // Omada Client Configuration
         baseUrl: z.string().url({ message: 'OMADA_BASE_URL must be a valid URL' }),
-        clientId: z.string().min(1, 'OMADA_CLIENT_ID is required'),
-        clientSecret: z.string().min(1, 'OMADA_CLIENT_SECRET is required'),
+        authMode: z.enum(['oauth', 'web']).optional().default('oauth'),
+        clientId: z.string().min(1).optional(),
+        clientSecret: z.string().min(1).optional(),
         omadacId: z.string().min(1, 'OMADA_OMADAC_ID is required'),
         siteId: z.string().min(1).optional(),
         webUsername: z.string().min(1).optional(),
@@ -63,6 +64,30 @@ const envSchema = z
         httpNgrokEnabled: createBooleanStringSchema(false),
         httpNgrokAuthToken: z.string().optional(),
     })
+    .refine(
+        (data) => {
+            if (data.authMode === 'oauth' && (!data.clientId || !data.clientSecret)) {
+                return false;
+            }
+            return true;
+        },
+        {
+            message: 'OMADA_CLIENT_ID and OMADA_CLIENT_SECRET are required when OMADA_AUTH_MODE=oauth',
+            path: ['authMode'],
+        }
+    )
+    .refine(
+        (data) => {
+            if (data.authMode === 'web' && (!data.webUsername || !data.webPassword)) {
+                return false;
+            }
+            return true;
+        },
+        {
+            message: 'OMADA_WEB_USERNAME and OMADA_WEB_PASSWORD are required when OMADA_AUTH_MODE=web',
+            path: ['authMode'],
+        }
+    )
     .refine(
         (data) => {
             // Validate httpBindAddr if provided
@@ -100,8 +125,9 @@ const envSchema = z
 export interface EnvironmentConfig {
     // Omada Client Configuration
     baseUrl: string;
-    clientId: string;
-    clientSecret: string;
+    authMode: 'oauth' | 'web';
+    clientId?: string;
+    clientSecret?: string;
     omadacId: string;
     siteId?: string;
     webUsername?: string;
@@ -132,6 +158,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Environ
     const parsed = envSchema.safeParse({
         // Omada Client Configuration
         baseUrl: env.OMADA_BASE_URL,
+        authMode: env.OMADA_AUTH_MODE,
         clientId: env.OMADA_CLIENT_ID,
         clientSecret: env.OMADA_CLIENT_SECRET,
         omadacId: env.OMADA_OMADAC_ID,
@@ -183,6 +210,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Environ
     return {
         // Omada Client Configuration
         baseUrl: parsed.data.baseUrl.replace(/\/$/, ''),
+        authMode: parsed.data.authMode,
         clientId: parsed.data.clientId,
         clientSecret: parsed.data.clientSecret,
         omadacId: parsed.data.omadacId,
