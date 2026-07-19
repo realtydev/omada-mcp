@@ -29,6 +29,7 @@ describe('config', () => {
             const config = loadConfigFromEnv(mockEnv);
 
             expect(config.baseUrl).toBe('https://omada.example.com');
+            expect(config.authMode).toBe('oauth');
             expect(config.clientId).toBe('test-client-id');
             expect(config.clientSecret).toBe('test-client-secret');
             expect(config.omadacId).toBe('test-omadac-id');
@@ -62,13 +63,13 @@ describe('config', () => {
         it('should throw error if OMADA_CLIENT_ID is missing', () => {
             delete mockEnv.OMADA_CLIENT_ID;
 
-            expect(() => loadConfigFromEnv(mockEnv)).toThrow('Invalid environment configuration');
+            expect(() => loadConfigFromEnv(mockEnv)).toThrow('OMADA_CLIENT_ID and OMADA_CLIENT_SECRET are required when OMADA_AUTH_MODE=oauth');
         });
 
         it('should throw error if OMADA_CLIENT_SECRET is missing', () => {
             delete mockEnv.OMADA_CLIENT_SECRET;
 
-            expect(() => loadConfigFromEnv(mockEnv)).toThrow('Invalid environment configuration');
+            expect(() => loadConfigFromEnv(mockEnv)).toThrow('OMADA_CLIENT_ID and OMADA_CLIENT_SECRET are required when OMADA_AUTH_MODE=oauth');
         });
 
         it('should throw error if OMADA_OMADAC_ID is missing', () => {
@@ -82,6 +83,34 @@ describe('config', () => {
             const config = loadConfigFromEnv(mockEnv);
 
             expect(config.siteId).toBe('test-site-id');
+        });
+
+        it('should accept web auth mode without OAuth credentials', () => {
+            mockEnv = {
+                OMADA_BASE_URL: 'https://omada.example.com',
+                OMADA_AUTH_MODE: 'web',
+                OMADA_OMADAC_ID: 'test-omadac-id',
+                OMADA_WEB_USERNAME: 'admin',
+                OMADA_WEB_PASSWORD: 'password',
+            };
+
+            const config = loadConfigFromEnv(mockEnv);
+
+            expect(config.authMode).toBe('web');
+            expect(config.clientId).toBeUndefined();
+            expect(config.clientSecret).toBeUndefined();
+            expect(config.webUsername).toBe('admin');
+            expect(config.webPassword).toBe('password');
+        });
+
+        it('should require web credentials in web auth mode', () => {
+            mockEnv = {
+                OMADA_BASE_URL: 'https://omada.example.com',
+                OMADA_AUTH_MODE: 'web',
+                OMADA_OMADAC_ID: 'test-omadac-id',
+            };
+
+            expect(() => loadConfigFromEnv(mockEnv)).toThrow('OMADA_WEB_USERNAME and OMADA_WEB_PASSWORD are required when OMADA_AUTH_MODE=web');
         });
 
         it('should parse OMADA_STRICT_SSL as true', () => {
@@ -304,6 +333,7 @@ describe('config', () => {
         it('should load complete configuration with all fields', () => {
             mockEnv = {
                 OMADA_BASE_URL: 'https://omada.example.com/',
+                OMADA_AUTH_MODE: 'oauth',
                 OMADA_CLIENT_ID: 'client-123',
                 OMADA_CLIENT_SECRET: 'secret-456',
                 OMADA_OMADAC_ID: 'omadac-789',
@@ -330,10 +360,13 @@ describe('config', () => {
 
             expect(config).toEqual({
                 baseUrl: 'https://omada.example.com',
+                authMode: 'oauth',
                 clientId: 'client-123',
                 clientSecret: 'secret-456',
                 omadacId: 'omadac-789',
                 siteId: 'site-abc',
+                webUsername: undefined,
+                webPassword: undefined,
                 strictSsl: false,
                 requestTimeout: 10000,
                 logLevel: 'debug',

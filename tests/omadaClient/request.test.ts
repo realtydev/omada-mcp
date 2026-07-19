@@ -9,6 +9,7 @@ describe('RequestHandler', () => {
     };
     let mockAuthManager: {
         getAccessToken: ReturnType<typeof vi.fn>;
+        getAuthHeaders: ReturnType<typeof vi.fn>;
         refreshAccessToken: ReturnType<typeof vi.fn>;
         clearToken?: ReturnType<typeof vi.fn>;
     };
@@ -20,6 +21,7 @@ describe('RequestHandler', () => {
 
         mockAuthManager = {
             getAccessToken: vi.fn().mockResolvedValue('test-access-token'),
+            getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: 'AccessToken=test-access-token' }),
             refreshAccessToken: vi.fn().mockResolvedValue(undefined),
             clearToken: vi.fn(),
         };
@@ -42,7 +44,7 @@ describe('RequestHandler', () => {
             const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
             const result = await handler.get<{ errorCode: number; msg: string; result: { data: string } }>('/api/test');
 
-            expect(mockAuthManager.getAccessToken).toHaveBeenCalled();
+            expect(mockAuthManager.getAuthHeaders).toHaveBeenCalled();
             expect(mockAxiosInstance.request).toHaveBeenCalledWith(
                 expect.objectContaining({
                     method: 'GET',

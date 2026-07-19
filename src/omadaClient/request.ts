@@ -3,7 +3,7 @@ import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosRequestHe
 import type { OmadaApiResponse, PaginatedResult } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 
-import type { AuthManager } from './auth.js';
+import type { RequestAuthManager } from './auth.js';
 
 const DEFAULT_PAGE_SIZE = 200;
 
@@ -13,7 +13,7 @@ const DEFAULT_PAGE_SIZE = 200;
 export class RequestHandler {
     constructor(
         private readonly http: AxiosInstance,
-        private readonly auth: AuthManager
+        private readonly auth: RequestAuthManager
     ) {}
 
     /**
@@ -48,13 +48,13 @@ export class RequestHandler {
      * Make an arbitrary HTTP request to the Omada API.
      */
     public async request<T>(config: AxiosRequestConfig, retry = true): Promise<T> {
-        const accessToken = await this.auth.getAccessToken();
+        const authHeaders = await this.auth.getAuthHeaders();
 
         const requestConfig: AxiosRequestConfig = {
             ...config,
             headers: {
                 ...(config.headers ?? {}),
-                Authorization: `AccessToken=${accessToken}`,
+                ...authHeaders,
             },
         };
 

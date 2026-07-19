@@ -16,6 +16,7 @@ Add to your MCP client configuration:
       "args": ["/path/to/omada-mcp/dist/index.js"],
       "env": {
         "OMADA_BASE_URL": "https://your-omada-controller.local",
+        "OMADA_AUTH_MODE": "oauth",
         "OMADA_CLIENT_ID": "your-client-id",
         "OMADA_CLIENT_SECRET": "your-client-secret",
         "OMADA_OMADAC_ID": "your-omadac-id",
@@ -37,6 +38,7 @@ Add to your MCP client configuration:
       "args": [
         "run", "-i", "--rm",
         "-e", "OMADA_BASE_URL=https://your-omada-controller.local",
+        "-e", "OMADA_AUTH_MODE=oauth",
         "-e", "OMADA_CLIENT_ID=your-client-id",
         "-e", "OMADA_CLIENT_SECRET=your-client-secret",
         "-e", "OMADA_OMADAC_ID=your-omadac-id",
@@ -69,12 +71,17 @@ Available at `http://localhost:3000/mcp` (stream) or `http://localhost:3000/sse`
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `OMADA_BASE_URL` | Yes | - | Omada controller URL |
-| `OMADA_CLIENT_ID` | Yes | - | OAuth client ID |
-| `OMADA_CLIENT_SECRET` | Yes | - | OAuth client secret |
+| `OMADA_AUTH_MODE` | No | `oauth` | `oauth` for classic OpenAPI credentials, `web` for Fusion web-session auth |
+| `OMADA_CLIENT_ID` | OAuth mode | - | OAuth client ID |
+| `OMADA_CLIENT_SECRET` | OAuth mode | - | OAuth client secret |
 | `OMADA_OMADAC_ID` | Yes | - | Controller ID (omadacId) |
 | `OMADA_SITE_ID` | No | - | Default site ID |
+| `OMADA_WEB_USERNAME` | Web mode | - | Omada web UI username |
+| `OMADA_WEB_PASSWORD` | Web mode | - | Omada web UI password |
 | `OMADA_STRICT_SSL` | No | `true` | SSL verification (`false` for self-signed) |
 | `OMADA_TIMEOUT` | No | `30000` | Request timeout (ms) |
+
+For Fusion gateways that do not expose Platform Integration OAuth credentials, set `OMADA_AUTH_MODE=web` and provide `OMADA_WEB_USERNAME` / `OMADA_WEB_PASSWORD`. The server logs in through `/{omadacId}/api/v2/login` and uses that web session for OpenAPI requests.
 
 ### MCP Server
 
