@@ -136,7 +136,43 @@ export class RequestHandler {
                 return this.request<T>(config, false);
             }
 
-            throw error;
+            throw this.toDetailedError(method, url, error);
+        }
+    }
+
+    /**
+     * Build an error that surfaces the HTTP status, endpoint, and response body/message for a
+     * request that failed at the HTTP level, instead of losing that detail behind axios's generic
+     * "Request failed with status code N" message.
+     */
+    private toDetailedError(method: string, url: string, error: unknown): Error {
+        if (!axios.isAxiosError(error) || !error.response) {
+            return error instanceof Error ? error : new Error(String(error));
+        }
+
+        const status = error.response.status;
+        const body = error.response.data as { msg?: string; errorCode?: number } | undefined;
+        const detail = body?.msg ?? this.safeStringifyBody(error.response.data) ?? error.message;
+        const errorCodePart = body?.errorCode !== undefined ? ` (errorCode: ${body.errorCode})` : '';
+        return new Error(`Omada API request failed: ${method} ${url} (HTTP ${status})${errorCodePart} - ${detail}`);
+    }
+
+    /**
+     * Stringify a non-2xx response body for inclusion in an error message.
+     */
+    private safeStringifyBody(data: unknown): string | undefined {
+        if (data === undefined || data === null) {
+            return undefined;
+        }
+
+        if (typeof data === 'string') {
+            return data;
+        }
+
+        try {
+            return JSON.stringify(data);
+        } catch {
+            return undefined;
         }
     }
 

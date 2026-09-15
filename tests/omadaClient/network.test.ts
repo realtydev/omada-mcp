@@ -256,6 +256,79 @@ describe('NetworkOperations', () => {
         });
     });
 
+    describe('listEvents', () => {
+        it('should fetch events from the logs/events endpoint with a default 7-day time range', async () => {
+            const mockResult: PaginatedResult<unknown> = {
+                data: [{ id: 'evt-1', message: 'Device connected' }],
+                totalRows: 1,
+                currentPage: 1,
+                currentSize: 10,
+            };
+            const mockResponse: OmadaApiResponse<PaginatedResult<unknown>> = {
+                errorCode: 0,
+                result: mockResult,
+            };
+
+            vi.mocked(mockRequest.get).mockResolvedValue(mockResponse);
+            vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+
+            const result = await networkOps.listEvents('site-123', 1, 10);
+
+            expect(mockRequest.get).toHaveBeenCalledWith('/openapi/v1/test-omadac/sites/site-123/logs/events', {
+                page: 1,
+                pageSize: 10,
+                'filters.timeStart': 1_700_000_000_000 - 7 * 24 * 60 * 60 * 1000,
+                'filters.timeEnd': 1_700_000_000_000,
+            });
+            expect(result).toEqual(mockResult);
+
+            vi.restoreAllMocks();
+        });
+
+        it('should use an explicit time range when provided', async () => {
+            const mockResponse: OmadaApiResponse<PaginatedResult<unknown>> = {
+                errorCode: 0,
+                result: { data: [], totalRows: 0, currentPage: 1, currentSize: 10 },
+            };
+
+            vi.mocked(mockRequest.get).mockResolvedValue(mockResponse);
+
+            await networkOps.listEvents('site-123', 1, 10, 1_600_000_000_000, 1_600_100_000_000);
+
+            expect(mockRequest.get).toHaveBeenCalledWith('/openapi/v1/test-omadac/sites/site-123/logs/events', {
+                page: 1,
+                pageSize: 10,
+                'filters.timeStart': 1_600_000_000_000,
+                'filters.timeEnd': 1_600_100_000_000,
+            });
+        });
+    });
+
+    describe('listLogs', () => {
+        it('should fetch audit logs from the audit-logs endpoint', async () => {
+            const mockResult: PaginatedResult<unknown> = {
+                data: [{ id: 'log-1', operation: 'Update SSID' }],
+                totalRows: 1,
+                currentPage: 1,
+                currentSize: 10,
+            };
+            const mockResponse: OmadaApiResponse<PaginatedResult<unknown>> = {
+                errorCode: 0,
+                result: mockResult,
+            };
+
+            vi.mocked(mockRequest.get).mockResolvedValue(mockResponse);
+
+            const result = await networkOps.listLogs('site-123', 1, 10);
+
+            expect(mockRequest.get).toHaveBeenCalledWith('/openapi/v1/test-omadac/sites/site-123/audit-logs', {
+                page: 1,
+                pageSize: 10,
+            });
+            expect(result).toEqual(mockResult);
+        });
+    });
+
     describe('getPortForwardingStatus with internal API', () => {
         it('should use the internal API for User type when internal API is available', async () => {
             networkOps.setInternalRequest(mockInternalRequest);

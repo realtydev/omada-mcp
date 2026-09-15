@@ -223,8 +223,14 @@ export class OmadaClient {
         return await this.networkOps.updateFirewallSetting(data, siteId);
     }
 
-    public async listEvents(siteId?: string, page?: number, pageSize?: number): Promise<PaginatedResult<unknown>> {
-        return await this.networkOps.listEvents(siteId, page, pageSize);
+    public async listEvents(
+        siteId?: string,
+        page?: number,
+        pageSize?: number,
+        timeStart?: number,
+        timeEnd?: number
+    ): Promise<PaginatedResult<unknown>> {
+        return await this.networkOps.listEvents(siteId, page, pageSize, timeStart, timeEnd);
     }
 
     public async listLogs(siteId?: string, page?: number, pageSize?: number): Promise<PaginatedResult<unknown>> {

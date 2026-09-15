@@ -271,23 +271,33 @@ export class NetworkOperations {
 
     /**
      * Get paginated events for a site (v1 API).
+     * The Open API spec's path is `/sites/{siteId}/logs/events`, not `/sites/{siteId}/events`
+     * — the latter 404s. `filters.timeStart`/`filters.timeEnd` (epoch milliseconds) are required
+     * by the API; default to the last 7 days when not supplied, matching the default window the
+     * sibling `audit-logs` endpoint applies internally when its own time filter is omitted.
      */
-    public async listEvents(siteId?: string, page = 1, pageSize = 10): Promise<PaginatedResult<unknown>> {
+    public async listEvents(siteId?: string, page = 1, pageSize = 10, timeStart?: number, timeEnd?: number): Promise<PaginatedResult<unknown>> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
-        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/events`);
+        const resolvedTimeEnd = timeEnd ?? Date.now();
+        const resolvedTimeStart = timeStart ?? resolvedTimeEnd - 7 * 24 * 60 * 60 * 1000;
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/logs/events`);
         const response = await this.request.get<OmadaApiResponse<PaginatedResult<unknown>>>(path, {
             page,
             pageSize,
+            'filters.timeStart': resolvedTimeStart,
+            'filters.timeEnd': resolvedTimeEnd,
         });
         return this.request.ensureSuccess(response);
     }
 
     /**
-     * Get paginated logs for a site (v1 API).
+     * Get paginated audit logs for a site (v1 API): system logs and configuration changes.
+     * The Open API spec's path is `/sites/{siteId}/audit-logs`, not `/sites/{siteId}/logs`
+     * — the latter 404s.
      */
     public async listLogs(siteId?: string, page = 1, pageSize = 10): Promise<PaginatedResult<unknown>> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
-        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/logs`);
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/audit-logs`);
         const response = await this.request.get<OmadaApiResponse<PaginatedResult<unknown>>>(path, {
             page,
             pageSize,
