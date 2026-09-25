@@ -1,0 +1,16 @@
+name: Feature request
+description: A new tool or capability
+labels: [enhancement]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: What do you want to do?
+      description: Describe the task in terms of your network, e.g. "rotate the guest Wi-Fi password weekly".
+    validations:
+      required: true
+  - type: textarea
+    id: api
+    attributes:
+      label: API details (if known)
+      description: Open API endpoint from docs/openapi/, or the internal web UI request you captured.
