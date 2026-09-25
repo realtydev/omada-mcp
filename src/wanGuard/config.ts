@@ -33,7 +33,7 @@ const wanGuardSchema = z
         requestTimeoutMs: positiveInteger(5_000),
     })
     .refine((value) => !value.enabled || Boolean(value.gatewayMac), {
-        message: 'OMADA_WAN_GUARD_GATEWAY_MAC is required when the WAN guard is enabled',
+        message: 'required when the WAN guard is enabled',
         path: ['gatewayMac'],
     });
 
@@ -49,20 +49,27 @@ export interface WanGuardConfig {
     requestTimeoutMs: number;
 }
 
+const ENV_NAMES: Record<keyof z.input<typeof wanGuardSchema>, string> = {
+    enabled: 'OMADA_WAN_GUARD_ENABLED',
+    dryRun: 'OMADA_WAN_GUARD_DRY_RUN',
+    gatewayMac: 'OMADA_WAN_GUARD_GATEWAY_MAC',
+    primaryPort: 'OMADA_WAN_GUARD_PRIMARY_PORT',
+    fallbackCidrs: 'OMADA_WAN_GUARD_FALLBACK_CIDRS',
+    intervalMs: 'OMADA_WAN_GUARD_INTERVAL_MS',
+    failureThreshold: 'OMADA_WAN_GUARD_FAILURE_THRESHOLD',
+    requestTimeoutMs: 'OMADA_TIMEOUT',
+};
+
 export function loadWanGuardConfig(env: NodeJS.ProcessEnv = process.env): WanGuardConfig {
-    const parsed = wanGuardSchema.safeParse({
-        enabled: env.OMADA_WAN_GUARD_ENABLED,
-        dryRun: env.OMADA_WAN_GUARD_DRY_RUN,
-        gatewayMac: env.OMADA_WAN_GUARD_GATEWAY_MAC,
-        primaryPort: env.OMADA_WAN_GUARD_PRIMARY_PORT,
-        fallbackCidrs: env.OMADA_WAN_GUARD_FALLBACK_CIDRS,
-        intervalMs: env.OMADA_WAN_GUARD_INTERVAL_MS,
-        failureThreshold: env.OMADA_WAN_GUARD_FAILURE_THRESHOLD,
-        requestTimeoutMs: env.OMADA_TIMEOUT,
-    });
+    const input = Object.fromEntries(Object.entries(ENV_NAMES).map(([key, name]) => [key, env[name]]));
+    const parsed = wanGuardSchema.safeParse(input);
 
     if (!parsed.success) {
-        throw new Error(`Invalid WAN guard configuration:\n${parsed.error.issues.map((issue) => issue.message).join('\n')}`);
+        const issues = parsed.error.issues.map((issue) => {
+            const name = ENV_NAMES[issue.path[0] as keyof typeof ENV_NAMES];
+            return name ? `${name}: ${issue.message}` : issue.message;
+        });
+        throw new Error(`Invalid WAN guard configuration:\n${issues.join('\n')}`);
     }
 
     return {
