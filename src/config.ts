@@ -14,6 +14,8 @@ const createBooleanStringSchema = (
             return value === 'true';
         });
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+
 const numericStringSchema = z
     .string()
     .optional()
@@ -218,7 +220,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Environ
         webUsername: parsed.data.webUsername,
         webPassword: parsed.data.webPassword,
         strictSsl: parsed.data.strictSsl,
-        requestTimeout: parsed.data.requestTimeout,
+        requestTimeout: parsed.data.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT_MS,
 
         // MCP Generic Server Configuration
         logLevel: parsed.data.logLevel,

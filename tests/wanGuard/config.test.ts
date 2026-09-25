@@ -41,7 +41,9 @@ describe('loadWanGuardConfig', () => {
     });
 
     it('requires a gateway MAC once enabled', () => {
-        expect(() => loadWanGuardConfig({ OMADA_WAN_GUARD_ENABLED: 'true' })).toThrow('OMADA_WAN_GUARD_GATEWAY_MAC: required when the WAN guard is enabled');
+        expect(() => loadWanGuardConfig({ OMADA_WAN_GUARD_ENABLED: 'true' })).toThrow(
+            'OMADA_WAN_GUARD_GATEWAY_MAC: required when the WAN guard is enabled'
+        );
     });
 
     it('names the offending variable when a numeric setting is invalid', () => {

@@ -134,6 +134,13 @@ describe('config', () => {
             expect(config.requestTimeout).toBe(5000);
         });
 
+        it('should default OMADA_TIMEOUT to 30 seconds so a hung controller cannot stall a tool call', () => {
+            delete mockEnv.OMADA_TIMEOUT;
+            const config = loadConfigFromEnv(mockEnv);
+
+            expect(config.requestTimeout).toBe(30000);
+        });
+
         it('should accept valid log levels', () => {
             const logLevels: Array<'debug' | 'info' | 'warn' | 'error'> = ['debug', 'info', 'warn', 'error'];
 
