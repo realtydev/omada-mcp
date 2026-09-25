@@ -1,15 +1,18 @@
-name: Pull Request
+name: CI
 
 on:
-  pull_request:
+  push:
     branches:
       - main
-      - develop
+  pull_request:
     paths:
       - "src/**"
       - "tests/**"
+      - "scripts/**"
       - "*.json"
       - "*.ts"
+      - "yarn.lock"
+      - "Dockerfile"
       - ".github/workflows/*.yml"
 
 concurrency:
