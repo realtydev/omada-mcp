@@ -4,9 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-09-24
+
 ### Changed
 
-- Upgraded to zod 4, MCP SDK 1.30, TypeScript 7, vitest 5 and Biome 2.5. Tool schemas no longer use `$ref`, so clients that don't resolve references now see every field.
+- Upgraded to zod 4, MCP SDK 1.30, dotenv 18, TypeScript 7, vitest 5 and Biome 2.5. Tool schemas no longer use `$ref`, so clients that don't resolve references now see every field.
 - Removed the unused `concurrently` dev dependency.
 
 ## [0.6.0] - 2026-09-24
@@ -50,5 +52,6 @@ First release as **realtydev/omada-mcp**: 78 tools, published to `ghcr.io/realty
 
 Released as [MiguelTVMS/tplink-omada-mcp](https://github.com/MiguelTVMS/tplink-omada-mcp).
 
-[Unreleased]: https://github.com/realtydev/omada-mcp/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/realtydev/omada-mcp/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/realtydev/omada-mcp/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/realtydev/omada-mcp/releases/tag/v0.6.0
