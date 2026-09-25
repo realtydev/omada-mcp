@@ -31,10 +31,12 @@ First release as **realtydev/omada-mcp**: 78 tools, published to `ghcr.io/realty
 - `getPortForwardingStatus` UPnP casing and `getSwitchNetworks` pagination. (@JimmyMultani)
 - Internal API errors now include the HTTP status, endpoint, and controller error code. (@JimmyMultani)
 - `startCableTest` is now marked destructive.
+- `OMADA_TIMEOUT` now really defaults to 30 s; previously requests never timed out unless it was set.
+- Web-session cookies are redacted from debug logs, and concurrent requests share a single web login.
 
 ### Changed
 
-- Write tools reject unrecognized fields instead of silently dropping them. (@JimmyMultani)
+- Write tools reject unrecognized fields instead of silently dropping them. (@JimmyMultani) This includes nested `dhcpSettingsVO` on LAN networks, so strip read-only fields from `getLanNetworkList` output before reusing it.
 - Package renamed to `@realtydev/omada-mcp`; the MCP server identifies as `omada-mcp`.
 - Container image moved to `ghcr.io/realtydev/omada-mcp`, runs as the non-root `node` user, and reports its git commit.
 - Tooling moved from npm to Yarn 4 (Corepack) with Node 24 pinned in `.nvmrc`. (@JimmyMultani)

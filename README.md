@@ -168,6 +168,7 @@ For Fusion gateways that do not expose Platform Integration OAuth credentials, s
 | `listEvents` | Paginated site events, optionally filtered by module and event key prefix |
 | `listLogs` | Paginated site logs |
 | `listFirewallAcls` | Firewall ACL rules |
+| `listIpGroups` | IP groups used by firewall ACLs (internal web UI API, requires `OMADA_WEB_USERNAME`/`OMADA_WEB_PASSWORD`) |
 | `listRoutes` | Static routes (internal web UI API only, requires `OMADA_WEB_USERNAME`/`OMADA_WEB_PASSWORD`) |
 | `getSwitch` | Full switch info including portList array (per-port status, profile, PoE) |
 | `getCableTestResults` | Cable test results for a switch |
