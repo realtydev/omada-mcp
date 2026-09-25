@@ -23,7 +23,7 @@ function run(command) {
 
 const packageVersion = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')).version;
 // Container builds have no .git directory, so CI passes the commit in as GIT_COMMIT.
-const envCommit = process.env.GIT_COMMIT?.slice(0, 7);
+const envCommit = process.env.GIT_COMMIT?.slice(0, 7) || undefined;
 const commit = envCommit ?? run('git rev-parse --short HEAD') ?? 'unknown';
 const dirty = envCommit ? '' : run('git status --porcelain');
 const gitCommit = dirty ? `${commit}-dirty` : commit;
