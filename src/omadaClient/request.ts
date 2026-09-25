@@ -297,6 +297,8 @@ export class RequestHandler {
             normalized.includes('token') ||
             normalized.includes('secret') ||
             normalized.includes('password') ||
+            normalized.includes('cookie') ||
+            normalized.includes('csrf') ||
             normalized.includes('client_id')
         );
     }

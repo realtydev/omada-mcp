@@ -397,4 +397,26 @@ describe('RequestHandler', () => {
             expect(result).toEqual({});
         });
     });
+
+    describe('debug logging', () => {
+        it('never logs the web session cookie in request or response headers', async () => {
+            const { RequestHandler } = await import('../../src/omadaClient/request.js');
+            const { logger } = await import('../../src/utils/logger.js');
+            const debug = vi.spyOn(logger, 'debug').mockImplementation(() => undefined);
+            const session = 'TPOMADA_SESSIONID=5f2b8c1d9e7a4b3c';
+
+            mockAuthManager.getAuthHeaders.mockResolvedValue({ Cookie: session, 'Csrf-Token': 'csrf-abcdef123456' });
+            mockAxiosInstance.request.mockResolvedValue({
+                status: 200,
+                headers: { 'set-cookie': `${session}; Path=/; HttpOnly` },
+                data: { errorCode: 0, result: {} },
+            });
+
+            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+            await handler.get('/api/test');
+
+            expect(JSON.stringify(debug.mock.calls)).not.toContain('5f2b8c1d9e7a4b3c');
+            debug.mockRestore();
+        });
+    });
 });
