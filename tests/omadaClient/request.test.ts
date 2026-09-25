@@ -9,6 +9,7 @@ describe('RequestHandler', () => {
     };
     let mockAuthManager: {
         getAccessToken: ReturnType<typeof vi.fn>;
+        getAuthHeaders: ReturnType<typeof vi.fn>;
         refreshAccessToken: ReturnType<typeof vi.fn>;
         clearToken?: ReturnType<typeof vi.fn>;
     };
@@ -20,6 +21,7 @@ describe('RequestHandler', () => {
 
         mockAuthManager = {
             getAccessToken: vi.fn().mockResolvedValue('test-access-token'),
+            getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: 'AccessToken=test-access-token' }),
             refreshAccessToken: vi.fn().mockResolvedValue(undefined),
             clearToken: vi.fn(),
         };
@@ -42,7 +44,7 @@ describe('RequestHandler', () => {
             const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
             const result = await handler.get<{ errorCode: number; msg: string; result: { data: string } }>('/api/test');
 
-            expect(mockAuthManager.getAccessToken).toHaveBeenCalled();
+            expect(mockAuthManager.getAuthHeaders).toHaveBeenCalled();
             expect(mockAxiosInstance.request).toHaveBeenCalledWith(
                 expect.objectContaining({
                     method: 'GET',
@@ -393,6 +395,28 @@ describe('RequestHandler', () => {
             });
 
             expect(result).toEqual({});
+        });
+    });
+
+    describe('debug logging', () => {
+        it('never logs the web session cookie in request or response headers', async () => {
+            const { RequestHandler } = await import('../../src/omadaClient/request.js');
+            const { logger } = await import('../../src/utils/logger.js');
+            const debug = vi.spyOn(logger, 'debug').mockImplementation(() => undefined);
+            const session = 'TPOMADA_SESSIONID=5f2b8c1d9e7a4b3c';
+
+            mockAuthManager.getAuthHeaders.mockResolvedValue({ Cookie: session, 'Csrf-Token': 'csrf-abcdef123456' });
+            mockAxiosInstance.request.mockResolvedValue({
+                status: 200,
+                headers: { 'set-cookie': `${session}; Path=/; HttpOnly` },
+                data: { errorCode: 0, result: {} },
+            });
+
+            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+            await handler.get('/api/test');
+
+            expect(JSON.stringify(debug.mock.calls)).not.toContain('5f2b8c1d9e7a4b3c');
+            debug.mockRestore();
         });
     });
 });

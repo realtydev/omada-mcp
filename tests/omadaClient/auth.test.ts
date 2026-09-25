@@ -1,6 +1,6 @@
 import type { AxiosInstance } from 'axios';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AuthManager } from '../../src/omadaClient/auth.js';
+import { AuthManager, WebAuthManager } from '../../src/omadaClient/auth.js';
 import type { OmadaApiResponse, TokenResult } from '../../src/types/index.js';
 import * as loggerModule from '../../src/utils/logger.js';
 
@@ -279,5 +279,107 @@ describe('AuthManager', () => {
             await authManager.getAccessToken();
             expect(mockHttp.post).toHaveBeenCalledTimes(2);
         });
+    });
+});
+
+describe('WebAuthManager', () => {
+    let mockHttp: AxiosInstance;
+
+    beforeEach(() => {
+        mockHttp = {
+            defaults: { baseURL: 'https://fusion.example.com' },
+            post: vi.fn(),
+        } as unknown as AxiosInstance;
+
+        vi.spyOn(loggerModule.logger, 'error').mockImplementation(() => {
+            // Mock implementation
+        });
+        vi.spyOn(loggerModule.logger, 'info').mockImplementation(() => {
+            // Mock implementation
+        });
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('should login and return Fusion web auth headers', async () => {
+        (mockHttp.post as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { errorCode: 0, msg: 'Success', result: { token: 'csrf-token' } },
+            headers: { 'set-cookie': ['TPOMADA_SESSIONID=session-123; Path=/; HttpOnly'] },
+        });
+
+        const authManager = new WebAuthManager(mockHttp, 'admin', 'password', 'omadac-id');
+
+        await expect(authManager.getAuthHeaders()).resolves.toEqual({
+            'Csrf-Token': 'csrf-token',
+            'Omada-Request-Source': 'web-local',
+            Cookie: 'TPOMADA_SESSIONID=session-123',
+        });
+
+        expect(mockHttp.post).toHaveBeenCalledWith('/omadac-id/api/v2/login', { username: 'admin', password: 'password' }, { withCredentials: true });
+    });
+
+    it('should reuse the cached web session', async () => {
+        (mockHttp.post as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { errorCode: 0, msg: 'Success', result: { token: 'csrf-token' } },
+            headers: {},
+        });
+
+        const authManager = new WebAuthManager(mockHttp, 'admin', 'password', 'omadac-id');
+
+        await authManager.getAuthHeaders();
+        await authManager.getAuthHeaders();
+
+        expect(mockHttp.post).toHaveBeenCalledTimes(1);
+    });
+
+    it('should clear the cached web session', async () => {
+        (mockHttp.post as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { errorCode: 0, msg: 'Success', result: { token: 'csrf-token' } },
+            headers: {},
+        });
+
+        const authManager = new WebAuthManager(mockHttp, 'admin', 'password', 'omadac-id');
+
+        await authManager.getAuthHeaders();
+        authManager.clearToken();
+        await authManager.getAuthHeaders();
+
+        expect(mockHttp.post).toHaveBeenCalledTimes(2);
+    });
+
+    it('should throw when Fusion web login fails', async () => {
+        (mockHttp.post as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { errorCode: -1, msg: 'Login failed' },
+            headers: {},
+        });
+
+        const authManager = new WebAuthManager(mockHttp, 'admin', 'bad-password', 'omadac-id');
+
+        await expect(authManager.getAuthHeaders()).rejects.toThrow('Login failed');
+    });
+
+    it('should log in once when several requests need a session at the same time', async () => {
+        (mockHttp.post as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { errorCode: 0, msg: 'Success', result: { token: 'csrf-token' } },
+            headers: {},
+        });
+
+        const authManager = new WebAuthManager(mockHttp, 'admin', 'password', 'omadac-id');
+        await Promise.all([authManager.getAuthHeaders(), authManager.getAuthHeaders(), authManager.getAuthHeaders()]);
+
+        expect(mockHttp.post).toHaveBeenCalledTimes(1);
+    });
+
+    it('should retry login on the next request after a failed login', async () => {
+        (mockHttp.post as ReturnType<typeof vi.fn>)
+            .mockResolvedValueOnce({ data: { errorCode: -30109, msg: 'Login failed' }, headers: {} })
+            .mockResolvedValueOnce({ data: { errorCode: 0, result: { token: 'csrf-token' } }, headers: {} });
+
+        const authManager = new WebAuthManager(mockHttp, 'admin', 'password', 'omadac-id');
+
+        await expect(authManager.getAuthHeaders()).rejects.toThrow('Login failed');
+        await expect(authManager.getAuthHeaders()).resolves.toMatchObject({ 'Csrf-Token': 'csrf-token' });
     });
 });

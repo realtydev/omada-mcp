@@ -10,6 +10,7 @@ import type {
     ClientActivity,
     ClientHistory,
     ClientPastConnection,
+    GatewayWanStatus,
     GetClientActivityOptions,
     GetClientHistoryOptions,
     GetDeviceStatsOptions,
@@ -31,7 +32,7 @@ import { logger } from '../utils/logger.js';
 
 import { ActionOperations } from './action.js';
 import { ApRadioOperations } from './apRadio.js';
-import { AuthManager } from './auth.js';
+import { AuthManager, type RequestAuthManager, WebAuthManager } from './auth.js';
 import { ClientOperations } from './client.js';
 import { DeviceOperations } from './device.js';
 import { GenericOperations } from './generic.js';
@@ -53,7 +54,7 @@ export type OmadaClientOptions = EnvironmentConfig;
 export class OmadaClient {
     private readonly http: AxiosInstance;
 
-    private readonly auth: AuthManager;
+    private readonly auth: RequestAuthManager;
 
     private readonly request: RequestHandler;
 
@@ -98,7 +99,10 @@ export class OmadaClient {
         this.http = axios.create(axiosOptions);
 
         // Initialize operation modules
-        this.auth = new AuthManager(this.http, options.clientId, options.clientSecret, options.omadacId);
+        this.auth =
+            options.authMode === 'web'
+                ? new WebAuthManager(this.http, options.webUsername ?? '', options.webPassword ?? '', options.omadacId)
+                : new AuthManager(this.http, options.clientId ?? '', options.clientSecret ?? '', options.omadacId);
         this.request = new RequestHandler(this.http, this.auth);
         this.siteOps = new SiteOperations(this.request, this.buildOmadaPath.bind(this), options.siteId);
         this.deviceOps = new DeviceOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
@@ -132,6 +136,10 @@ export class OmadaClient {
 
     public async getDevice(identifier: string, siteId?: string): Promise<OmadaDeviceInfo | undefined> {
         return await this.deviceOps.getDevice(identifier, siteId);
+    }
+
+    public async getGatewayWanStatus(gatewayMac: string, siteId?: string): Promise<GatewayWanStatus[]> {
+        return await this.deviceOps.getGatewayWanStatus(gatewayMac, siteId);
     }
 
     public async getSwitchStackDetail(stackId: string, siteId?: string): Promise<OswStackDetail> {
@@ -338,7 +346,7 @@ export class OmadaClient {
         return await this.actionOps.startFirmwareUpgrade(deviceMac, siteId);
     }
 
-    public async setGatewayWanConnect(gatewayMac: string, portId: string, action: 'connect' | 'disconnect', siteId?: string): Promise<unknown> {
+    public async setGatewayWanConnect(gatewayMac: string, portId: number, action: 'connect' | 'disconnect', siteId?: string): Promise<unknown> {
         return await this.actionOps.setGatewayWanConnect(gatewayMac, portId, action, siteId);
     }
 

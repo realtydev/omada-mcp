@@ -61,6 +61,7 @@ const networkModule = vi.hoisted(() => {
         getSsidList: vi.fn().mockResolvedValue([{ id: 'ssid' }]),
         getSsidDetail: vi.fn().mockResolvedValue({ id: 'ssid-detail' }),
         getFirewallSetting: vi.fn().mockResolvedValue({ rules: [] }),
+        setInternalRequest: vi.fn(),
     };
     const NetworkOperations = vi.fn(function () {
         return instance;
@@ -82,6 +83,9 @@ const authModule = vi.hoisted(() => ({
     AuthManager: vi.fn(function () {
         return {};
     }),
+    WebAuthManager: vi.fn(function () {
+        return {};
+    }),
 }));
 
 const axiosModule = vi.hoisted(() => {
@@ -96,11 +100,12 @@ vi.mock('../../src/omadaClient/client.js', () => ({ ClientOperations: clientModu
 vi.mock('../../src/omadaClient/security.js', () => ({ SecurityOperations: securityModule.SecurityOperations }));
 vi.mock('../../src/omadaClient/network.js', () => ({ NetworkOperations: networkModule.NetworkOperations }));
 vi.mock('../../src/omadaClient/request.js', () => ({ RequestHandler: requestModule.RequestHandler }));
-vi.mock('../../src/omadaClient/auth.js', () => ({ AuthManager: authModule.AuthManager }));
+vi.mock('../../src/omadaClient/auth.js', () => ({ AuthManager: authModule.AuthManager, WebAuthManager: authModule.WebAuthManager }));
 vi.mock('axios', () => axiosModule);
 
 const baseConfig: EnvironmentConfig = {
     baseUrl: 'https://controller.local',
+    authMode: 'oauth',
     clientId: 'client-id',
     clientSecret: 'secret',
     omadacId: 'omadac',
@@ -128,6 +133,7 @@ describe('OmadaClient aggregator', () => {
 
         expect(axiosModule.default.create).toHaveBeenCalledWith(expect.objectContaining({ baseURL: 'https://controller.local' }));
         expect(authModule.AuthManager).toHaveBeenCalledWith(axiosModule.axiosInstance, 'client-id', 'secret', 'omadac');
+        expect(authModule.WebAuthManager).not.toHaveBeenCalled();
         expect(requestModule.RequestHandler).toHaveBeenCalled();
         expect(siteModule.SiteOperations).toHaveBeenCalledWith(requestModule.instance, expect.any(Function), 'default-site');
 
@@ -158,5 +164,19 @@ describe('OmadaClient aggregator', () => {
         expect(clientModule.instance.listClients).toHaveBeenCalledWith('s1');
         expect(networkModule.instance.getPortForwardingStatus).toHaveBeenCalledWith('User', undefined, 1, 10);
         expect(requestModule.instance.request).toHaveBeenCalledWith({ url: '/path' });
+    });
+
+    it('uses web authentication when configured', async () => {
+        const { OmadaClient } = await import('../../src/omadaClient/index.js');
+        new OmadaClient({
+            ...baseConfig,
+            authMode: 'web',
+            clientId: undefined,
+            clientSecret: undefined,
+            webUsername: 'admin',
+            webPassword: 'password',
+        });
+
+        expect(authModule.WebAuthManager).toHaveBeenCalledWith(axiosModule.axiosInstance, 'admin', 'password', 'omadac');
     });
 });

@@ -1,0 +1,39 @@
+name: Bug report
+description: A tool returns an error, the wrong data, or changes the wrong thing
+labels: [bug]
+body:
+  - type: input
+    id: tool
+    attributes:
+      label: Tool
+      description: Which tool(s) misbehaved?
+      placeholder: listEvents
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Include the error message. Redact MACs, IPs, and IDs.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+  - type: input
+    id: version
+    attributes:
+      label: Server version
+      description: Output of the getServerInfo tool, or the image tag
+      placeholder: 0.6.0 (abc1234)
+  - type: input
+    id: controller
+    attributes:
+      label: Controller and firmware
+      placeholder: OC200 v2, controller 5.15.x / Software controller 5.x / Fusion
+  - type: dropdown
+    id: auth
+    attributes:
+      label: Auth mode
+      options: [OAuth client credentials, Fusion web session, OAuth + web UI credentials]

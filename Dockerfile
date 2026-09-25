@@ -11,6 +11,8 @@ WORKDIR /app
 RUN corepack enable
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+ARG GIT_COMMIT
+ENV GIT_COMMIT=${GIT_COMMIT}
 RUN yarn build
 
 FROM node:24-bookworm-slim AS runtime
@@ -33,4 +35,5 @@ RUN corepack enable
 COPY package.json yarn.lock .yarnrc.yml ./
 RUN yarn workspaces focus --production
 COPY --from=build /app/dist ./dist
+USER node
 CMD ["node", "dist/index.js"]

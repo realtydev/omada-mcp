@@ -48,4 +48,20 @@ describe('ActionOperations', () => {
             expect(result).toEqual(mockData);
         });
     });
+
+    describe('setGatewayWanConnect', () => {
+        it.each([
+            ['disconnect', 0],
+            ['connect', 1],
+        ] as const)('posts %s to the internet-state endpoint as operation %i', async (action, operation) => {
+            vi.mocked(mockRequest.post).mockResolvedValue({ errorCode: 0, result: {} });
+
+            await actionOps.setGatewayWanConnect('AA-BB-CC-DD-EE-FF', 2, action, 'site-123');
+
+            expect(mockRequest.post).toHaveBeenCalledWith('/openapi/v1/test-omadac/sites/site-123/gateways/AA-BB-CC-DD-EE-FF/internet-state', {
+                portId: 2,
+                operation,
+            });
+        });
+    });
 });

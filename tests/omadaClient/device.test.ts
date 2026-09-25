@@ -251,4 +251,16 @@ describe('omadaClient/device', () => {
             await expect(deviceOps.getApRadios('AA-BB-CC-DD-EE-FF')).rejects.toThrow('AP does not exist.');
         });
     });
+
+    describe('getGatewayWanStatus', () => {
+        it('should fetch per-port WAN status for a gateway', async () => {
+            const mockStatus = [{ port: 2, status: 1, ip: '203.0.113.10' }];
+            (mockRequest.get as ReturnType<typeof vi.fn>).mockResolvedValue({ errorCode: 0, result: mockStatus });
+
+            const result = await deviceOps.getGatewayWanStatus('AA-BB-CC-DD-EE-FF', 'test-site');
+
+            expect(result).toEqual(mockStatus);
+            expect(mockRequest.get).toHaveBeenCalledWith('/api/sites/test-site/gateways/AA-BB-CC-DD-EE-FF/wan-status');
+        });
+    });
 });

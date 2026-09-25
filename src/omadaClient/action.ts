@@ -109,12 +109,13 @@ export class ActionOperations {
     /**
      * Connect or disconnect a gateway WAN port (v1 API).
      */
-    public async setGatewayWanConnect(gatewayMac: string, portId: string, action: 'connect' | 'disconnect', siteId?: string): Promise<unknown> {
+    public async setGatewayWanConnect(gatewayMac: string, portId: number, action: 'connect' | 'disconnect', siteId?: string): Promise<unknown> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
-        const path = this.buildPath(
-            `/sites/${encodeURIComponent(resolvedSiteId)}/gateways/${encodeURIComponent(gatewayMac)}/wan/${encodeURIComponent(portId)}/${action}`
-        );
-        const response = await this.request.post<OmadaApiResponse<unknown>>(path, {});
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/gateways/${encodeURIComponent(gatewayMac)}/internet-state`);
+        const response = await this.request.post<OmadaApiResponse<unknown>>(path, {
+            portId,
+            operation: action === 'connect' ? 1 : 0,
+        });
         return this.request.ensureSuccess(response);
     }
 }

@@ -3,17 +3,7 @@ import { z } from 'zod';
 
 import type { OmadaClient } from '../omadaClient/index.js';
 import { toToolResult, wrapToolHandler } from '../server/common.js';
-
-const dhcpRangeSchema = z.object({
-    ipaddrStart: z.string().min(1).describe('DHCP range start IP (e.g. "192.168.10.100")'),
-    ipaddrEnd: z.string().min(1).describe('DHCP range end IP (e.g. "192.168.10.200")'),
-});
-
-const dhcpSettingsSchema = z.object({
-    enable: z.boolean().describe('Whether DHCP is enabled'),
-    ipRangePool: z.array(dhcpRangeSchema).describe('DHCP address ranges'),
-    leasetime: z.number().int().describe('DHCP lease time in minutes (2-10080)'),
-});
+import { dhcpSettingsSchema } from './lanNetworkSchemas.js';
 
 const createLanNetworkSchema = z.object({
     siteId: z.string().min(1).optional(),
