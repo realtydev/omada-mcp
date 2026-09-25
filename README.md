@@ -44,7 +44,7 @@ Add to your MCP client configuration:
         "-e", "OMADA_OMADAC_ID=your-omadac-id",
         "-e", "OMADA_SITE_ID=your-site-id",
         "-e", "OMADA_STRICT_SSL=false",
-        "jmtvms/tplink-omada-mcp:latest"
+        "ghcr.io/realtydev/omada-mcp:latest"
       ]
     }
   }
@@ -59,7 +59,7 @@ docker run -d \
   -e MCP_SERVER_USE_HTTP=true \
   -e MCP_HTTP_BIND_ADDR=0.0.0.0 \
   -p 3000:3000 \
-  jmtvms/tplink-omada-mcp:latest
+  ghcr.io/realtydev/omada-mcp:latest
 ```
 
 Available at `http://localhost:3000/mcp` (stream) or `http://localhost:3000/sse` (SSE).

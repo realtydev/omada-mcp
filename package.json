@@ -1,10 +1,41 @@
 {
-    "name": "tplink-omada-mcp",
+    "name": "@realtydev/omada-mcp",
     "version": "0.5.5",
-    "description": "Model Context Protocol server that exposes TP-Link Omada controller APIs",
+    "description": "Full read/write Model Context Protocol server for TP-Link Omada SDN controllers — sites, devices, clients, VLANs, firewall, switch ports, Wi-Fi and WAN",
     "type": "module",
     "main": "dist/index.js",
     "bin": "./dist/index.js",
+    "files": [
+        "dist",
+        "README.md",
+        "LICENSE"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/realtydev/omada-mcp.git"
+    },
+    "homepage": "https://github.com/realtydev/omada-mcp#readme",
+    "bugs": {
+        "url": "https://github.com/realtydev/omada-mcp/issues"
+    },
+    "author": "Alex Gibson <alex@algib.com> (https://github.com/realtydev)",
+    "license": "MIT",
+    "keywords": [
+        "mcp",
+        "model-context-protocol",
+        "tp-link",
+        "omada",
+        "omada-sdn",
+        "network-automation",
+        "claude",
+        "ai-agents"
+    ],
+    "engines": {
+        "node": ">=24.0.0"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
     "scripts": {
         "generate:build-info": "node scripts/generate-build-info.mjs",
         "build": "yarn generate:build-info && tsc -p tsconfig.json",
@@ -17,20 +48,10 @@
         "test:coverage": "yarn generate:build-info && vitest run --coverage",
         "dev": "yarn generate:build-info && tsx src/index.ts",
         "start": "node dist/index.js",
-        "docker:build": "docker build -f Dockerfile -t ghcr.io/migueltvms/tplink-omada-mcp:latest .",
-        "docker:run": "docker run --rm -it --env-file .env --env-file .env.local ghcr.io/migueltvms/tplink-omada-mcp:latest",
-        "docker:push": "docker push ghcr.io/migueltvms/tplink-omada-mcp:latest"
+        "docker:build": "docker build -f Dockerfile -t ghcr.io/realtydev/omada-mcp:latest .",
+        "docker:run": "docker run --rm -it --env-file .env --env-file .env.local ghcr.io/realtydev/omada-mcp:latest",
+        "docker:push": "docker push ghcr.io/realtydev/omada-mcp:latest"
     },
-    "keywords": [
-        "mcp",
-        "tp-link",
-        "omada"
-    ],
-    "engines": {
-        "node": ">=24.0.0"
-    },
-    "author": "",
-    "license": "MIT",
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.21.0",
         "@ngrok/ngrok": "^1.5.2",

@@ -182,7 +182,7 @@ function setupServerLogging(server: McpServer): void {
 
 export function createServer(client: OmadaClient): McpServer {
     const server = new McpServer({
-        name: 'tplink-omada-mcp',
+        name: 'omada-mcp',
         version: PACKAGE_VERSION,
     });
 

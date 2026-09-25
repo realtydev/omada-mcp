@@ -555,6 +555,29 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@realtydev/omada-mcp@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "@realtydev/omada-mcp@workspace:."
+  dependencies:
+    "@biomejs/biome": "npm:2.3.4"
+    "@modelcontextprotocol/sdk": "npm:^1.21.0"
+    "@ngrok/ngrok": "npm:^1.5.2"
+    "@types/node": "npm:^24.10.0"
+    "@vitest/coverage-v8": "npm:^4.0.10"
+    "@vitest/ui": "npm:^4.0.8"
+    axios: "npm:^1.13.2"
+    concurrently: "npm:^9.1.0"
+    dotenv: "npm:^17.2.3"
+    pino: "npm:^10.1.0"
+    tsx: "npm:^4.20.6"
+    typescript: "npm:^5.9.3"
+    vitest: "npm:^4.0.8"
+    zod: "npm:^3.25.76"
+  bin:
+    omada-mcp: ./dist/index.js
+  languageName: unknown
+  linkType: soft
+
 "@rolldown/binding-android-arm-eabi@npm:1.2.8":
   version: 1.2.8
   resolution: "@rolldown/binding-android-arm-eabi@npm:1.2.8"
@@ -2714,29 +2737,6 @@ __metadata:
   checksum: 10c0/4bb1fadb69c3edbef91c73ebef9d25b33bbf69afe1e37ce544d5f7d13854cda15e47132f3e0dc4cafe300ddb8578c77c50a65004d8b6e97e77934a69aa924863
   languageName: node
   linkType: hard
-
-"tplink-omada-mcp@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "tplink-omada-mcp@workspace:."
-  dependencies:
-    "@biomejs/biome": "npm:2.3.4"
-    "@modelcontextprotocol/sdk": "npm:^1.21.0"
-    "@ngrok/ngrok": "npm:^1.5.2"
-    "@types/node": "npm:^24.10.0"
-    "@vitest/coverage-v8": "npm:^4.0.10"
-    "@vitest/ui": "npm:^4.0.8"
-    axios: "npm:^1.13.2"
-    concurrently: "npm:^9.1.0"
-    dotenv: "npm:^17.2.3"
-    pino: "npm:^10.1.0"
-    tsx: "npm:^4.20.6"
-    typescript: "npm:^5.9.3"
-    vitest: "npm:^4.0.8"
-    zod: "npm:^3.25.76"
-  bin:
-    tplink-omada-mcp: ./dist/index.js
-  languageName: unknown
-  linkType: soft
 
 "tree-kill@npm:1.2.2":
   version: 1.2.2
