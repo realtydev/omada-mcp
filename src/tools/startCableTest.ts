@@ -13,8 +13,12 @@ export function registerStartCableTestTool(server: McpServer, client: OmadaClien
     server.registerTool(
         'startCableTest',
         {
-            description: 'Start a cable test on a switch. Use getCableTestResults to retrieve results after completion.',
+            description:
+                'Start a cable test on a switch. Ports under test briefly lose link. Use getCableTestResults to retrieve results after completion.',
             inputSchema: startCableTestSchema.shape,
+            annotations: {
+                destructiveHint: true,
+            },
         },
         wrapToolHandler('startCableTest', async ({ switchMac, siteId }) => toToolResult(await client.startCableTest(switchMac, siteId)))
     );
