@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OmadaClient } from '../../src/omadaClient/index.js';
 import { registerGetClientTool } from '../../src/tools/getClient.js';
 import { registerGetFirewallSettingTool } from '../../src/tools/getFirewallSetting.js';
+import { registerGetGatewayWanStatusTool } from '../../src/tools/getGatewayWanStatus.js';
 import { registerGetInternetInfoTool } from '../../src/tools/getInternetInfo.js';
 import * as loggerModule from '../../src/utils/logger.js';
 
@@ -21,6 +22,7 @@ describe('tools - simple get operations', () => {
         mockClient = {
             getClient: vi.fn(),
             getFirewallSetting: vi.fn(),
+            getGatewayWanStatus: vi.fn(),
             getInternetInfo: vi.fn(),
         } as unknown as OmadaClient;
 
@@ -108,6 +110,19 @@ describe('tools - simple get operations', () => {
                 expect.any(Function)
             );
             expect(mockClient.getClientHistory).toHaveBeenCalledWith(args);
+        });
+    });
+
+    describe('getGatewayWanStatus', () => {
+        it('should pass the gateway MAC and site through to the client', async () => {
+            const mockStatus = [{ port: 2, status: 1, ip: '203.0.113.10' }];
+            (mockClient.getGatewayWanStatus as ReturnType<typeof vi.fn>).mockResolvedValue(mockStatus);
+
+            registerGetGatewayWanStatusTool(mockServer, mockClient);
+            const result = (await toolHandler({ gatewayMac: 'AA-BB-CC-DD-EE-FF', siteId: 'site-1' }, {})) as { content: Array<{ text: string }> };
+
+            expect(mockClient.getGatewayWanStatus).toHaveBeenCalledWith('AA-BB-CC-DD-EE-FF', 'site-1');
+            expect(result.content[0].text).toContain('203.0.113.10');
         });
     });
 });

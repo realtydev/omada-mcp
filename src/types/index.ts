@@ -3,6 +3,7 @@ export type { ApRadioBand, ApRadioChange, ApRadioField, ApRadioSettings, SetApRa
 export type { ClientActivity, GetClientActivityOptions } from './clientActivity.js';
 export type { ClientHistory, ClientRoam, ClientSession, GetClientHistoryOptions } from './clientHistory.js';
 export type { ClientPastConnection, ListClientsPastConnectionsOptions } from './clientPastConnection.js';
+export type { GatewayWanStatus } from './gatewayWanStatus.js';
 export type {
     LogNotificationChange,
     LogNotificationDiff,

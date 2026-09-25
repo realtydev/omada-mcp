@@ -10,6 +10,7 @@ import type {
     ClientActivity,
     ClientHistory,
     ClientPastConnection,
+    GatewayWanStatus,
     GetClientActivityOptions,
     GetClientHistoryOptions,
     GetDeviceStatsOptions,
@@ -132,6 +133,10 @@ export class OmadaClient {
 
     public async getDevice(identifier: string, siteId?: string): Promise<OmadaDeviceInfo | undefined> {
         return await this.deviceOps.getDevice(identifier, siteId);
+    }
+
+    public async getGatewayWanStatus(gatewayMac: string, siteId?: string): Promise<GatewayWanStatus[]> {
+        return await this.deviceOps.getGatewayWanStatus(gatewayMac, siteId);
     }
 
     public async getSwitchStackDetail(stackId: string, siteId?: string): Promise<OswStackDetail> {
@@ -338,7 +343,7 @@ export class OmadaClient {
         return await this.actionOps.startFirmwareUpgrade(deviceMac, siteId);
     }
 
-    public async setGatewayWanConnect(gatewayMac: string, portId: string, action: 'connect' | 'disconnect', siteId?: string): Promise<unknown> {
+    public async setGatewayWanConnect(gatewayMac: string, portId: number, action: 'connect' | 'disconnect', siteId?: string): Promise<unknown> {
         return await this.actionOps.setGatewayWanConnect(gatewayMac, portId, action, siteId);
     }
 

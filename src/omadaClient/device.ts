@@ -1,4 +1,4 @@
-import type { GetDeviceStatsOptions, OmadaApiResponse, OmadaDeviceInfo, OmadaDeviceStats, OswStackDetail } from '../types/index.js';
+import type { GatewayWanStatus, GetDeviceStatsOptions, OmadaApiResponse, OmadaDeviceInfo, OmadaDeviceStats, OswStackDetail } from '../types/index.js';
 
 import type { RequestHandler } from './request.js';
 import type { SiteOperations } from './site.js';
@@ -42,6 +42,16 @@ export class DeviceOperations {
     public async getDevice(identifier: string, siteId?: string): Promise<OmadaDeviceInfo | undefined> {
         const devices = await this.listDevices(siteId);
         return devices.find((device) => device.mac === identifier || device.deviceId === identifier);
+    }
+
+    /**
+     * Get the live WAN status reported by a gateway.
+     */
+    public async getGatewayWanStatus(gatewayMac: string, siteId?: string): Promise<GatewayWanStatus[]> {
+        const resolvedSiteId = this.site.resolveSiteId(siteId);
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/gateways/${encodeURIComponent(gatewayMac)}/wan-status`);
+        const response = await this.request.get<OmadaApiResponse<GatewayWanStatus[]>>(path);
+        return this.request.ensureSuccess(response);
     }
 
     /**
