@@ -7,7 +7,7 @@ import { toToolResult, wrapToolHandler } from '../server/common.js';
 const createFirewallAclSchema = z.object({
     siteId: z.string().min(1).optional(),
     rule: z
-        .record(z.unknown())
+        .record(z.string(), z.unknown())
         .describe('Firewall ACL rule object (fields vary by controller version; use listFirewallAcls to see existing rule shapes)'),
 });
 

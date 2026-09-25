@@ -8,7 +8,7 @@ const updateRouteSchema = z.object({
     siteId: z.string().min(1).optional(),
     routeId: z.string().min(1, 'routeId is required'),
     route: z
-        .record(z.unknown())
+        .record(z.string(), z.unknown())
         .describe(
             'Updated static route object, same shape as createRoute, e.g. { name, status, ' +
                 'destinations: ["203.0.113.0/24"], routeType: 0, nextHopIp: "192.168.0.1", metric: "15" }.'

@@ -80,11 +80,11 @@ function summarizeSuccess(method: string, result: unknown): Record<string, unkno
 
 export type ToolExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
 
-export function wrapToolHandler<Args extends z.ZodRawShape>(
+export function wrapToolHandler<Args>(
     name: string,
-    handler: (args: z.objectOutputType<Args, z.ZodTypeAny>, extra: ToolExtra) => Promise<CallToolResult>
-): (args: z.objectOutputType<Args, z.ZodTypeAny>, extra: ToolExtra) => Promise<CallToolResult> {
-    return async (args: z.objectOutputType<Args, z.ZodTypeAny>, extra: ToolExtra): Promise<CallToolResult> => {
+    handler: (args: Args, extra: ToolExtra) => Promise<CallToolResult>
+): (args: Args, extra: ToolExtra) => Promise<CallToolResult> {
+    return async (args: Args, extra: ToolExtra): Promise<CallToolResult> => {
         const sessionId = extra.sessionId ?? 'unknown-session';
         logger.info('Tool invoked', { tool: name, sessionId, args: safeSerialize(args) });
 

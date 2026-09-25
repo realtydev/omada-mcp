@@ -9,7 +9,7 @@ const updateSsidSchema = z.object({
     ssidId: z.string().min(1, 'ssidId is required. Use getSsidList to get available SSID IDs.'),
     siteId: z.string().min(1).optional(),
     ssid: z
-        .record(z.unknown())
+        .record(z.string(), z.unknown())
         .describe(
             "SSID basic-config fields, same shape as getSsidDetail's basic fields (name, band, security, broadcast, vlanEnable, " +
                 'vlanId, pskSetting, entSetting, ppskSetting, mloEnable, pmfMode, enable11r, hidePwd, greEnable, vlanSetting, ' +

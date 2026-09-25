@@ -8,7 +8,7 @@ const updateFirewallAclSchema = z.object({
     siteId: z.string().min(1).optional(),
     aclId: z.string().min(1, 'aclId is required'),
     rule: z
-        .record(z.unknown())
+        .record(z.string(), z.unknown())
         .describe(
             'Firewall ACL rule object (fields vary by controller version; use listFirewallAcls to see the existing rule shape). ' +
                 'This is a full replace, so pass the complete rule (as returned by listFirewallAcls) with only the field(s) changed.'

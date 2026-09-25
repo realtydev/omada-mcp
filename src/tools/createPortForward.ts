@@ -7,7 +7,7 @@ import { toToolResult, wrapToolHandler } from '../server/common.js';
 const createPortForwardSchema = z.object({
     siteId: z.string().min(1).optional(),
     rule: z
-        .record(z.unknown())
+        .record(z.string(), z.unknown())
         .describe(
             'Port forwarding rule object, e.g. { name, status, dMZ: false, externalPort: "59999", ' +
                 'forwardIp: "192.168.0.253", forwardPort: "59999", protocol: 1, from: 0, ' +

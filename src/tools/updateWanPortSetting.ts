@@ -7,7 +7,7 @@ import { toToolResult, wrapToolHandler } from '../server/common.js';
 const updateWanPortSettingSchema = z.object({
     siteId: z.string().min(1).optional(),
     portSetting: z
-        .record(z.unknown())
+        .record(z.string(), z.unknown())
         .describe(
             'WAN port setting object for the write endpoint — this is NOT the same shape as an entry in ' +
                 "getInternetInfo's wanPortSettings array; passing that read-model shape through unchanged will be " +

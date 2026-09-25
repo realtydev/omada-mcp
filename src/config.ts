@@ -3,9 +3,7 @@ import { z } from 'zod';
 import { isValidBindAddress, isValidOrigin } from './utils/config-validations.js';
 import { logger } from './utils/logger.js';
 
-const createBooleanStringSchema = (
-    defaultValue: boolean
-): z.ZodEffects<z.ZodOptional<z.ZodUnion<[z.ZodLiteral<'true'>, z.ZodLiteral<'false'>]>>, boolean, 'true' | 'false' | undefined> =>
+const createBooleanStringSchema = (defaultValue: boolean) =>
     z
         .union([z.literal('true'), z.literal('false')])
         .optional()
@@ -103,26 +101,16 @@ const envSchema = z
             path: ['httpBindAddr'],
         }
     )
-    .refine(
-        (data) => {
-            // Validate httpAllowedOrigins if provided
-            if (data.httpAllowedOrigins) {
-                for (const origin of data.httpAllowedOrigins) {
-                    if (!isValidOrigin(origin)) {
-                        return false;
-                    }
-                }
-            }
-            return true;
-        },
-        (data) => {
-            const invalidOrigin = data.httpAllowedOrigins?.find((origin) => !isValidOrigin(origin));
-            return {
+    .superRefine((data, ctx) => {
+        const invalidOrigin = data.httpAllowedOrigins?.find((origin) => !isValidOrigin(origin));
+        if (invalidOrigin !== undefined) {
+            ctx.addIssue({
+                code: 'custom',
                 message: `MCP_HTTP_ALLOWED_ORIGINS contains invalid origin: ${invalidOrigin}`,
                 path: ['httpAllowedOrigins'],
-            };
+            });
         }
-    );
+    });
 
 export interface EnvironmentConfig {
     // Omada Client Configuration

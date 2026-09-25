@@ -21,7 +21,7 @@ const setIpsSettingSchema = z.object({
             'Detection level/sensitivity, per TP-Link\'s documented shape (e.g. "Low"/"Medium"/"High"). Required by the controller when enabling.'
         ),
     settings: z
-        .record(z.unknown())
+        .record(z.string(), z.unknown())
         .optional()
         .describe('Additional raw fields to merge into the request body (e.g. an allowList of exempted hosts/IPs), for anything not covered above.'),
 });
