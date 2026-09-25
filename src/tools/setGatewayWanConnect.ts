@@ -7,7 +7,7 @@ import { toToolResult, wrapToolHandler } from '../server/common.js';
 const setGatewayWanConnectSchema = z.object({
     siteId: z.string().min(1).optional(),
     gatewayMac: z.string().min(1, 'gatewayMac is required'),
-    portId: z.string().min(1, 'portId is required'),
+    portId: z.coerce.number().int().positive('portId is required'),
     action: z.enum(['connect', 'disconnect']).describe('Whether to connect or disconnect the WAN port'),
 });
 
