@@ -1,5 +1,5 @@
 {
-    "$schema": "https://biomejs.dev/schemas/2.3.4/schema.json",
+    "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
     "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
     "files": { "includes": ["**", "!dist/**", "!docs/openapi/**/*.json", "!package.json"] },
     "formatter": {
@@ -18,7 +18,7 @@
     "linter": {
         "enabled": true,
         "rules": {
-            "recommended": false,
+            "preset": "none",
             "complexity": {
                 "noAdjacentSpacesInRegex": "error",
                 "noExtraBooleanCast": "error",
@@ -168,10 +168,9 @@
                 "rules": {
                     "correctness": { "noUnusedVariables": "error" },
                     "style": { "useConsistentTypeDefinitions": "error" },
-                    "suspicious": { "noExplicitAny": "warn", "useAwait": "warn" },
+                    "suspicious": { "noExplicitAny": "warn", "useAwait": "warn", "noUnnecessaryConditions": "warn" },
                     "nursery": {
-                        "noMisusedPromises": "error",
-                        "noUnnecessaryConditions": "warn"
+                        "noMisusedPromises": "error"
                     }
                 }
             }
