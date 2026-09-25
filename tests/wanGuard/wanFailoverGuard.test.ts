@@ -74,4 +74,12 @@ describe('WAN failover guard', () => {
         expect(result.action).toBe('already_disconnected');
         expect(client.setGatewayWanConnect).not.toHaveBeenCalled();
     });
+
+    it('reports a disconnected primary as disconnected, not healthy, once it loses its lease', async () => {
+        const client = createClient([{ port: 2, status: 0 }]);
+        const result = await createGuard(client).checkOnce();
+
+        expect(result).toEqual({ action: 'already_disconnected', ip: undefined, consecutiveFallbacks: 0 });
+        expect(client.setGatewayWanConnect).not.toHaveBeenCalled();
+    });
 });

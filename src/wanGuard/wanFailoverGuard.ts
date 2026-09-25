@@ -71,6 +71,11 @@ export class WanFailoverGuard {
         }
 
         const ip = getWanIpv4Address(primary);
+        if (primary.status === 0) {
+            this.consecutiveFallbacks = 0;
+            return { action: 'already_disconnected', ip, consecutiveFallbacks: 0 };
+        }
+
         const isFallback = Boolean(ip && this.options.fallbackCidrs.some((cidr) => isIpv4InCidr(ip, cidr)));
 
         if (!isFallback) {
@@ -79,10 +84,6 @@ export class WanFailoverGuard {
         }
 
         this.consecutiveFallbacks += 1;
-        if (primary.status === 0) {
-            return { action: 'already_disconnected', ip, consecutiveFallbacks: this.consecutiveFallbacks };
-        }
-
         if (this.consecutiveFallbacks < this.options.failureThreshold) {
             return { action: 'observed_fallback', ip, consecutiveFallbacks: this.consecutiveFallbacks };
         }
