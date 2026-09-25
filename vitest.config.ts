@@ -12,7 +12,7 @@ export default defineConfig({
             provider: 'v8',
             reporter: ['text', 'json', 'json-summary', 'html'],
             include: ['src/**/*.ts'],
-            exclude: ['src/**/*.test.ts', 'src/types/**', 'src/types.ts', 'src/tools/types.ts'],
+            exclude: ['src/**/*.test.ts', 'src/types/**', 'src/types.ts', 'src/tools/types.ts', 'src/generated/**'],
             reportOnFailure: true,
         },
     },

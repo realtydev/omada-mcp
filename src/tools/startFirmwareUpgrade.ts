@@ -14,7 +14,7 @@ export function registerStartFirmwareUpgradeTool(server: McpServer, client: Omad
         'startFirmwareUpgrade',
         {
             description: 'Start a firmware upgrade for a device. Use getFirmwareDetails first to check for available updates.',
-            inputSchema: startFirmwareUpgradeSchema.shape,
+            inputSchema: startFirmwareUpgradeSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

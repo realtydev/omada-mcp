@@ -86,10 +86,12 @@ export class ActionOperations {
 
     /**
      * Get firmware details for a device (v1 API).
+     * The Open API spec's path is `/devices/{deviceMac}/latest-firmware-info`, not
+     * `/devices/{deviceMac}/firmware` — the latter 404s on every device.
      */
     public async getFirmwareDetails(deviceMac: string, siteId?: string): Promise<unknown> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
-        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/devices/${encodeURIComponent(deviceMac)}/firmware`);
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/devices/${encodeURIComponent(deviceMac)}/latest-firmware-info`);
         const response = await this.request.get<OmadaApiResponse<unknown>>(path);
         return this.request.ensureSuccess(response);
     }

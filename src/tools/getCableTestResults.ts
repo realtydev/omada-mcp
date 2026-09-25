@@ -16,8 +16,6 @@ export function registerGetCableTestResultsTool(server: McpServer, client: Omada
             description: 'Get cable test results for a switch. Run startCableTest first.',
             inputSchema: getCableTestResultsSchema.shape,
         },
-        wrapToolHandler('getCableTestResults', async ({ switchMac, siteId }) =>
-            toToolResult(await client.getCableTestResults(switchMac, siteId))
-        )
+        wrapToolHandler('getCableTestResults', async ({ switchMac, siteId }) => toToolResult(await client.getCableTestResults(switchMac, siteId)))
     );
 }

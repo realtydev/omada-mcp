@@ -18,7 +18,7 @@ export function registerCreateFirewallAclTool(server: McpServer, client: OmadaCl
             description:
                 'Create a firewall ACL rule for inter-VLAN isolation or traffic control. ' +
                 'Use listFirewallAcls first to see the expected rule shape.',
-            inputSchema: createFirewallAclSchema.shape,
+            inputSchema: createFirewallAclSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

@@ -14,7 +14,7 @@ export function registerReconnectClientTool(server: McpServer, client: OmadaClie
         'reconnectClient',
         {
             description: 'Force a client to reconnect to the network by its MAC address.',
-            inputSchema: reconnectClientSchema.shape,
+            inputSchema: reconnectClientSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

@@ -16,7 +16,7 @@ export function registerSetSwitchPortPoeTool(server: McpServer, client: OmadaCli
         'setSwitchPortPoe',
         {
             description: 'Enable or disable PoE on a single switch port. 1=on (802.3at/af), 0=off.',
-            inputSchema: setSwitchPortPoeSchema.shape,
+            inputSchema: setSwitchPortPoeSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

@@ -5,9 +5,13 @@ import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
 import type { EnvironmentConfig } from '../config.js';
 import type {
     ActiveClientInfo,
+    ApRadioBand,
+    ApRadioSettings,
     ClientActivity,
+    ClientHistory,
     ClientPastConnection,
     GetClientActivityOptions,
+    GetClientHistoryOptions,
     GetDeviceStatsOptions,
     GetThreatListOptions,
     ListClientsPastConnectionsOptions,
@@ -17,18 +21,23 @@ import type {
     OmadaSiteSummary,
     OswStackDetail,
     PaginatedResult,
+    SetApRadioResult,
+    SetLogNotificationsOptions,
+    SetLogNotificationsResult,
     ThreatInfo,
 } from '../types/index.js';
 
 import { logger } from '../utils/logger.js';
 
 import { ActionOperations } from './action.js';
+import { ApRadioOperations } from './apRadio.js';
 import { AuthManager } from './auth.js';
 import { ClientOperations } from './client.js';
 import { DeviceOperations } from './device.js';
 import { GenericOperations } from './generic.js';
 import { InternalAuthManager } from './internalAuth.js';
 import { InternalRequestHandler } from './internalRequest.js';
+import { LogNotificationOperations } from './logNotification.js';
 import { NetworkOperations } from './network.js';
 import { RequestHandler } from './request.js';
 import { SecurityOperations } from './security.js';
@@ -64,6 +73,10 @@ export class OmadaClient {
 
     private readonly switchOps: SwitchOperations;
 
+    private readonly logNotificationOps: LogNotificationOperations;
+
+    private readonly apRadioOps: ApRadioOperations;
+
     private readonly omadacId: string;
 
     constructor(options: OmadaClientOptions) {
@@ -92,6 +105,8 @@ export class OmadaClient {
         this.clientOps = new ClientOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.securityOps = new SecurityOperations(this.request, this.buildOmadaPath.bind(this));
         this.networkOps = new NetworkOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.logNotificationOps = new LogNotificationOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.apRadioOps = new ApRadioOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.actionOps = new ActionOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.genericOps = new GenericOperations(this.request, this.buildOmadaPath.bind(this));
         this.switchOps = new SwitchOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
@@ -190,7 +205,19 @@ export class OmadaClient {
         return await this.networkOps.getFirewallSetting(siteId);
     }
 
+    public async getIpsSetting(siteId?: string): Promise<unknown> {
+        return await this.networkOps.getIpsSetting(siteId);
+    }
+
     // Network write operations
+    public async updateSsid(wlanId: string, ssidId: string, data: Record<string, unknown>, siteId?: string): Promise<unknown> {
+        return await this.networkOps.updateSsid(wlanId, ssidId, data, siteId);
+    }
+
+    public async setSsidEnable(ssidId: string, enable: boolean, siteId?: string): Promise<unknown> {
+        return await this.networkOps.setSsidEnable(ssidId, enable, siteId);
+    }
+
     public async createLanNetwork(data: Record<string, unknown>, siteId?: string): Promise<unknown> {
         return await this.networkOps.createLanNetwork(data, siteId);
     }
@@ -215,12 +242,49 @@ export class OmadaClient {
         return await this.networkOps.updateFirewallSetting(data, siteId);
     }
 
-    public async listEvents(siteId?: string, page?: number, pageSize?: number): Promise<PaginatedResult<unknown>> {
-        return await this.networkOps.listEvents(siteId, page, pageSize);
+    public async setIpsSetting(data: Record<string, unknown>, siteId?: string): Promise<unknown> {
+        return await this.networkOps.setIpsSetting(data, siteId);
+    }
+
+    public async updateWanPortSetting(portSetting: Record<string, unknown>, siteId?: string): Promise<unknown> {
+        return await this.networkOps.updateWanPortSetting(portSetting, siteId);
+    }
+
+    public async listEvents(
+        siteId?: string,
+        page?: number,
+        pageSize?: number,
+        timeStart?: number,
+        timeEnd?: number,
+        module?: 'System' | 'Device' | 'Client',
+        keyPrefix?: string,
+        excludeKeyPrefix?: string
+    ): Promise<PaginatedResult<unknown> & { scanTruncated?: boolean }> {
+        return await this.networkOps.listEvents(siteId, page, pageSize, timeStart, timeEnd, module, keyPrefix, excludeKeyPrefix);
+    }
+
+    public async listAlerts(
+        siteId?: string,
+        page?: number,
+        pageSize?: number,
+        timeStart?: number,
+        timeEnd?: number,
+        module?: 'System' | 'Device' | 'Client',
+        resolved?: boolean
+    ): Promise<PaginatedResult<unknown>> {
+        return await this.networkOps.listAlerts(siteId, page, pageSize, timeStart, timeEnd, module, resolved);
     }
 
     public async listLogs(siteId?: string, page?: number, pageSize?: number): Promise<PaginatedResult<unknown>> {
         return await this.networkOps.listLogs(siteId, page, pageSize);
+    }
+
+    public async getApRadios(apMac: string, siteId?: string): Promise<{ radioConfig: unknown; radioStats: unknown }> {
+        return await this.deviceOps.getApRadios(apMac, siteId);
+    }
+
+    public async getClientHistory(options: GetClientHistoryOptions): Promise<ClientHistory> {
+        return await this.clientOps.getClientHistory(options);
     }
 
     // Device and client actions
@@ -252,6 +316,20 @@ export class OmadaClient {
         return await this.actionOps.setDeviceLed(deviceMac, ledSetting, siteId);
     }
 
+    public async setApRadio(
+        apMac: string,
+        band: ApRadioBand,
+        settings: ApRadioSettings,
+        siteId?: string,
+        dryRun?: boolean
+    ): Promise<SetApRadioResult> {
+        return await this.apRadioOps.setApRadio(apMac, band, settings, siteId, dryRun);
+    }
+
+    public async setLogNotifications(options: SetLogNotificationsOptions): Promise<SetLogNotificationsResult> {
+        return await this.logNotificationOps.setLogNotifications(options);
+    }
+
     public async getFirmwareDetails(deviceMac: string, siteId?: string): Promise<unknown> {
         return await this.actionOps.getFirmwareDetails(deviceMac, siteId);
     }
@@ -265,10 +343,6 @@ export class OmadaClient {
     }
 
     // Network read/write operations (switch ports, firewall ACLs, routes)
-    public async getSwitchPorts(switchMac: string, siteId?: string): Promise<unknown[]> {
-        return await this.networkOps.getSwitchPorts(switchMac, siteId);
-    }
-
     public async updateSwitchPort(switchMac: string, portId: string, data: Record<string, unknown>, siteId?: string): Promise<unknown> {
         return await this.networkOps.updateSwitchPort(switchMac, portId, data, siteId);
     }
@@ -285,12 +359,40 @@ export class OmadaClient {
         return await this.networkOps.createFirewallAcl(data, siteId);
     }
 
+    public async updateFirewallAcl(aclId: string, data: Record<string, unknown>, siteId?: string): Promise<unknown> {
+        return await this.networkOps.updateFirewallAcl(aclId, data, siteId);
+    }
+
     public async deleteFirewallAcl(aclId: string, siteId?: string): Promise<unknown> {
         return await this.networkOps.deleteFirewallAcl(aclId, siteId);
     }
 
     public async listRoutes(siteId?: string): Promise<unknown[]> {
         return await this.networkOps.listRoutes(siteId);
+    }
+
+    public async createRoute(data: Record<string, unknown>, siteId?: string): Promise<unknown> {
+        return await this.networkOps.createRoute(data, siteId);
+    }
+
+    public async updateRoute(routeId: string, data: Record<string, unknown>, siteId?: string): Promise<unknown> {
+        return await this.networkOps.updateRoute(routeId, data, siteId);
+    }
+
+    public async deleteRoute(routeId: string, siteId?: string): Promise<unknown> {
+        return await this.networkOps.deleteRoute(routeId, siteId);
+    }
+
+    public async createPortForward(data: Record<string, unknown>, siteId?: string): Promise<unknown> {
+        return await this.networkOps.createPortForward(data, siteId);
+    }
+
+    public async updatePortForward(ruleId: string, data: Record<string, unknown>, siteId?: string): Promise<unknown> {
+        return await this.networkOps.updatePortForward(ruleId, data, siteId);
+    }
+
+    public async deletePortForward(ruleId: string, siteId?: string): Promise<unknown> {
+        return await this.networkOps.deletePortForward(ruleId, siteId);
     }
 
     // Switch operations
@@ -342,7 +444,7 @@ export class OmadaClient {
         return await this.switchOps.getCableTestResults(switchMac, siteId);
     }
 
-    public async getSwitchNetworks(switchMac: string, siteId?: string): Promise<unknown> {
+    public async getSwitchNetworks(switchMac: string, siteId?: string): Promise<unknown[]> {
         return await this.switchOps.getSwitchNetworks(switchMac, siteId);
     }
 

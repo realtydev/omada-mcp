@@ -16,7 +16,7 @@ export function registerSetSwitchPortStatusTool(server: McpServer, client: Omada
         'setSwitchPortStatus',
         {
             description: 'Enable or disable a single switch port. 0=off, 1=on.',
-            inputSchema: setSwitchPortStatusSchema.shape,
+            inputSchema: setSwitchPortStatusSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

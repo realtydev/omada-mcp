@@ -10,12 +10,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-!.vscode/*.code-snippets
+.vscode/
 !*.code-workspace
 
 # Built Visual Studio Code Extensions
@@ -23,3 +18,15 @@ pnpm-debug.log*
 
 # Coverage directory used by vitest
 coverage/
+
+# Yarn Berry
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
+
+# Generated at build time by scripts/generate-build-info.mjs
+src/generated/

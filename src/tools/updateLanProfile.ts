@@ -22,7 +22,7 @@ export function registerUpdateLanProfileTool(server: McpServer, client: OmadaCli
         'updateLanProfile',
         {
             description: 'Update an existing LAN profile configuration including network assignments and port settings.',
-            inputSchema: updateLanProfileSchema.shape,
+            inputSchema: updateLanProfileSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

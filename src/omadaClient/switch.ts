@@ -29,9 +29,7 @@ export class SwitchOperations {
      */
     public async setSwitchPortProfile(switchMac: string, port: number, profileId: string, siteId?: string): Promise<unknown> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
-        const path = this.buildPath(
-            `/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/ports/${port}/profile`
-        );
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/ports/${port}/profile`);
         const response = await this.request.put<OmadaApiResponse<unknown>>(path, { profileId });
         return this.request.ensureSuccess(response);
     }
@@ -42,9 +40,7 @@ export class SwitchOperations {
      */
     public async setSwitchPortPoe(switchMac: string, port: number, poeMode: number, siteId?: string): Promise<unknown> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
-        const path = this.buildPath(
-            `/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/ports/${port}/poe-mode`
-        );
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/ports/${port}/poe-mode`);
         const response = await this.request.put<OmadaApiResponse<unknown>>(path, { poeMode });
         return this.request.ensureSuccess(response);
     }
@@ -55,9 +51,7 @@ export class SwitchOperations {
      */
     public async setSwitchPortName(switchMac: string, port: number, name: string, siteId?: string): Promise<unknown> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
-        const path = this.buildPath(
-            `/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/ports/${port}/name`
-        );
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/ports/${port}/name`);
         const response = await this.request.put<OmadaApiResponse<unknown>>(path, { name });
         return this.request.ensureSuccess(response);
     }
@@ -68,9 +62,7 @@ export class SwitchOperations {
      */
     public async setSwitchPortStatus(switchMac: string, port: number, status: number, siteId?: string): Promise<unknown> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
-        const path = this.buildPath(
-            `/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/ports/${port}/status`
-        );
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/ports/${port}/status`);
         const response = await this.request.put<OmadaApiResponse<unknown>>(path, { status });
         return this.request.ensureSuccess(response);
     }
@@ -78,12 +70,7 @@ export class SwitchOperations {
     /**
      * Enable or disable profile override on a single switch port (v1 API).
      */
-    public async setSwitchPortProfileOverride(
-        switchMac: string,
-        port: number,
-        profileOverrideEnable: boolean,
-        siteId?: string
-    ): Promise<unknown> {
+    public async setSwitchPortProfileOverride(switchMac: string, port: number, profileOverrideEnable: boolean, siteId?: string): Promise<unknown> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
         const path = this.buildPath(
             `/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/ports/${port}/profile-override`
@@ -95,12 +82,7 @@ export class SwitchOperations {
     /**
      * Batch set profile override on multiple switch ports (v1 API).
      */
-    public async batchSetSwitchPortProfile(
-        switchMac: string,
-        portList: number[],
-        profileOverrideEnable: boolean,
-        siteId?: string
-    ): Promise<unknown> {
+    public async batchSetSwitchPortProfile(switchMac: string, portList: number[], profileOverrideEnable: boolean, siteId?: string): Promise<unknown> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
         const path = this.buildPath(
             `/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/multi-ports/profile-override`
@@ -115,9 +97,7 @@ export class SwitchOperations {
      */
     public async batchSetSwitchPortPoe(switchMac: string, portList: number[], poeMode: number, siteId?: string): Promise<unknown> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
-        const path = this.buildPath(
-            `/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/multi-ports/poe-mode`
-        );
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/multi-ports/poe-mode`);
         const response = await this.request.put<OmadaApiResponse<unknown>>(path, { portList, poeMode });
         return this.request.ensureSuccess(response);
     }
@@ -128,9 +108,7 @@ export class SwitchOperations {
      */
     public async batchSetSwitchPortStatus(switchMac: string, portList: number[], status: number, siteId?: string): Promise<unknown> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
-        const path = this.buildPath(
-            `/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/multi-ports/status`
-        );
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/multi-ports/status`);
         const response = await this.request.put<OmadaApiResponse<unknown>>(path, { portList, status });
         return this.request.ensureSuccess(response);
     }
@@ -138,15 +116,9 @@ export class SwitchOperations {
     /**
      * Batch set names on multiple switch ports (v1 API).
      */
-    public async batchSetSwitchPortName(
-        switchMac: string,
-        portNameList: Array<{ port: number; name: string }>,
-        siteId?: string
-    ): Promise<unknown> {
+    public async batchSetSwitchPortName(switchMac: string, portNameList: Array<{ port: number; name: string }>, siteId?: string): Promise<unknown> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
-        const path = this.buildPath(
-            `/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/multi-ports/name`
-        );
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/multi-ports/name`);
         const response = await this.request.put<OmadaApiResponse<unknown>>(path, { portNameList });
         return this.request.ensureSuccess(response);
     }
@@ -156,9 +128,7 @@ export class SwitchOperations {
      */
     public async startCableTest(switchMac: string, siteId?: string): Promise<unknown> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
-        const path = this.buildPath(
-            `/sites/${encodeURIComponent(resolvedSiteId)}/cable-test/switches/${encodeURIComponent(switchMac)}/start`
-        );
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/cable-test/switches/${encodeURIComponent(switchMac)}/start`);
         const response = await this.request.post<OmadaApiResponse<unknown>>(path, {});
         return this.request.ensureSuccess(response);
     }
@@ -168,23 +138,20 @@ export class SwitchOperations {
      */
     public async getCableTestResults(switchMac: string, siteId?: string): Promise<unknown> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
-        const path = this.buildPath(
-            `/sites/${encodeURIComponent(resolvedSiteId)}/cable-test/switches/${encodeURIComponent(switchMac)}/full-results`
-        );
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/cable-test/switches/${encodeURIComponent(switchMac)}/full-results`);
         const response = await this.request.get<OmadaApiResponse<unknown>>(path);
         return this.request.ensureSuccess(response);
     }
 
     /**
-     * Get switch networks / VLAN trunking config (v1 API).
+     * Get switch networks / VLAN trunking config (v1 API). `page`/`pageSize` are required by
+     * this endpoint even though the OpenAPI spec doesn't say so explicitly (an unparameterized
+     * GET returns HTTP 400) — `fetchPaginated` supplies them and loops until all VLANs are read.
      */
-    public async getSwitchNetworks(switchMac: string, siteId?: string): Promise<unknown> {
+    public async getSwitchNetworks(switchMac: string, siteId?: string): Promise<unknown[]> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
-        const path = this.buildPath(
-            `/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/networks`
-        );
-        const response = await this.request.get<OmadaApiResponse<unknown>>(path);
-        return this.request.ensureSuccess(response);
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/networks`);
+        return await this.request.fetchPaginated<unknown>(path);
     }
 
     /**
@@ -192,9 +159,7 @@ export class SwitchOperations {
      */
     public async setSwitchNetworks(switchMac: string, data: Record<string, unknown>, siteId?: string): Promise<unknown> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
-        const path = this.buildPath(
-            `/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/networks`
-        );
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/networks`);
         const response = await this.request.post<OmadaApiResponse<unknown>>(path, data);
         return this.request.ensureSuccess(response);
     }

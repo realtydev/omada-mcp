@@ -14,13 +14,11 @@ export function registerDeleteLanNetworkTool(server: McpServer, client: OmadaCli
         'deleteLanNetwork',
         {
             description: 'Delete a LAN network by its network ID.',
-            inputSchema: deleteLanNetworkSchema.shape,
+            inputSchema: deleteLanNetworkSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },
         },
-        wrapToolHandler('deleteLanNetwork', async ({ siteId, networkId }) =>
-            toToolResult(await client.deleteLanNetwork(networkId, siteId))
-        )
+        wrapToolHandler('deleteLanNetwork', async ({ siteId, networkId }) => toToolResult(await client.deleteLanNetwork(networkId, siteId)))
     );
 }

@@ -323,4 +323,135 @@ describe('omadaClient/client', () => {
             expect(connections).toEqual([]);
         });
     });
+
+    describe('getClientHistory', () => {
+        const mac = 'AA-BB-CC-DD-EE-FF';
+        const wireless = (firstSeen: number, lastSeen: number, deviceName: string, extra: Record<string, unknown> = {}) => ({
+            mac,
+            firstSeen,
+            lastSeen,
+            duration: (lastSeen - firstSeen) / 1000,
+            deviceName,
+            ssid: 'Home',
+            ...extra,
+        });
+        const mockPage = (rows: unknown[]) => {
+            vi.mocked(mockRequest.get).mockResolvedValueOnce({ errorCode: 0, result: { data: rows } } as OmadaApiResponse<never>);
+        };
+
+        it('should query past-connection with searchKey and a default 7-day window', async () => {
+            mockPage([]);
+            vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+
+            await clientOps.getClientHistory({ siteId: 'site-1', clientMac: mac });
+
+            expect(mockRequest.get).toHaveBeenCalledWith('/api/sites/site-1/insight/past-connection', {
+                page: 1,
+                pageSize: 1000,
+                'sorts.lastSeen': 'desc',
+                'filters.timeStart': String(1_700_000_000_000 - 7 * 24 * 60 * 60 * 1000),
+                'filters.timeEnd': '1700000000000',
+                searchKey: mac,
+            });
+
+            vi.restoreAllMocks();
+        });
+
+        it('should keep only exact-MAC sessions, normalised and sorted oldest first', async () => {
+            mockPage([
+                wireless(3000, 4000, 'AP-B'),
+                { ...wireless(1000, 2000, 'AP-A'), mac: 'aa:bb:cc:dd:ee:ff' },
+                { ...wireless(500, 900, 'AP-A'), mac: 'AA-BB-CC-DD-EE-00' },
+            ]);
+
+            const history = await clientOps.getClientHistory({ clientMac: mac, timeStart: 0, timeEnd: 10_000 });
+
+            expect(history.sessions.map((s) => [s.start, s.end, s.deviceName])).toEqual([
+                [1000, 2000, 'AP-A'],
+                [3000, 4000, 'AP-B'],
+            ]);
+            expect(history.sessions[0].durationSeconds).toBe(1);
+            expect(history).not.toHaveProperty('roams');
+        });
+
+        it('should fetch following pages until a short page and set no truncation flag', async () => {
+            mockPage(Array.from({ length: 1000 }, (_, i) => wireless(i * 10, i * 10 + 5, 'AP-A')));
+            mockPage([wireless(20_000, 20_005, 'AP-A')]);
+
+            const history = await clientOps.getClientHistory({ clientMac: mac, timeStart: 0, timeEnd: 30_000 });
+
+            expect(mockRequest.get).toHaveBeenCalledTimes(2);
+            expect(history.sessions).toHaveLength(1001);
+            expect(history).not.toHaveProperty('truncated');
+        });
+
+        it('should flag truncated when the page cap is reached', async () => {
+            vi.mocked(mockRequest.get).mockResolvedValue({
+                errorCode: 0,
+                result: { data: Array.from({ length: 1000 }, (_, i) => wireless(i, i + 1, 'AP-A')) },
+            } as OmadaApiResponse<never>);
+
+            const history = await clientOps.getClientHistory({ clientMac: mac, timeStart: 0, timeEnd: 30_000 });
+
+            expect(mockRequest.get).toHaveBeenCalledTimes(20);
+            expect(history.truncated).toBe(true);
+        });
+
+        describe('roam timeline', () => {
+            it('should report a roam between different APs within the 60s gap', async () => {
+                mockPage([wireless(0, 100_000, 'AP-A'), wireless(130_000, 200_000, 'AP-B')]);
+
+                const history = await clientOps.getClientHistory({ clientMac: mac, roamTimeline: true });
+
+                expect(history.roams).toEqual([
+                    {
+                        at: 130_000,
+                        from: { deviceName: 'AP-A', ssid: 'Home', sessionEnd: 100_000 },
+                        to: { deviceName: 'AP-B', ssid: 'Home', sessionStart: 130_000 },
+                        gapSeconds: 30,
+                    },
+                ]);
+            });
+
+            it('should treat exactly 60s as a roam and 61s as not', async () => {
+                mockPage([wireless(0, 10_000, 'AP-A'), wireless(70_000, 80_000, 'AP-B'), wireless(141_000, 150_000, 'AP-A')]);
+
+                const history = await clientOps.getClientHistory({ clientMac: mac, roamTimeline: true });
+
+                expect(history.roams?.map((r) => r.gapSeconds)).toEqual([60]);
+            });
+
+            it('should count overlapping sessions on different APs as a roam with a negative gap', async () => {
+                mockPage([wireless(0, 10_000, 'AP-A'), wireless(8_000, 20_000, 'AP-B')]);
+
+                const history = await clientOps.getClientHistory({ clientMac: mac, roamTimeline: true });
+
+                expect(history.roams?.map((r) => r.gapSeconds)).toEqual([-2]);
+            });
+
+            it('should not report a reconnect on the same AP as a roam', async () => {
+                mockPage([wireless(0, 10_000, 'AP-A'), wireless(20_000, 30_000, 'AP-A')]);
+
+                const history = await clientOps.getClientHistory({ clientMac: mac, roamTimeline: true });
+
+                expect(history.roams).toEqual([]);
+            });
+
+            it('should ignore wired sessions', async () => {
+                mockPage([wireless(0, 10_000, 'AP-A'), wireless(20_000, 30_000, 'Switch', { ssid: undefined, port: 3 })]);
+
+                const history = await clientOps.getClientHistory({ clientMac: mac, roamTimeline: true });
+
+                expect(history.roams).toEqual([]);
+            });
+
+            it('should honour a custom maxGapSeconds', async () => {
+                mockPage([wireless(0, 10_000, 'AP-A'), wireless(200_000, 210_000, 'AP-B')]);
+
+                const history = await clientOps.getClientHistory({ clientMac: mac, roamTimeline: true, maxGapSeconds: 300 });
+
+                expect(history.roams).toHaveLength(1);
+            });
+        });
+    });
 });

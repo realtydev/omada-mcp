@@ -16,7 +16,7 @@ export function registerBatchSetSwitchPortProfileTool(server: McpServer, client:
         'batchSetSwitchPortProfile',
         {
             description: 'Batch enable or disable profile override on multiple switch ports.',
-            inputSchema: batchSetSwitchPortProfileSchema.shape,
+            inputSchema: batchSetSwitchPortProfileSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

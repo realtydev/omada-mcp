@@ -19,7 +19,7 @@ export function registerUpdateClientTool(server: McpServer, client: OmadaClient)
         'updateClient',
         {
             description: 'Update client settings such as display name, static IP, and rate limits.',
-            inputSchema: updateClientSchema.shape,
+            inputSchema: updateClientSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

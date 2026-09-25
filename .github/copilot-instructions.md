@@ -6,7 +6,8 @@ This project implements a Model Context Protocol (MCP) server that exposes TP-Li
 
 ## Tooling and Runtime
 
-- Node.js 22 LTS (devcontainer base image `mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm`).
+- Node.js 24 (see `.nvmrc`).
+- Yarn 4 (Berry) via Corepack for package management — do not use `npm`.
 - TypeScript 5.9 with `module`/`moduleResolution` set to `NodeNext`.
 - Zod 3.x for configuration validation (the MCP SDK currently expects Zod 3 APIs).
 - Biome 2.x for linting and formatting.
@@ -73,8 +74,8 @@ Reference `.env.example`. Primary variables:
 - The project uses **Vitest** as the test framework.
 - All test files should be placed in the `tests/` directory with the `.test.ts` extension.
 - The test folder structure **must mirror** the `src/` folder structure for consistency and maintainability.
-- Run tests with `npm test` or `npm run test:watch` for watch mode.
-- Test coverage can be generated with `npm run test:coverage`.
+- Run tests with `yarn test` or `yarn test:watch` for watch mode.
+- Test coverage can be generated with `yarn test:coverage`.
 - All configuration validations must be implemented in `src/utils/config-validations.ts` and tested thoroughly.
 - No validation logic should exist outside of `src/config.ts` and `src/utils/config-validations.ts`.
 - Mock external dependencies (e.g., Omada API calls) in tests to ensure isolation. Use Vitest's mocking capabilities for this purpose.
@@ -82,23 +83,22 @@ Reference `.env.example`. Primary variables:
 
 ## Development Workflow
 
-- Install dependencies: `npm install` (runs automatically on container create).
-- Development server: `npm run dev` (tsx watcher).
-- Build: `npm run build` (emits to `dist/`).
-- Lint: `npm run check` (Biome linting and TypeScript type checking).
-- Launch configurations are available under `.vscode/launch.json` for debugging.
+- Install dependencies: `yarn install` (runs automatically on container create).
+- Development server: `yarn dev` (tsx watcher).
+- Build: `yarn build` (emits to `dist/`).
+- Lint: `yarn check` (Biome linting and TypeScript type checking).
 
 ## Formatting & Linting
 
-- Biome is used for both formatting and linting (`npm run format` and `npm run lint`).
+- Biome is used for both formatting and linting (`yarn format` and `yarn lint`).
 - Biome enforces import ordering, TypeScript best practices, and code style consistency.
-- **IMPORTANT** All source files must use LF (Unix-style) line endings, not CRLF (Windows-style). Biome will automatically convert line endings when running `npm run format`.
-- If you encounter formatting errors related to line endings (shown as `␍` in error messages), run `npm run format` to fix them automatically.
+- **IMPORTANT** All source files must use LF (Unix-style) line endings, not CRLF (Windows-style). Biome will automatically convert line endings when running `yarn format`.
+- If you encounter formatting errors related to line endings (shown as `␍` in error messages), run `yarn format` to fix them automatically.
 
 ## Contribution Guidelines
 
 - Keep environment secrets out of the repo; only commit `.env.example`.
-- Ensure `npm run lint` and `npm run build` pass before committing.
+- Ensure `yarn lint` and `yarn build` pass before committing.
 - Reference the OpenAPI spec in `docs/` when adding or updating Omada API interactions.
 
 ## Aditional Guidelines
@@ -134,7 +134,6 @@ Reference `.env.example`. Primary variables:
   - Tools table
   - Supported Omada API Operations table
 - `README.Docker.md` should **not** include development-specific sections:
-  - Development workflow (npm commands, building, linting)
-  - Devcontainer support
+  - Development workflow (yarn commands, building, linting)
   - Local testing and debugging
 - `README.Docker.md` should include a "Contributing" section with the GitHub repository URL to invite contributions.

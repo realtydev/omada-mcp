@@ -16,7 +16,7 @@ export function registerSetGatewayWanConnectTool(server: McpServer, client: Omad
         'setGatewayWanConnect',
         {
             description: 'Connect or disconnect a gateway WAN port.',
-            inputSchema: setGatewayWanConnectSchema.shape,
+            inputSchema: setGatewayWanConnectSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

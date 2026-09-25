@@ -15,7 +15,7 @@ export function registerSetDeviceLedTool(server: McpServer, client: OmadaClient)
         'setDeviceLed',
         {
             description: 'Set the LED on/off/site-default for a device by its MAC address.',
-            inputSchema: setDeviceLedSchema.shape,
+            inputSchema: setDeviceLedSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

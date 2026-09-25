@@ -71,4 +71,43 @@ describe('tools - simple get operations', () => {
             expect(result).toBeDefined();
         });
     });
+
+    describe('registerGetApRadiosTool', () => {
+        it('should register the tool and pass apMac and siteId through to the client', async () => {
+            const { registerGetApRadiosTool } = await import('../../src/tools/getApRadios.js');
+
+            const mockClient = { getApRadios: vi.fn().mockResolvedValue({}) };
+            const mockServer = {
+                registerTool: vi.fn((_, _schema, handler) => handler({ apMac: 'AA-BB-CC-DD-EE-FF', siteId: 'test-site' }, {})),
+            };
+
+            registerGetApRadiosTool(mockServer as never, mockClient as never);
+
+            expect(mockServer.registerTool).toHaveBeenCalledWith(
+                'getApRadios',
+                expect.objectContaining({ description: expect.any(String) }),
+                expect.any(Function)
+            );
+            expect(mockClient.getApRadios).toHaveBeenCalledWith('AA-BB-CC-DD-EE-FF', 'test-site');
+        });
+    });
+
+    describe('registerGetClientHistoryTool', () => {
+        it('should register the tool and pass its options through to the client', async () => {
+            const { registerGetClientHistoryTool } = await import('../../src/tools/getClientHistory.js');
+
+            const mockClient = { getClientHistory: vi.fn().mockResolvedValue({ sessions: [] }) };
+            const args = { siteId: 'test-site', clientMac: 'AA-BB-CC-DD-EE-FF', timeStart: 1, timeEnd: 2, roamTimeline: true, maxGapSeconds: 30 };
+            const mockServer = { registerTool: vi.fn((_, _schema, handler) => handler(args, {})) };
+
+            registerGetClientHistoryTool(mockServer as never, mockClient as never);
+
+            expect(mockServer.registerTool).toHaveBeenCalledWith(
+                'getClientHistory',
+                expect.objectContaining({ description: expect.any(String) }),
+                expect.any(Function)
+            );
+            expect(mockClient.getClientHistory).toHaveBeenCalledWith(args);
+        });
+    });
 });

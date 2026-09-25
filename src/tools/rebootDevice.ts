@@ -14,13 +14,11 @@ export function registerRebootDeviceTool(server: McpServer, client: OmadaClient)
         'rebootDevice',
         {
             description: 'Reboot a network device by its MAC address.',
-            inputSchema: rebootDeviceSchema.shape,
+            inputSchema: rebootDeviceSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },
         },
-        wrapToolHandler('rebootDevice', async ({ deviceMac, siteId }) =>
-            toToolResult(await client.rebootDevice(deviceMac, siteId))
-        )
+        wrapToolHandler('rebootDevice', async ({ deviceMac, siteId }) => toToolResult(await client.rebootDevice(deviceMac, siteId)))
     );
 }

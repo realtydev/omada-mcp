@@ -16,7 +16,7 @@ export function registerBatchSetSwitchPortStatusTool(server: McpServer, client: 
         'batchSetSwitchPortStatus',
         {
             description: 'Batch enable or disable multiple switch ports. 0=off, 1=on.',
-            inputSchema: batchSetSwitchPortStatusSchema.shape,
+            inputSchema: batchSetSwitchPortStatusSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

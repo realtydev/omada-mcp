@@ -24,7 +24,7 @@ export function registerUpdateSwitchPortTool(server: McpServer, client: OmadaCli
         'updateSwitchPort',
         {
             description: 'Update a switch port configuration (profile, PoE, speed, STP, isolation, etc.).',
-            inputSchema: updateSwitchPortSchema.shape,
+            inputSchema: updateSwitchPortSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

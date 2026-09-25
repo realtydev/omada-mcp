@@ -1,7 +1,7 @@
 {
     "$schema": "https://biomejs.dev/schemas/2.3.4/schema.json",
     "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
-    "files": { "includes": ["**", "!dist/**", "!docs/openapi/**/*.json"] },
+    "files": { "includes": ["**", "!dist/**", "!docs/openapi/**/*.json", "!package.json"] },
     "formatter": {
         "enabled": true,
         "formatWithErrors": false,

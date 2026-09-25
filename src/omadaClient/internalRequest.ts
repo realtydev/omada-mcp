@@ -1,4 +1,4 @@
-import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosRequestHeaders } from 'axios';
+import axios, { type AxiosError, type AxiosInstance, type AxiosRequestConfig, type AxiosRequestHeaders } from 'axios';
 
 import type { OmadaApiResponse } from '../types/index.js';
 import { logger } from '../utils/logger.js';
@@ -32,6 +32,13 @@ export class InternalRequestHandler {
     }
 
     /**
+     * Make a PUT request to the internal API.
+     */
+    public async put<T>(path: string, data: unknown, params?: Record<string, unknown>): Promise<T> {
+        return await this.request<T>({ method: 'PUT', url: this.buildInternalPath(path), data, params });
+    }
+
+    /**
      * Make a DELETE request to the internal API.
      */
     public async delete<T>(path: string, params?: Record<string, unknown>): Promise<T> {
@@ -48,7 +55,8 @@ export class InternalRequestHandler {
                 errorCode: response.errorCode,
                 message: response.msg,
             });
-            throw new Error(response.msg ?? 'Internal API request failed');
+            const detail = response.msg ? `: ${response.msg}` : '';
+            throw new Error(`Internal API request failed (errorCode: ${response.errorCode})${detail}`);
         }
 
         return (response.result ?? ({} as T)) as T;
@@ -122,9 +130,11 @@ export class InternalRequestHandler {
 
             return response.data;
         } catch (error) {
+            const status = axios.isAxiosError(error) ? error.response?.status : undefined;
             logger.error('Internal API request failed', {
                 method,
                 url,
+                status,
                 message: error instanceof Error ? error.message : String(error),
             });
 
@@ -132,14 +142,27 @@ export class InternalRequestHandler {
                 throw error;
             }
 
-            const status = error.response?.status;
             if (status === 401 || status === 403) {
                 this.auth.clearSession();
                 return this.request<T>(config, false);
             }
 
-            throw error;
+            throw this.toDetailedError(method, url, error);
         }
+    }
+
+    /**
+     * Build an error that surfaces the HTTP status, endpoint, and response body/message
+     * for an internal API request that failed at the HTTP level, instead of losing that
+     * detail behind axios's generic "Request failed with status code N" message.
+     */
+    private toDetailedError(method: string, url: string, error: AxiosError): Error {
+        const status = error.response?.status;
+        const body = error.response?.data as { msg?: string; errorCode?: number } | undefined;
+        const detail = body?.msg ?? error.message;
+        const statusPart = status ? ` (HTTP ${status})` : '';
+        const errorCodePart = body?.errorCode !== undefined ? ` (errorCode: ${body.errorCode})` : '';
+        return new Error(`Internal API request failed: ${method} ${url}${statusPart}${errorCodePart} - ${detail}`);
     }
 
     /**

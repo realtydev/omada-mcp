@@ -222,4 +222,33 @@ describe('omadaClient/device', () => {
             );
         });
     });
+
+    describe('getApRadios', () => {
+        it('should combine radio-config and radios responses', async () => {
+            vi.mocked(mockRequest.get).mockImplementation((path: string) => {
+                if (path.endsWith('/radio-config')) {
+                    return Promise.resolve({ errorCode: 0, result: { radioSetting5g: { channel: '52', txPower: 21 } } });
+                }
+                return Promise.resolve({ errorCode: 0, result: { radioTraffic5g: { txRetryPkts: 5 } } });
+            });
+
+            const result = await deviceOps.getApRadios('AA-BB-CC-DD-EE-FF', 'site-1');
+
+            expect(mockRequest.get).toHaveBeenCalledWith('/api/sites/site-1/aps/AA-BB-CC-DD-EE-FF/radio-config');
+            expect(mockRequest.get).toHaveBeenCalledWith('/api/sites/site-1/aps/AA-BB-CC-DD-EE-FF/radios');
+            expect(result).toEqual({
+                radioConfig: { radioSetting5g: { channel: '52', txPower: 21 } },
+                radioStats: { radioTraffic5g: { txRetryPkts: 5 } },
+            });
+        });
+
+        it('should propagate a failed response', async () => {
+            vi.mocked(mockRequest.get).mockResolvedValue({ errorCode: -39303, msg: 'AP does not exist.' });
+            vi.mocked(mockRequest.ensureSuccess).mockImplementation(() => {
+                throw new Error('AP does not exist.');
+            });
+
+            await expect(deviceOps.getApRadios('AA-BB-CC-DD-EE-FF')).rejects.toThrow('AP does not exist.');
+        });
+    });
 });

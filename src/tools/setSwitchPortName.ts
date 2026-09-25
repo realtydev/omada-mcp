@@ -16,7 +16,7 @@ export function registerSetSwitchPortNameTool(server: McpServer, client: OmadaCl
         'setSwitchPortName',
         {
             description: 'Set the name of a single switch port (1-128 characters).',
-            inputSchema: setSwitchPortNameSchema.shape,
+            inputSchema: setSwitchPortNameSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

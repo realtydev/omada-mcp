@@ -1,6 +1,8 @@
 # Omada MCP Server
 
-Full CRUD MCP server for TP-Link Omada SDN controllers. Exposes 60+ tools for reading, writing, and managing sites, devices, clients, networks, switch ports, firewalls, and more — all via the Model Context Protocol.
+Full CRUD MCP server for TP-Link Omada SDN controllers. Exposes 70+ tools for reading, writing, and managing sites, devices, clients, networks, switch ports, firewalls, and more — all via the Model Context Protocol.
+
+Most of this codebase is written by AI (Claude Code), with human review and direction.
 
 ## Quick Start
 
@@ -98,6 +100,8 @@ Available at `http://localhost:3000/mcp` (stream) or `http://localhost:3000/sse`
 | `listDevices` | List devices for a site |
 | `listClients` | List active clients for a site |
 | `getDevice` | Get details for a specific device |
+| `getApRadios` | AP radio configuration (channel, width, tx power per band) and radio statistics (retries, drops) |
+| `getClientHistory` | A client's association sessions over a time range, optionally with roams between APs |
 | `getClient` | Get details for a specific client |
 | `getSwitchStackDetail` | Get switch stack configuration and status |
 | `searchDevices` | Search devices globally across all sites |
@@ -107,20 +111,21 @@ Available at `http://localhost:3000/mcp` (stream) or `http://localhost:3000/sse`
 | `listClientsPastConnections` | Historical client connections |
 | `getThreatList` | Security threat list with filtering |
 | `getInternetInfo` | Internet / WAN configuration |
-| `getPortForwardingStatus` | Port forwarding rules (User/UPnP) |
+| `getPortForwardingStatus` | Port forwarding rules (User uses the internal web UI API when `OMADA_WEB_USERNAME`/`OMADA_WEB_PASSWORD` are set; UPnP uses the public Open API) |
 | `getLanNetworkList` | LAN networks and VLAN settings |
 | `getLanProfileList` | LAN profiles for switch ports |
 | `getWlanGroupList` | WLAN groups |
 | `getSsidList` | SSIDs in a WLAN group |
 | `getSsidDetail` | Detailed SSID configuration |
 | `getFirewallSetting` | Firewall rules and policies |
-| `getSwitchPorts` | All ports for a switch (status, PoE, speed, STP) |
+| `getIpsSetting` | IDS/IPS (threat protection) status for a site's gateway — enabled/disabled, mode, and detection level; reports `supported: false` on gateway models without IDS/IPS |
 | `getFirmwareDetails` | Firmware info for a device |
-| `listEvents` | Paginated site events |
+| `listAlerts` | Paginated site alerts, optionally filtered by module and resolved state |
+| `listEvents` | Paginated site events, optionally filtered by module and event key prefix |
 | `listLogs` | Paginated site logs |
 | `listFirewallAcls` | Firewall ACL rules |
-| `listRoutes` | Static routes |
-| `getSwitch` | Full switch info including portList array |
+| `listRoutes` | Static routes (internal web UI API only, requires `OMADA_WEB_USERNAME`/`OMADA_WEB_PASSWORD`) |
+| `getSwitch` | Full switch info including portList array (per-port status, profile, PoE) |
 | `getCableTestResults` | Cable test results for a switch |
 | `getSwitchNetworks` | Switch VLAN trunking configuration |
 
@@ -134,11 +139,22 @@ Available at `http://localhost:3000/mcp` (stream) or `http://localhost:3000/sse`
 | `createLanProfile` | Create a LAN profile |
 | `updateLanProfile` | Update a LAN profile |
 | `updateFirewallSetting` | Update firewall settings |
+| `setIpsSetting` | Enable/disable and configure IDS/IPS (mode, detection level) on a site's gateway; can reduce max throughput when enabled |
 | `createFirewallAcl` | Create a firewall ACL rule |
+| `updateFirewallAcl` | Update a firewall ACL rule |
 | `deleteFirewallAcl` | Delete a firewall ACL rule |
+| `updateSsid` | Update an SSID's basic config (name, band, security, VLAN, PSK, etc.) |
+| `setSsidEnable` | Enable or disable an SSID network-wide |
 | `updateSwitchPort` | Update switch port config (profile, PoE, speed, STP) |
 | `updateClient` | Update client settings |
 | `setSwitchNetworks` | Set switch VLAN trunking configuration |
+| `createRoute` | Create a static route (internal web UI API only) |
+| `updateRoute` | Update a static route by ID (internal web UI API only) |
+| `deleteRoute` | Delete a static route by ID (internal web UI API only) |
+| `createPortForward` | Create a port forwarding rule (internal web UI API only) |
+| `updatePortForward` | Update a port forwarding rule by ID (internal web UI API only) |
+| `deletePortForward` | Delete a port forwarding rule by ID (internal web UI API only) |
+| `updateWanPortSetting` | Update a gateway WAN port's IPv4/IPv6/MAC connection settings (e.g. DHCP client `unicastDhcp`) |
 
 ### Switch Port Tools
 
@@ -165,6 +181,8 @@ Available at `http://localhost:3000/mcp` (stream) or `http://localhost:3000/sse`
 | `unblockClient` | Unblock a client |
 | `reconnectClient` | Reconnect a client |
 | `setDeviceLed` | Set device LED setting |
+| `setLogNotifications` | Turn alert/event log notification types on or off for a site; dry run supported, returns a before/after diff (live config write) |
+| `setApRadio` | Change one AP radio band: enable, channel index, width, tx power. Reads back and verifies, fails if the controller does not apply it; dry run supported (live config write, can drop clients on that band) |
 | `startFirmwareUpgrade` | Start firmware upgrade |
 | `setGatewayWanConnect` | Connect/disconnect gateway WAN port |
 
@@ -174,26 +192,48 @@ Available at `http://localhost:3000/mcp` (stream) or `http://localhost:3000/sse`
 |---|---|
 | `genericApiCall` | Invoke any Omada OpenAPI endpoint directly |
 
+### Meta
+
+| Tool | Description |
+|---|---|
+| `getServerInfo` | Report the package version, git commit, and build time this server process was actually built from |
+
 ## Development
 
+Requires Node 24 (see `.nvmrc`, use `nvm use`) and [Yarn 4](https://yarnpkg.com/) via Corepack (`corepack enable`).
+
 ```bash
-npm install
-npm run dev          # Live reload via tsx
-npm run build        # Compile TypeScript
-npm run check        # Lint + type check
-npm start            # Run compiled server (stdio)
+yarn install
+yarn dev          # Live reload via tsx
+yarn build        # Compile TypeScript
+yarn check        # Lint + type check
+yarn start        # Run compiled server (stdio)
 ```
 
 ### Docker
 
 ```bash
-npm run docker:build   # Build image
-npm run docker:run     # Run with .env file
+yarn docker:build   # Build image
+yarn docker:run     # Run with .env file
 ```
+
+### Restarting after a change
+
+For stdio transport, each session's MCP client spawns its own server subprocess when it connects,
+and that process keeps running whatever code it loaded at that point. Rebuilding `dist/` on disk
+(`yarn build`) does **not** affect an already-connected session — only a fresh connection picks up
+the new build. After merging a change and rebuilding:
+
+1. Restart/reconnect each MCP session that talks to this server (e.g. `/mcp` in Claude Code, or
+   start a new session).
+2. Call the `getServerInfo` tool and check `gitCommit` against the commit you expect to be running,
+   before relying on any new or changed tool behavior — especially anything billed as dry-run or
+   safe-by-default. A session that skips this can silently keep running stale code that ignores a
+   safety parameter it doesn't know about yet.
 
 ## Credits
 
-Forked from [jmtvms/tplink-omada-mcp](https://github.com/jmtvms/tplink-omada-mcp). Extended with full CRUD operations, switch port management, batch operations, and cable testing by [realtydev/omada-mcp](https://github.com/realtydev/omada-mcp).
+Originally forked from [jmtvms/tplink-omada-mcp](https://github.com/jmtvms/tplink-omada-mcp). This project has since diverged significantly (full CRUD operations, switch port management, batch operations, cable testing, and more) and is now maintained independently rather than as an active fork.
 
 ## License
 

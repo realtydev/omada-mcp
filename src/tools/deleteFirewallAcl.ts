@@ -14,7 +14,7 @@ export function registerDeleteFirewallAclTool(server: McpServer, client: OmadaCl
         'deleteFirewallAcl',
         {
             description: 'Delete a firewall ACL rule by its ID.',
-            inputSchema: deleteFirewallAclSchema.shape,
+            inputSchema: deleteFirewallAclSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

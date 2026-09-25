@@ -16,7 +16,7 @@ export function registerSetSwitchPortProfileOverrideTool(server: McpServer, clie
         'setSwitchPortProfileOverride',
         {
             description: 'Enable or disable profile override on a single switch port.',
-            inputSchema: setSwitchPortProfileOverrideSchema.shape,
+            inputSchema: setSwitchPortProfileOverrideSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

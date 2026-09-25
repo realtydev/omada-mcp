@@ -16,7 +16,7 @@ export function registerBatchSetSwitchPortPoeTool(server: McpServer, client: Oma
         'batchSetSwitchPortPoe',
         {
             description: 'Batch enable or disable PoE on multiple switch ports. 1=on (802.3at/af), 0=off.',
-            inputSchema: batchSetSwitchPortPoeSchema.shape,
+            inputSchema: batchSetSwitchPortPoeSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

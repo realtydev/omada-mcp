@@ -14,13 +14,11 @@ export function registerUnblockClientTool(server: McpServer, client: OmadaClient
         'unblockClient',
         {
             description: 'Unblock a previously blocked client device by its MAC address, restoring network access.',
-            inputSchema: unblockClientSchema.shape,
+            inputSchema: unblockClientSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },
         },
-        wrapToolHandler('unblockClient', async ({ clientMac, siteId }) =>
-            toToolResult(await client.unblockClient(clientMac, siteId))
-        )
+        wrapToolHandler('unblockClient', async ({ clientMac, siteId }) => toToolResult(await client.unblockClient(clientMac, siteId)))
     );
 }

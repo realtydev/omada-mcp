@@ -15,7 +15,7 @@ export function registerSetSwitchNetworksTool(server: McpServer, client: OmadaCl
         'setSwitchNetworks',
         {
             description: 'Set switch networks / VLAN trunking configuration for a switch.',
-            inputSchema: setSwitchNetworksSchema.shape,
+            inputSchema: setSwitchNetworksSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

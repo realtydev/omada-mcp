@@ -16,7 +16,7 @@ export function registerSetSwitchPortProfileTool(server: McpServer, client: Omad
         'setSwitchPortProfile',
         {
             description: 'Assign a LAN profile to a single switch port.',
-            inputSchema: setSwitchPortProfileSchema.shape,
+            inputSchema: setSwitchPortProfileSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

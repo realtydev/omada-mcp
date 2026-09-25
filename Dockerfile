@@ -2,14 +2,16 @@
 
 FROM node:24-bookworm-slim AS deps
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
+RUN corepack enable
+COPY package.json yarn.lock .yarnrc.yml ./
+RUN yarn install --immutable
 
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
+RUN corepack enable
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+RUN yarn build
 
 FROM node:24-bookworm-slim AS runtime
 
@@ -27,7 +29,8 @@ ENV NODE_ENV=production
 RUN apt-get update \
   && apt-get install -y --no-install-recommends curl \
   && rm -rf /var/lib/apt/lists/*
-COPY package*.json ./
-RUN npm install --omit=dev
+RUN corepack enable
+COPY package.json yarn.lock .yarnrc.yml ./
+RUN yarn workspaces focus --production
 COPY --from=build /app/dist ./dist
 CMD ["node", "dist/index.js"]

@@ -1,8 +1,12 @@
 import type {
     ActiveClientInfo,
     ClientActivity,
+    ClientHistory,
     ClientPastConnection,
+    ClientRoam,
+    ClientSession,
     GetClientActivityOptions,
+    GetClientHistoryOptions,
     ListClientsPastConnectionsOptions,
     OmadaApiResponse,
     OmadaClientInfo,
@@ -11,6 +15,12 @@ import type {
 
 import type { RequestHandler } from './request.js';
 import type { SiteOperations } from './site.js';
+
+const HISTORY_PAGE_SIZE = 1000;
+const HISTORY_MAX_PAGES = 20;
+const DEFAULT_ROAM_MAX_GAP_SECONDS = 60;
+
+const normaliseMac = (mac: string): string => mac.replace(/[^0-9a-f]/gi, '').toLowerCase();
 
 /**
  * Client-related operations for the Omada API.
@@ -120,5 +130,88 @@ export class ClientOperations {
 
         const result = this.request.ensureSuccess(response);
         return result.data ?? [];
+    }
+    /**
+     * Get a client's association sessions over a time range, optionally with a roam timeline.
+     *
+     * Built on the insight `past-connection` endpoint rather than `/clients/{mac}/client-history`: on
+     * controllers checked so far the latter ignores `page`, `pageSize` and the time filters and always
+     * returns the 10 most recent sessions. Here `firstSeen` is the session start, `lastSeen` its end
+     * and `duration` the length in seconds. `searchKey` is a fuzzy match, so results are re-filtered
+     * to the exact MAC.
+     */
+    public async getClientHistory(options: GetClientHistoryOptions): Promise<ClientHistory> {
+        const timeEnd = options.timeEnd ?? Date.now();
+        const timeStart = options.timeStart ?? timeEnd - 7 * 24 * 60 * 60 * 1000;
+        const wantedMac = normaliseMac(options.clientMac);
+
+        const sessions: ClientSession[] = [];
+        let truncated = false;
+        for (let page = 1; ; page++) {
+            const rows = await this.listClientsPastConnections({
+                siteId: options.siteId,
+                page,
+                pageSize: HISTORY_PAGE_SIZE,
+                sortLastSeen: 'desc',
+                timeStart,
+                timeEnd,
+                searchKey: options.clientMac,
+            });
+            for (const row of rows) {
+                if (row.mac !== undefined && normaliseMac(row.mac) === wantedMac && row.firstSeen !== undefined && row.lastSeen !== undefined) {
+                    sessions.push({
+                        start: row.firstSeen,
+                        end: row.lastSeen,
+                        durationSeconds: row.duration ?? Math.round((row.lastSeen - row.firstSeen) / 1000),
+                        deviceName: row.deviceName,
+                        ssid: row.ssid,
+                        port: row.port,
+                        associationTimeMs: row.associationTime,
+                        download: row.download,
+                        upload: row.upload,
+                    });
+                }
+            }
+            if (rows.length < HISTORY_PAGE_SIZE) {
+                break;
+            }
+            if (page >= HISTORY_MAX_PAGES) {
+                truncated = true;
+                break;
+            }
+        }
+        sessions.sort((a, b) => a.start - b.start);
+
+        const history: ClientHistory = { clientMac: options.clientMac, sessions };
+        if (options.roamTimeline) {
+            history.roams = ClientOperations.findRoams(sessions, options.maxGapSeconds ?? DEFAULT_ROAM_MAX_GAP_SECONDS);
+        }
+        if (truncated) {
+            history.truncated = true;
+        }
+        return history;
+    }
+
+    /**
+     * A roam is two consecutive wireless sessions (sorted by start) on different devices where the
+     * next session starts no more than `maxGapSeconds` after the previous one ended.
+     */
+    private static findRoams(sessions: ClientSession[], maxGapSeconds: number): ClientRoam[] {
+        const roams: ClientRoam[] = [];
+        for (let i = 1; i < sessions.length; i++) {
+            const prev = sessions[i - 1];
+            const next = sessions[i];
+            const bothWireless = prev.ssid !== undefined && next.ssid !== undefined;
+            const gapSeconds = (next.start - prev.end) / 1000;
+            if (bothWireless && prev.deviceName !== next.deviceName && gapSeconds <= maxGapSeconds) {
+                roams.push({
+                    at: next.start,
+                    from: { deviceName: prev.deviceName, ssid: prev.ssid, sessionEnd: prev.end },
+                    to: { deviceName: next.deviceName, ssid: next.ssid, sessionStart: next.start },
+                    gapSeconds,
+                });
+            }
+        }
+        return roams;
     }
 }

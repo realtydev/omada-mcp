@@ -4,25 +4,28 @@
     "description": "Model Context Protocol server that exposes TP-Link Omada controller APIs",
     "type": "module",
     "main": "dist/index.js",
-    "bin": {
-        "tplink-omada-mcp": "./dist/index.js"
-    },
+    "bin": "./dist/index.js",
     "scripts": {
-        "build": "tsc -p tsconfig.json",
+        "generate:build-info": "node scripts/generate-build-info.mjs",
+        "build": "yarn generate:build-info && tsc -p tsconfig.json",
         "lint": "biome check --error-on-warnings .",
         "lint:fix": "biome check --write .",
         "format": "biome format --write .",
-        "check": "npm run lint && tsc --noEmit",
-        "test": "vitest run",
-        "test:watch": "vitest",
-        "test:coverage": "vitest run --coverage",
-        "dev": "tsx src/index.ts",
+        "check": "yarn generate:build-info && yarn lint && tsc --noEmit",
+        "test": "yarn generate:build-info && vitest run",
+        "test:watch": "yarn generate:build-info && vitest",
+        "test:coverage": "yarn generate:build-info && vitest run --coverage",
+        "dev": "yarn generate:build-info && tsx src/index.ts",
         "start": "node dist/index.js",
         "docker:build": "docker build -f Dockerfile -t ghcr.io/migueltvms/tplink-omada-mcp:latest .",
         "docker:run": "docker run --rm -it --env-file .env --env-file .env.local ghcr.io/migueltvms/tplink-omada-mcp:latest",
         "docker:push": "docker push ghcr.io/migueltvms/tplink-omada-mcp:latest"
     },
-    "keywords": ["mcp", "tp-link", "omada"],
+    "keywords": [
+        "mcp",
+        "tp-link",
+        "omada"
+    ],
     "engines": {
         "node": ">=24.0.0"
     },
@@ -45,5 +48,6 @@
         "tsx": "^4.20.6",
         "typescript": "^5.9.3",
         "vitest": "^4.0.8"
-    }
+    },
+    "packageManager": "yarn@4.18.0+sha512.fcb8716fe7cd0eece141ffc18b92193a9df9204c1ba83189c288835223fc0bbe64af473bab0d5e9927a7daeb5caf2bb07eb2787cc9338ca040ea125f2a1f2f7e"
 }

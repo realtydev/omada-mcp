@@ -22,7 +22,7 @@ export function registerBatchSetSwitchPortNameTool(server: McpServer, client: Om
         'batchSetSwitchPortName',
         {
             description: 'Batch set names on multiple switch ports. Each entry specifies a port number and name (1-128 chars).',
-            inputSchema: batchSetSwitchPortNameSchema.shape,
+            inputSchema: batchSetSwitchPortNameSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

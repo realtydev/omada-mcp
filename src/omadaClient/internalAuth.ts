@@ -60,11 +60,7 @@ export class InternalAuthManager {
         const loginPath = `/${encodeURIComponent(this.omadacId)}/api/v2/login`;
 
         try {
-            const response = await this.http.post(
-                loginPath,
-                { username: this.username, password: this.password },
-                { withCredentials: true }
-            );
+            const response = await this.http.post(loginPath, { username: this.username, password: this.password }, { withCredentials: true });
 
             const data = response.data as { errorCode?: number; msg?: string; result?: { token?: string } };
 

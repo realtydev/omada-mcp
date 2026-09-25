@@ -16,8 +16,6 @@ export function registerGetSwitchNetworksTool(server: McpServer, client: OmadaCl
             description: 'Get switch networks / VLAN trunking configuration for a switch.',
             inputSchema: getSwitchNetworksSchema.shape,
         },
-        wrapToolHandler('getSwitchNetworks', async ({ switchMac, siteId }) =>
-            toToolResult(await client.getSwitchNetworks(switchMac, siteId))
-        )
+        wrapToolHandler('getSwitchNetworks', async ({ switchMac, siteId }) => toToolResult(await client.getSwitchNetworks(switchMac, siteId)))
     );
 }

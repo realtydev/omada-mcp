@@ -22,6 +22,21 @@ export class DeviceOperations {
     }
 
     /**
+     * Get an AP's radio configuration and radio statistics (v1 API).
+     * Combines `/aps/{apMac}/radio-config` (channel, width, tx power per band) with
+     * `/aps/{apMac}/radios` (rx/tx packet, retry and drop counters per band).
+     */
+    public async getApRadios(apMac: string, siteId?: string): Promise<{ radioConfig: unknown; radioStats: unknown }> {
+        const resolvedSiteId = this.site.resolveSiteId(siteId);
+        const base = `/sites/${encodeURIComponent(resolvedSiteId)}/aps/${encodeURIComponent(apMac)}`;
+        const [config, stats] = await Promise.all([
+            this.request.get<OmadaApiResponse<unknown>>(this.buildPath(`${base}/radio-config`)),
+            this.request.get<OmadaApiResponse<unknown>>(this.buildPath(`${base}/radios`)),
+        ]);
+        return { radioConfig: this.request.ensureSuccess(config), radioStats: this.request.ensureSuccess(stats) };
+    }
+
+    /**
      * Get a specific device by MAC address or device ID.
      */
     public async getDevice(identifier: string, siteId?: string): Promise<OmadaDeviceInfo | undefined> {

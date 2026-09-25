@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import type { CallToolResult, ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
+import { PACKAGE_VERSION } from '../generated/buildInfo.js';
 
 import type { OmadaClient } from '../omadaClient/index.js';
 import { registerAllTools } from '../tools/index.js';
@@ -182,7 +183,7 @@ function setupServerLogging(server: McpServer): void {
 export function createServer(client: OmadaClient): McpServer {
     const server = new McpServer({
         name: 'tplink-omada-mcp',
-        version: '0.1.0',
+        version: PACKAGE_VERSION,
     });
 
     setupServerLogging(server);
