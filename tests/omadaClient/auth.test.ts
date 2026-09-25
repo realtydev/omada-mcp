@@ -359,4 +359,27 @@ describe('WebAuthManager', () => {
 
         await expect(authManager.getAuthHeaders()).rejects.toThrow('Login failed');
     });
+
+    it('should log in once when several requests need a session at the same time', async () => {
+        (mockHttp.post as ReturnType<typeof vi.fn>).mockResolvedValue({
+            data: { errorCode: 0, msg: 'Success', result: { token: 'csrf-token' } },
+            headers: {},
+        });
+
+        const authManager = new WebAuthManager(mockHttp, 'admin', 'password', 'omadac-id');
+        await Promise.all([authManager.getAuthHeaders(), authManager.getAuthHeaders(), authManager.getAuthHeaders()]);
+
+        expect(mockHttp.post).toHaveBeenCalledTimes(1);
+    });
+
+    it('should retry login on the next request after a failed login', async () => {
+        (mockHttp.post as ReturnType<typeof vi.fn>)
+            .mockResolvedValueOnce({ data: { errorCode: -30109, msg: 'Login failed' }, headers: {} })
+            .mockResolvedValueOnce({ data: { errorCode: 0, result: { token: 'csrf-token' } }, headers: {} });
+
+        const authManager = new WebAuthManager(mockHttp, 'admin', 'password', 'omadac-id');
+
+        await expect(authManager.getAuthHeaders()).rejects.toThrow('Login failed');
+        await expect(authManager.getAuthHeaders()).resolves.toMatchObject({ 'Csrf-Token': 'csrf-token' });
+    });
 });

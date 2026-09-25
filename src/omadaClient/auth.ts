@@ -135,6 +135,8 @@ export class WebAuthManager implements RequestAuthManager {
 
     private sessionCookie?: string;
 
+    private pendingLogin?: Promise<void>;
+
     constructor(
         private readonly http: AxiosInstance,
         private readonly username: string,
@@ -167,7 +169,11 @@ export class WebAuthManager implements RequestAuthManager {
             return;
         }
 
-        await this.login();
+        // Share one login between concurrent requests so they don't each open a session.
+        this.pendingLogin ??= this.login().finally(() => {
+            this.pendingLogin = undefined;
+        });
+        await this.pendingLogin;
     }
 
     private async login(): Promise<void> {
