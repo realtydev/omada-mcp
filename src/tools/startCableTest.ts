@@ -15,7 +15,7 @@ export function registerStartCableTestTool(server: McpServer, client: OmadaClien
         {
             description:
                 'Start a cable test on a switch. Ports under test briefly lose link. Use getCableTestResults to retrieve results after completion.',
-            inputSchema: startCableTestSchema.shape,
+            inputSchema: startCableTestSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },

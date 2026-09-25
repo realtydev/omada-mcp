@@ -6,7 +6,7 @@ import { toToolResult, wrapToolHandler } from '../server/common.js';
 
 const updateFirewallSettingSchema = z.object({
     siteId: z.string().min(1).optional(),
-    settings: z.record(z.unknown()).describe('Firewall settings object (same shape returned by getFirewallSetting)'),
+    settings: z.record(z.string(), z.unknown()).describe('Firewall settings object (same shape returned by getFirewallSetting)'),
 });
 
 export function registerUpdateFirewallSettingTool(server: McpServer, client: OmadaClient): void {

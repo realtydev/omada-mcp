@@ -7,7 +7,7 @@ import { toToolResult, wrapToolHandler } from '../server/common.js';
 const updatePortForwardSchema = z.object({
     siteId: z.string().min(1).optional(),
     ruleId: z.string().min(1, 'ruleId is required'),
-    rule: z.record(z.unknown()).describe('Updated port forwarding rule object, same shape as createPortForward.'),
+    rule: z.record(z.string(), z.unknown()).describe('Updated port forwarding rule object, same shape as createPortForward.'),
 });
 
 export function registerUpdatePortForwardTool(server: McpServer, client: OmadaClient): void {

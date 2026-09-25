@@ -8,8 +8,8 @@ const genericApiCallSchema = z.object({
     method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
     path: z.string().min(1, 'path is required (e.g. /sites/{siteId}/firewall)'),
     version: z.enum(['v1', 'v2']).optional().default('v1'),
-    body: z.record(z.unknown()).optional(),
-    queryParams: z.record(z.unknown()).optional(),
+    body: z.record(z.string(), z.unknown()).optional(),
+    queryParams: z.record(z.string(), z.unknown()).optional(),
 });
 
 export function registerGenericApiCallTool(server: McpServer, client: OmadaClient): void {
