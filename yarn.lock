@@ -362,9 +362,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@modelcontextprotocol/sdk@npm:^1.30.1":
-  version: 1.30.1
-  resolution: "@modelcontextprotocol/sdk@npm:1.30.1"
+"@modelcontextprotocol/sdk@npm:^1.31.0":
+  version: 1.31.0
+  resolution: "@modelcontextprotocol/sdk@npm:1.31.0"
   dependencies:
     "@hono/node-server": "npm:^1.19.9 || ^2.0.5"
     ajv: "npm:^8.17.1"
@@ -391,7 +391,7 @@ __metadata:
       optional: true
     zod:
       optional: false
-  checksum: 10c0/68e21e5d584f54948d3ccccb780530fdb21e83a0e69e867ae0d18499afa715c12e6e0bd666e33fd98c8b8528bc03631422e90f659f30cff8b35147efd6ec6894
+  checksum: 10c0/2c4f011a765fb3346ec578455591d062008a842a0f6f8a763baa97b6a01e0f1febb97d1cc44024ee6d0761d43df56e9c71f72a37d47c7ea6aeb1c4f8be0f06d9
   languageName: node
   linkType: hard
 
@@ -560,13 +560,13 @@ __metadata:
   resolution: "@realtydev/omada-mcp@workspace:."
   dependencies:
     "@biomejs/biome": "npm:2.5.14"
-    "@modelcontextprotocol/sdk": "npm:^1.30.1"
+    "@modelcontextprotocol/sdk": "npm:^1.31.0"
     "@ngrok/ngrok": "npm:^1.5.2"
     "@types/node": "npm:^24.10.0"
     "@vitest/coverage-v8": "npm:^5.0.1"
     "@vitest/ui": "npm:^5.0.1"
     axios: "npm:^1.13.2"
-    dotenv: "npm:^18.0.2"
+    dotenv: "npm:^18.0.4"
     pino: "npm:^10.1.0"
     tsx: "npm:^4.23.15"
     typescript: "npm:^7.0.2"
@@ -1237,12 +1237,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"dotenv@npm:^18.0.2":
-  version: 18.0.2
-  resolution: "dotenv@npm:18.0.2"
+"dotenv@npm:^18.0.4":
+  version: 18.0.4
+  resolution: "dotenv@npm:18.0.4"
   bin:
     dotenv: dist/index.cjs
-  checksum: 10c0/c16e179205096a7028eea5fba2062dbd25e88d93a0beb66d219507d4585f63ec3f02fda755eee5dca790b7424391a39332830b19983003f0d8d449fbc6845424
+  checksum: 10c0/33be95df15269c0f1106da53b97bf8dd2ad17cec34aaa9e05ea1e97135195d50a9fbf0cdcac27a736b1dcd20575b2bfdea2287a5c86bf950430eb45de7ec4eda
   languageName: node
   linkType: hard
 
