@@ -52,6 +52,7 @@ import { registerListLogsTool } from './listLogs.js';
 import { registerListMostActiveClientsTool } from './listMostActiveClients.js';
 import { registerListRoutesTool } from './listRoutes.js';
 import { registerListSitesTool } from './listSites.js';
+import { registerListSwitchPortsTool } from './listSwitchPorts.js';
 import { registerRebootDeviceTool } from './rebootDevice.js';
 import { registerReconnectClientTool } from './reconnectClient.js';
 import { registerSearchDevicesTool } from './searchDevices.js';
@@ -115,6 +116,7 @@ export function registerAllTools(server: McpServer, client: OmadaClient): void {
     registerListIpGroupsTool(server, client);
     registerListRoutesTool(server, client);
     registerGetSwitchTool(server, client);
+    registerListSwitchPortsTool(server, client);
     registerGetCableTestResultsTool(server, client);
     registerGetSwitchNetworksTool(server, client);
 

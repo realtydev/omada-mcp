@@ -3,6 +3,11 @@ import type { OmadaApiResponse } from '../types/index.js';
 import type { RequestHandler } from './request.js';
 import type { SiteOperations } from './site.js';
 
+interface SwitchPortTelemetry {
+    switchMac?: string;
+    [key: string]: unknown;
+}
+
 /**
  * Switch port and cable test operations for the Omada API.
  * Covers single-port config, batch operations, cable tests, and switch networks.
@@ -22,6 +27,26 @@ export class SwitchOperations {
         const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}`);
         const response = await this.request.get<OmadaApiResponse<unknown>>(path);
         return this.request.ensureSuccess(response);
+    }
+
+    /**
+     * List site-wide switch port telemetry, optionally filtered by switch MAC.
+     *
+     * Unlike the per-switch detail endpoint, this endpoint supports Omada
+     * Agile Series switches and includes live link, traffic, STP, LLDP and PoE
+     * fields. Omada requires pagination parameters, supplied by fetchPaginated.
+     */
+    public async listSwitchPorts(switchMac?: string, siteId?: string): Promise<SwitchPortTelemetry[]> {
+        const resolvedSiteId = this.site.resolveSiteId(siteId);
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/switches/ports/poe-info`);
+        const ports = await this.request.fetchPaginated<SwitchPortTelemetry>(path);
+
+        if (!switchMac) {
+            return ports;
+        }
+
+        const normalizedMac = switchMac.toUpperCase();
+        return ports.filter((port) => port.switchMac?.toUpperCase() === normalizedMac);
     }
 
     /**

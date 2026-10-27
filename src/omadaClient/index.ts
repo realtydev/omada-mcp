@@ -408,6 +408,10 @@ export class OmadaClient {
         return await this.switchOps.getSwitch(switchMac, siteId);
     }
 
+    public async listSwitchPorts(switchMac?: string, siteId?: string): Promise<Record<string, unknown>[]> {
+        return await this.switchOps.listSwitchPorts(switchMac, siteId);
+    }
+
     public async setSwitchPortProfile(switchMac: string, port: number, profileId: string, siteId?: string): Promise<unknown> {
         return await this.switchOps.setSwitchPortProfile(switchMac, port, profileId, siteId);
     }
