@@ -54,6 +54,7 @@ describe('tools/index', () => {
                 'listIpGroups',
                 'listRoutes',
                 'getSwitch',
+                'listSwitchPorts',
                 'getCableTestResults',
                 'getSwitchNetworks',
                 // Write tools

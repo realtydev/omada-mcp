@@ -171,6 +171,7 @@ For Fusion gateways that do not expose Platform Integration OAuth credentials, s
 | `listIpGroups` | IP groups used by firewall ACLs (internal web UI API, requires `OMADA_WEB_USERNAME`/`OMADA_WEB_PASSWORD`) |
 | `listRoutes` | Static routes (internal web UI API only, requires `OMADA_WEB_USERNAME`/`OMADA_WEB_PASSWORD`) |
 | `getSwitch` | Full switch info including portList array (per-port status, profile, PoE) |
+| `listSwitchPorts` | Site-wide switch port telemetry (link, speed, traffic, STP, LLDP and PoE), optionally filtered by switch MAC; supports Agile Series switches |
 | `getCableTestResults` | Cable test results for a switch |
 | `getSwitchNetworks` | Switch VLAN trunking configuration |
 
