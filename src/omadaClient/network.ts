@@ -1,9 +1,10 @@
+import { isDeepStrictEqual } from 'node:util';
 import type { OmadaApiResponse, PaginatedResult } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { completeSsidSchema, mergeSsidConfig, ssidRecord, ssidSecurityGroupActive, ssidUpdateSchema } from '../utils/ssid-update-schema.js';
 import { verifyWrite } from '../utils/write-verification.js';
-
 import type { InternalRequestHandler } from './internalRequest.js';
+import { type SsidChangeReceipt, safeSsidChangeConfig, sameShape, ssidChangeReceiptSchema } from './networkChange.js';
 import type { RequestHandler } from './request.js';
 import type { SiteOperations } from './site.js';
 
@@ -54,7 +55,8 @@ export class NetworkOperations {
     constructor(
         private readonly request: RequestHandler,
         private readonly site: SiteOperations,
-        private readonly buildPath: (path: string, version?: string) => string
+        private readonly buildPath: (path: string, version?: string) => string,
+        private readonly controllerId?: string
     ) {}
 
     /**
@@ -202,7 +204,14 @@ export class NetworkOperations {
      * @param wlanId - WLAN group ID (can be obtained from getWlanGroupList)
      * @param ssidId - SSID ID (can be obtained from getSsidList)
      */
-    public async updateSsid(wlanId: string, ssidId: string, data: Record<string, unknown>, siteId?: string, dryRun = false): Promise<unknown> {
+    public async updateSsid(
+        wlanId: string,
+        ssidId: string,
+        data: Record<string, unknown>,
+        siteId?: string,
+        dryRun = false,
+        expected?: SsidChangeReceipt['applied']
+    ): Promise<unknown> {
         if (!wlanId) {
             throw new Error('A wlanId must be provided. Use getWlanGroupList to get available WLAN group IDs.');
         }
@@ -216,6 +225,8 @@ export class NetworkOperations {
         if (requested.length === 0) throw new Error('At least one SSID field must be changed.');
         const before = ssidRecord(await this.getSsidDetail(wlanId, ssidId, siteId));
         if (!before) throw new Error('Cannot preserve SSID settings: the controller did not return an SSID object.');
+        if (expected && !isDeepStrictEqual(safeSsidChangeConfig(before), expected))
+            throw new Error('Rollback refused: SSID basic settings changed while preparing restoration.');
         for (const group of ['pskSetting', 'entSetting', 'ppskSetting']) {
             if (
                 parsed.data[group as keyof typeof parsed.data] !== undefined &&
@@ -307,7 +318,35 @@ export class NetworkOperations {
                 return mismatchedFields.length === 0 && unexpectedChanges.length === 0;
             }
         );
+        const oldConfig = safeSsidChangeConfig(before);
+        const observedConfig = safeSsidChangeConfig(verification.observed);
+        const receipt =
+            this.controllerId &&
+            verification.status === 'verified' &&
+            oldConfig &&
+            observedConfig &&
+            oldConfig.security === observedConfig.security &&
+            sameShape(oldConfig, observedConfig)
+                ? ssidChangeReceiptSchema.safeParse({
+                      version: 1,
+                      resource: 'ssid-basic',
+                      controllerId: this.controllerId,
+                      siteId: resolvedSiteId,
+                      wlanId,
+                      ssidId,
+                      before: oldConfig,
+                      applied: observedConfig,
+                  })
+                : undefined;
         return {
+            ...(receipt?.success
+                ? { rollbackReceipt: receipt.data }
+                : this.controllerId
+                  ? {
+                        rollbackUnavailable:
+                            'SSID rollback requires complete, secret-free open/enterprise configuration with unchanged field presence and verified read-back.',
+                    }
+                  : {}),
             dryRun: false,
             written: response === undefined ? 'unknown' : true,
             acknowledged: response !== undefined,
@@ -323,6 +362,26 @@ export class NetworkOperations {
                     : {}),
             },
         };
+    }
+
+    public async rollbackSsidChange(receipt: SsidChangeReceipt, dryRun = true): Promise<unknown> {
+        const parsed = ssidChangeReceiptSchema.parse(receipt);
+        if (!this.controllerId || parsed.controllerId !== this.controllerId) throw new Error('Rollback receipt belongs to a different controller');
+        if (typeof dryRun !== 'boolean') throw new Error('dryRun must be a boolean');
+        const current = safeSsidChangeConfig(await this.getSsidDetail(parsed.wlanId, parsed.ssidId, parsed.siteId));
+        if (isDeepStrictEqual(current, parsed.before))
+            return {
+                operation: 'rollback',
+                resource: parsed.resource,
+                dryRun,
+                written: false,
+                changes: [],
+                verification: { status: 'verified', attempts: 0 },
+            };
+        if (!current || !isDeepStrictEqual(current, parsed.applied))
+            throw new Error('Rollback refused: SSID basic settings changed after this receipt was issued.');
+        const result = await this.updateSsid(parsed.wlanId, parsed.ssidId, parsed.before, parsed.siteId, dryRun, parsed.applied);
+        return { ...(result as Record<string, unknown>), operation: 'rollback', resource: parsed.resource };
     }
 
     /**

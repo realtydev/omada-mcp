@@ -213,11 +213,14 @@ export class RateLimitProfileOperations {
         let response: OmadaApiResponse<unknown> | undefined;
         let writeError: string | undefined;
         try {
-            response = await this.request.request<OmadaApiResponse<unknown>>({
-                method: 'PUT',
-                url: this.buildPath(`/sites/${encodeURIComponent(siteId)}/rate-limit-profile/${encodeURIComponent(profileId)}`),
-                data: desired,
-            });
+            response = await this.request.request<OmadaApiResponse<unknown>>(
+                {
+                    method: 'PUT',
+                    url: this.buildPath(`/sites/${encodeURIComponent(siteId)}/rate-limit-profile/${encodeURIComponent(profileId)}`),
+                    data: desired,
+                },
+                false
+            );
         } catch (error) {
             if (definiteRejection(error)) throw error;
             writeError = error instanceof Error ? error.message : String(error);

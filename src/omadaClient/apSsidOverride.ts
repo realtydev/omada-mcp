@@ -270,7 +270,10 @@ export class ApSsidOverrideOperations {
         let writeError = false;
         let response: OmadaApiResponse<unknown> | undefined;
         try {
-            response = await this.request.request<OmadaApiResponse<unknown>>({ method: 'PATCH', url: target.path, data: { ssidOverrides: desired } });
+            response = await this.request.request<OmadaApiResponse<unknown>>(
+                { method: 'PATCH', url: target.path, data: { ssidOverrides: desired } },
+                false
+            );
         } catch (error) {
             const status = axios.isAxiosError(error)
                 ? error.response?.status
@@ -290,7 +293,7 @@ export class ApSsidOverrideOperations {
         );
         return {
             ...base,
-            written: writeError && verification.status !== 'verified' ? 'unknown' : true,
+            written: writeError ? 'unknown' : true,
             verified: verification.status === 'verified',
             verification: { status: verification.status, attempts: verification.attempts },
             ...(writeError ? { acknowledgement: 'unknown' } : {}),

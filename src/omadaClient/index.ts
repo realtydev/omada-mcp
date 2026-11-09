@@ -54,6 +54,7 @@ import { LogNotificationOperations } from './logNotification.js';
 import { MonitorOperations, type SiteDashboardOptions, type SiteDashboardResult } from './monitor.js';
 import { type ListVpnConnectionsOptions, MonitoringOperations } from './monitoring.js';
 import { NetworkOperations } from './network.js';
+import { NetworkChangeOperations, type NetworkChangeReceipt } from './networkChange.js';
 import {
     type NetworkDiagnosticOptions,
     NetworkDiagnosticsOperations,
@@ -61,12 +62,7 @@ import {
     type WanDiagnosticOptions,
     type WifiHistoryOptions,
 } from './networkDiagnostics.js';
-import {
-    type NetworkChangeReceipt,
-    RateLimitProfileOperations,
-    type RateLimitProfileUpdate,
-    type RateLimitProfileWriteResult,
-} from './rateLimitProfile.js';
+import { RateLimitProfileOperations, type RateLimitProfileUpdate, type RateLimitProfileWriteResult } from './rateLimitProfile.js';
 import { type PaginationReadOptions, RequestHandler } from './request.js';
 import { SecurityOperations } from './security.js';
 import { SiteOperations } from './site.js';
@@ -99,6 +95,7 @@ export class OmadaClient {
     private readonly networkOps: NetworkOperations;
     private readonly networkDiagnosticsOps: NetworkDiagnosticsOperations;
     private readonly rateLimitProfileOps: RateLimitProfileOperations;
+    private readonly networkChangeOps: NetworkChangeOperations;
 
     private readonly diagnosticsOps: DiagnosticsOperations;
 
@@ -144,15 +141,22 @@ export class OmadaClient {
         this.deviceOps = new DeviceOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.clientOps = new ClientOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.securityOps = new SecurityOperations(this.request, this.buildOmadaPath.bind(this));
-        this.networkOps = new NetworkOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.networkOps = new NetworkOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this), options.omadacId);
         this.networkDiagnosticsOps = new NetworkDiagnosticsOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.rateLimitProfileOps = new RateLimitProfileOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this), options.omadacId);
-        this.dhcpReservationOps = new DhcpReservationOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.dhcpReservationOps = new DhcpReservationOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this), options.omadacId);
         this.monitoringOps = new MonitoringOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.monitorOps = new MonitorOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.logNotificationOps = new LogNotificationOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.apSsidOverrideOps = new ApSsidOverrideOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
-        this.apRadioOps = new ApRadioOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.apRadioOps = new ApRadioOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this), options.omadacId);
+        this.networkChangeOps = new NetworkChangeOperations(
+            options.omadacId,
+            this.rateLimitProfileOps,
+            this.networkOps,
+            this.dhcpReservationOps,
+            this.apRadioOps
+        );
         this.actionOps = new ActionOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.genericOps = new GenericOperations(this.request, this.buildOmadaPath.bind(this), this.accessPolicy);
         this.discoveryOps = new DiscoveryOperations(this.request, this.http, options);
@@ -669,9 +673,13 @@ export class OmadaClient {
     ): Promise<RateLimitProfileWriteResult> {
         return await this.rateLimitProfileOps.updateRateLimitProfile(profileId, settings, siteId, dryRun);
     }
-    public async rollbackNetworkChange(receipt: NetworkChangeReceipt, dryRun = true): Promise<RateLimitProfileWriteResult> {
-        return await this.rateLimitProfileOps.rollbackNetworkChange(receipt, dryRun);
+    public async rollbackNetworkChange(receipt: NetworkChangeReceipt, dryRun = true): Promise<unknown> {
+        return await this.networkChangeOps.rollbackNetworkChange(receipt, dryRun);
     }
+    public async refreshApiCatalog(): Promise<unknown> {
+        return await this.discoveryOps.refreshApiCatalog();
+    }
+
     public async searchApiOperations(options: SearchApiOperationsOptions = {}, policy: DiscoveryPolicy = {}): Promise<unknown> {
         return await this.discoveryOps.searchApiOperations(options, policy);
     }

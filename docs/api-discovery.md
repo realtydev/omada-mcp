@@ -1,6 +1,6 @@
 # Automatic API discovery
 
-The existing tools remain available. Three additional tools let an assistant search the controller's API, inspect an operation, and execute a validated request without needing a separate MCP tool for every endpoint.
+The existing tools remain available. Discovery tools let an assistant search the controller's API, inspect an operation, and execute a validated request without needing a separate MCP tool for every endpoint.
 
 1. Call `searchApiOperations` with keywords, an optional category (`tag`), HTTP method, and a result limit from 1 to 50.
 2. Pass a returned `operationId` to `describeApiOperation`. The description includes parameters, JSON schemas, controller documentation, and any execution limitations.
@@ -20,9 +20,21 @@ Search recognizes common network vocabulary such as router/gateway, restart/rebo
 | `live`           | Require usable controller documentation; fail clearly instead of falling back.                        |
 | `bundled`        | Use the packaged snapshot without fetching controller documentation.                                  |
 
-Discovery loads lazily and shares one cached snapshot per client process. Restart after changing controller firmware or discovery configuration. Every search, description, and execution identifies its `source` and `loadedAt`; fallback searches/descriptions also explain why the bundled snapshot was selected. The bundled snapshot currently indexes 1,676 operations. A listed operation does not establish that a particular controller/device implements it.
+Discovery loads lazily and shares one cached snapshot per client process. Call `refreshApiCatalog` after controller firmware/documentation changes; restart the server after changing discovery configuration. Every search, description, and execution identifies its `source` and `loadedAt`; fallback searches/descriptions also explain why the bundled snapshot was selected. The bundled snapshot currently indexes 1,676 operations. A listed operation does not establish that a particular controller/device implements it.
 
 Documentation requests stay on the configured controller, retain TLS verification/private-CA configuration, refuse redirects, and are bounded in size and duration. External schema references are not fetched. Split documentation groups must load consistently; partial or conflicting groups trigger fallback in `auto` mode or failure in `live` mode. Descriptions disclose unresolved references and bounded expansion.
+
+## Discovery diagnostics and refresh
+
+`searchApiOperations` and `describeApiOperation` include `discoveryDiagnostics` for the snapshot they used. Each bounded attempt records a stage (`combined`, `configuration`, numbered `group`, or `default`), outcome and a safe reason such as `http_error` with numeric status, `timeout`, `tls_error`, `unexpected_content`, `invalid_document`, `unsafe_documentation_path` or `group_conflict`. Raw exceptions, controller URLs, group names, headers and response bodies are omitted. This evidence explains fallback; it does not establish hardware support.
+
+Call `refreshApiCatalog` with `{}` to reload the configured source. The tool accepts no URL, credentials, source override or controller mutation. Its `current` snapshot reports source, load time, schema/API version when safe, a document SHA-256 hash and operation count. When a prior snapshot exists, `previous` and `changed` make a source/document change explicit. Inspect `status`: `refreshed` means a valid replacement loaded, while `failed` reports whether the existing cache was retained.
+
+Concurrent refresh calls share one load. Calls already using the old catalogue finish on that snapshot; normal reads can keep using it during refresh. Successful refresh replaces the cache atomically. A failed live-only refresh leaves the prior valid catalogue available; an initial failure leaves no usable cache. In `auto` mode, a valid bundled fallback is an intentional replacement and is identified as `source:"bundled"`; `bundled` mode reloads the packaged snapshot without network requests. Refresh does not reload environment variables or silently change the configured source mode.
+
+Read-only profiles can refresh documentation. Existing read-only/category enforcement still governs searching, describing and executing operations from the replacement snapshot. A refresh does not grant additional permissions or turn every API operation into a registered MCP tool.
+
+Live Controller 6.3.0.45 returned HTTP 404 for all three configured documentation probe stages. The complete bundled snapshot therefore remains the usable source; a fresh refresh confirms the same document hash. This is distinct from invalid JSON, TLS or authentication errors and does not imply that new undocumented endpoint paths should be guessed.
 
 ## Execution and existing safeguards
 

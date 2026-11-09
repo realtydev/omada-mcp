@@ -4,6 +4,7 @@ import axios from 'axios';
 
 import type { OmadaApiResponse } from '../types/index.js';
 import { verifyWrite, type WriteVerification } from '../utils/write-verification.js';
+import { changeIdentifierSchema, type DhcpChangeReceipt, dhcpChangeConfigSchema, dhcpChangeReceiptSchema, sameShape } from './networkChange.js';
 import type { RequestHandler } from './request.js';
 import type { SiteOperations } from './site.js';
 
@@ -49,6 +50,8 @@ export interface DhcpReservationWriteResult {
     requestBody?: DhcpReservationConfig;
     verification?: Omit<WriteVerification<DhcpReservation | undefined>, 'observed'>;
     writeError?: string;
+    rollbackReceipt?: DhcpChangeReceipt;
+    rollbackUnavailable?: string;
 }
 
 const WRITABLE_FIELDS = ['mac', 'netId', 'status', 'ip', 'description', 'options'] as const;
@@ -66,7 +69,8 @@ export class DhcpReservationOperations {
     constructor(
         private readonly request: RequestHandler,
         private readonly site: SiteOperations,
-        private readonly buildPath: (path: string) => string
+        private readonly buildPath: (path: string) => string,
+        private readonly controllerId?: string
     ) {}
 
     public async listDhcpReservations(siteId?: string, searchKey?: string): Promise<DhcpReservation[]> {
@@ -114,7 +118,8 @@ export class DhcpReservationOperations {
         mac: string,
         settings: DhcpReservationUpdate,
         siteId?: string,
-        dryRun = false
+        dryRun = false,
+        expected?: { config: DhcpReservationConfig; id: string }
     ): Promise<DhcpReservationWriteResult> {
         if (Object.keys(settings).length === 0) {
             throw new Error('At least one DHCP reservation setting must be provided.');
@@ -122,6 +127,8 @@ export class DhcpReservationOperations {
         const normalizedMac = normalizeMac(mac);
         const before = await this.requireExisting(normalizedMac, siteId);
         const current = this.writableConfig(before);
+        if (expected && (!sameValue(current, expected.config) || before.id !== expected.id))
+            throw new Error('Rollback refused: DHCP reservation changed while preparing restoration.');
         const body = { ...current, ...settings, mac: normalizedMac };
         const changes = WRITABLE_FIELDS.filter((field) => !sameValue(current[field], body[field])).map((field) => ({
             field,
@@ -137,9 +144,16 @@ export class DhcpReservationOperations {
         return await this.mutate('update', `${this.path(siteId)}/${encodeURIComponent(normalizedMac)}`, normalizedMac, body, changes, before, siteId);
     }
 
-    public async deleteDhcpReservation(mac: string, siteId?: string, dryRun = false): Promise<DhcpReservationWriteResult> {
+    public async deleteDhcpReservation(
+        mac: string,
+        siteId?: string,
+        dryRun = false,
+        expected?: { config: DhcpReservationConfig; id: string }
+    ): Promise<DhcpReservationWriteResult> {
         const normalizedMac = normalizeMac(mac);
         const before = await this.requireExisting(normalizedMac, siteId);
+        if (expected && (!sameValue(this.writableConfig(before), expected.config) || before.id !== expected.id))
+            throw new Error('Rollback refused: DHCP reservation changed while preparing restoration.');
         const changes = [{ field: 'reservation', before, after: undefined }];
         if (dryRun) {
             return { operation: 'delete', dryRun: true, written: false, changes, before };
@@ -153,6 +167,60 @@ export class DhcpReservationOperations {
             before,
             siteId
         );
+    }
+
+    public async rollbackDhcpChange(receipt: DhcpChangeReceipt, dryRun = true): Promise<unknown> {
+        const parsed = dhcpChangeReceiptSchema.parse(receipt);
+        if (!this.controllerId || parsed.controllerId !== this.controllerId) throw new Error('Rollback receipt belongs to a different controller');
+        if (typeof dryRun !== 'boolean') throw new Error('dryRun must be a boolean');
+        const current = await this.find(parsed.mac, parsed.siteId);
+        const snapshot = current ? dhcpChangeConfigSchema.parse(this.writableConfig(current)) : null;
+        if (sameValue(snapshot, parsed.before) && (parsed.before === null || parsed.applied === null || current?.id === parsed.beforeId))
+            return {
+                operation: 'rollback',
+                resource: parsed.resource,
+                dryRun,
+                written: false,
+                changes: [],
+                verification: { status: 'verified', attempts: 0 },
+            };
+        if (!sameValue(snapshot, parsed.applied) || (current !== undefined && current.id !== parsed.appliedId)) {
+            throw new Error('Rollback refused: DHCP reservation changed or was replaced after this receipt was issued.');
+        }
+        let result: DhcpReservationWriteResult;
+        if (parsed.before === null)
+            result = await this.deleteDhcpReservation(parsed.mac, parsed.siteId, dryRun, { config: parsed.applied!, id: parsed.appliedId! });
+        else if (parsed.applied === null) result = await this.createDhcpReservation(parsed.before, parsed.siteId, dryRun);
+        else {
+            if (!sameShape(parsed.before, parsed.applied)) throw new Error('Rollback cannot restore absent DHCP fields');
+            result = await this.updateDhcpReservation(parsed.mac, parsed.before, parsed.siteId, dryRun, {
+                config: parsed.applied,
+                id: parsed.appliedId!,
+            });
+        }
+        return { ...result, operation: 'rollback', resource: parsed.resource };
+    }
+
+    private receipt(before: DhcpReservation | undefined, applied: DhcpReservation | undefined, siteId?: string): DhcpChangeReceipt | undefined {
+        if (!this.controllerId) return undefined;
+        try {
+            const old = before ? dhcpChangeConfigSchema.parse(this.writableConfig(before)) : null;
+            const next = applied ? dhcpChangeConfigSchema.parse(this.writableConfig(applied)) : null;
+            if (old && next && (!sameShape(old, next) || before?.id !== applied?.id)) return undefined;
+            return dhcpChangeReceiptSchema.parse({
+                version: 1,
+                resource: 'dhcp-reservation',
+                controllerId: this.controllerId,
+                siteId: this.site.resolveSiteId(siteId),
+                mac: old?.mac ?? next?.mac,
+                before: old,
+                applied: next,
+                beforeId: before ? changeIdentifierSchema.parse(before.id) : null,
+                appliedId: applied ? changeIdentifierSchema.parse(applied.id) : null,
+            });
+        } catch {
+            return undefined;
+        }
     }
 
     private path(siteId?: string): string {
@@ -197,16 +265,25 @@ export class DhcpReservationOperations {
         let response: OmadaApiResponse<unknown> | undefined;
         let writeError: string | undefined;
         try {
-            response = await this.request.request<OmadaApiResponse<unknown>>({
-                method: operation === 'create' ? 'POST' : operation === 'update' ? 'PATCH' : 'DELETE',
-                url: path,
-                ...(body ? { data: body } : {}),
-            });
+            response = await this.request.request<OmadaApiResponse<unknown>>(
+                {
+                    method: operation === 'create' ? 'POST' : operation === 'update' ? 'PATCH' : 'DELETE',
+                    url: path,
+                    ...(body ? { data: body } : {}),
+                },
+                false
+            );
         } catch (error) {
             // A controller rejection is definite. A lost transport response is uncertain, so only re-read state.
-            if (!axios.isAxiosError(error) || error.response) {
-                throw error;
-            }
+            const safeStatus = error && typeof error === 'object' && 'status' in error ? error.status : undefined;
+            const status = axios.isAxiosError(error)
+                ? error.response?.status
+                : typeof safeStatus === 'number'
+                  ? safeStatus
+                  : Number((error instanceof Error ? error.message : '').match(/HTTP\s+(\d{3})/)?.[1]);
+            if (status !== undefined && status >= 400 && status < 500 && status !== 408) throw error;
+            // RequestHandler deliberately strips Axios config/response identities while redacting errors.
+            // Those sanitized network errors still need reconciliation, never another mutation.
             writeError = error instanceof Error ? error.message : String(error);
         }
         if (response) {
@@ -220,16 +297,20 @@ export class DhcpReservationOperations {
                     : entry !== undefined &&
                       WRITABLE_FIELDS.every((field) => body?.[field] === undefined || sameValue(this.writableConfig(entry)[field], body[field]))
         );
+        const receipt = verification.status === 'verified' ? this.receipt(before, verification.observed, siteId) : undefined;
         return {
             operation,
             dryRun: false,
-            written: writeError && verification.status !== 'verified' ? 'unknown' : true,
+            written: writeError ? 'unknown' : true,
             changes,
             before,
             after: verification.observed,
             requestBody: body,
             verification: { status: verification.status, attempts: verification.attempts, message: verification.message },
             ...(writeError ? { writeError } : {}),
+            ...(receipt
+                ? { rollbackReceipt: receipt }
+                : { rollbackUnavailable: 'A complete verified reservation identity/configuration was not available for rollback.' }),
         };
     }
 }

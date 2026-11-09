@@ -61,3 +61,35 @@ describe('discovery client policy and loading', () => {
         expect(request.request).toHaveBeenCalledTimes(1);
     });
 });
+
+it('returns sanitized source diagnostics from search, describe and refresh', async () => {
+    const { service } = setup();
+    expect(await service.searchApiOperations()).toMatchObject({
+        discoveryDiagnostics: { mode: 'auto', attempts: [{ stage: 'combined', status: 'ok' }] },
+    });
+    expect(await service.describeApiOperation('sites')).toMatchObject({ discoveryDiagnostics: { attempts: [{ stage: 'combined', status: 'ok' }] } });
+    expect(await service.refreshApiCatalog()).toMatchObject({
+        status: 'refreshed',
+        current: { source: 'live', schemaVersion: '3.0.1', operations: 2, documentHash: expect.stringMatching(/^[a-f0-9]{64}$/) },
+        previous: { source: 'live' },
+        changed: false,
+    });
+});
+
+it('retains prior live catalogue and safe evidence when an explicit live refresh fails', async () => {
+    const fetch = vi.fn().mockResolvedValue(document);
+    const loader = new CatalogLoader(fetch, 'live');
+    const service = new DiscoveryOperations({} as RequestHandler, {} as AxiosInstance, { omadacId: 'controller' }, loader);
+    const original = await service.getCatalog();
+    fetch.mockRejectedValue({ code: 'ETIMEDOUT', message: 'private controller secret' });
+    const refreshed = await service.refreshApiCatalog();
+    expect(refreshed).toMatchObject({ status: 'failed', cacheRetained: true, current: { source: 'live' } });
+    expect(JSON.stringify(refreshed)).not.toContain('private');
+    expect(await service.getCatalog()).toBe(original);
+});
+
+it('does not expose local bundle failure messages and reports whether a cache exists', async () => {
+    const loader = new CatalogLoader(vi.fn(), 'bundled', () => Promise.reject(new Error('/private/config/secret')));
+    const service = new DiscoveryOperations({} as RequestHandler, {} as AxiosInstance, { omadacId: 'controller' }, loader);
+    expect(await service.refreshApiCatalog()).toEqual({ status: 'failed', cacheRetained: false, reason: 'catalogue_load_failed' });
+});

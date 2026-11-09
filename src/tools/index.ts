@@ -77,6 +77,7 @@ import { registerListVpnConnectionsTool } from './listVpnConnections.js';
 import { registerLocateDeviceTool } from './locateDevice.js';
 import { registerRebootDeviceTool } from './rebootDevice.js';
 import { registerReconnectClientTool } from './reconnectClient.js';
+import { registerRefreshApiCatalogTool } from './refreshApiCatalog.js';
 import { registerRollbackNetworkChangeTool } from './rollbackNetworkChange.js';
 import { registerSearchApiOperationsTool } from './searchApiOperations.js';
 import { registerSearchDevicesTool } from './searchDevices.js';
@@ -117,6 +118,7 @@ export function registerAllTools(
     policy = new ToolAccessPolicy(profile)
 ): void {
     const discoveryPolicy = { readOnly: policy.readOnly || !policy.permitsWrites, ...(policy.unrestricted ? {} : { accessPolicy: policy }) };
+    registerRefreshApiCatalogTool(server, client);
     registerSearchApiOperationsTool(server, client, discoveryPolicy);
     registerDescribeApiOperationTool(server, client, discoveryPolicy);
     registerExecuteApiOperationTool(server, client, discoveryPolicy);

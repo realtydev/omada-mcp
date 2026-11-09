@@ -9,7 +9,7 @@ export function registerGetWifiHistoryTool(server: McpServer, client: OmadaClien
         'getWifiHistory',
         {
             description:
-                'Collect channel distribution, interference and timestamped retry/drop evidence. Optional apMac adds mesh evidence. Reports missing bands, partial results and truncation; never starts scans or changes radios.',
+                'Collect channel distribution, interference and timestamped retry/drop evidence. Optional apMac adds mesh evidence. Reports missing bands, partial results and truncation; optional baseline compares documented-unit evidence; never starts scans or changes radios.',
             inputSchema: networkDiagnosticSchema
                 .extend({
                     apMac: z

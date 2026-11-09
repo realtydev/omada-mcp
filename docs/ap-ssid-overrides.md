@@ -35,7 +35,7 @@ The documented Open API v2 GET returns effective settings but can omit the overr
 
 Updates preserve the other entries' enablement and active name/password/VLAN overrides and submit the complete documented v2 list once. Inactive inherited name/password/VLAN values are not promoted into overrides. An unreadable active sibling password blocks the write; it is never replaced with a mask or blank value. Existing schedules, radio settings and site-wide SSID configuration are outside this endpoint.
 
-A second snapshot rejects preflight drift. Read-back checks all active configured override entries and the AP/WLAN group identity, including unchanged siblings. Verified no-ops send no write. Lost acknowledgments are reconciled with bounded reads without replaying PATCH. `written:"unknown"` or `verified:false` requires inspection before another change.
+A second snapshot rejects preflight drift. Read-back checks all active configured override entries and the AP/WLAN group identity, including unchanged siblings. Verified no-ops send no write. Lost acknowledgments are reconciled with bounded reads without replaying PATCH. `written:"unknown"` remains unknown even when read-back verifies the desired configuration. An uncertain or unverified result requires inspection before another change.
 
 Verification covers configured AP overrides, not live broadcasting, connectivity or performance. No atomic compare-and-swap contract is available, so a race after preflight remains possible. Per-controller web API compatibility is established by live validation rather than inferred from the public schema.
 

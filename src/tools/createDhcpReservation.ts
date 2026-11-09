@@ -18,7 +18,7 @@ export function registerCreateDhcpReservationTool(server: McpServer, client: Oma
         'createDhcpReservation',
         {
             description:
-                'Create a DHCP reservation after checking for an existing MAC. Supports dryRun and bounded read-back verification. Inspect verification.status; unknown or mismatch means completion is not confirmed.',
+                'Create a DHCP reservation after checking for an existing MAC. Supports dryRun and bounded read-back verification. Inspect verification.status; unknown or mismatch means completion is not confirmed. Verified changes with complete stable identity/configuration may return a rollbackReceipt.',
             inputSchema: schema,
             annotations: { destructiveHint: true },
         },

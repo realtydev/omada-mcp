@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server for TP-Link Omada network diagnostics and configuration, with stdio and HTTP transports and a runtime CLI for managed Docker setup, updates and rollback.
 
-> **Release:** The [v0.10.1 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.10.1) includes 104 tools, automatic API discovery, richer diagnostics and verified profile rollback. `getServerInfo` identifies the running build.
+> **Release:** The [v0.11.0 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.11.0) includes 105 tools, automatic API discovery, discovery refresh, diagnostic comparisons and extended verified rollback. `getServerInfo` identifies the running build.
 
 ## Runtime management
 
@@ -78,7 +78,7 @@ The HTTP server will be available at `http://localhost:3000/mcp` (stream transpo
 ## Features
 
 - OAuth client-credentials authentication with automatic token refresh, plus web-session authentication for Fusion gateways
-- 106 tools in the current source (the released image has 104) for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
+- 107 tools in the current source (the released image has 105) for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
 - Automatic API discovery: search, describe and execute documented JSON operations with live/bundled source information and write previews
 - Dedicated dashboard, topology and client/log diagnostics, with guarded DHCP, radio and log-notification workflows
 - Read-only profile enforced for dedicated tools and discovered operations
@@ -362,12 +362,13 @@ DHCP writes support `dryRun`. Inspect `verification.status`: `verified` confirms
 
 ### Generic
 
-| Tool                   | Description                                                                              |
-| ---------------------- | ---------------------------------------------------------------------------------------- |
-| `genericApiCall`       | Invoke any Omada OpenAPI endpoint directly                                               |
-| `searchApiOperations`  | Search API operations by keyword, category or HTTP method                                |
-| `describeApiOperation` | Inspect an operation’s parameters, schemas and limitations                               |
-| `executeApiOperation`  | Execute validated JSON, multipart or file-download operations; writes preview by default |
+| Tool                   | Description                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
+| `genericApiCall`       | Invoke any Omada OpenAPI endpoint directly                                                       |
+| `searchApiOperations`  | Search API operations by keyword, category or HTTP method                                        |
+| `refreshApiCatalog`    | Refresh the configured catalogue with sanitized discovery diagnostics and safe cache replacement |
+| `describeApiOperation` | Inspect an operation’s parameters, schemas and limitations                                       |
+| `executeApiOperation`  | Execute validated JSON, multipart or file-download operations; writes preview by default         |
 
 See [API discovery](docs/api-discovery.md) for live/bundled specification selection and guarded execution.
 

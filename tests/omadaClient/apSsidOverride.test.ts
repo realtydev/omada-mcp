@@ -108,24 +108,27 @@ describe('AP SSID override preservation', () => {
     it('writes the complete documented v2 body once, preserving an active sibling password and VLAN', async () => {
         const other = structuredClone(config[1]);
         const result = await ops.updateApSsidOverride('aabbccddeeff', 1, { ssidEnable: false }, 'site', false);
-        expect(request.request).toHaveBeenCalledExactlyOnceWith({
-            method: 'PATCH',
-            url: `/openapi/v2/controller/sites/site/aps/${mac}/override`,
-            data: {
-                ssidOverrides: [
-                    { ssidEntryId: 1, overrideSsidEnable: false, overrideVlanEnable: false, ssidEnable: false },
-                    {
-                        ssidEntryId: 2,
-                        overrideSsidEnable: true,
-                        overrideVlanEnable: true,
-                        ssidEnable: true,
-                        overrideSsidName: 'Private override',
-                        overrideSsidPassword: 'Other-secret-42',
-                        vlanId: 42,
-                    },
-                ],
+        expect(request.request).toHaveBeenCalledExactlyOnceWith(
+            {
+                method: 'PATCH',
+                url: `/openapi/v2/controller/sites/site/aps/${mac}/override`,
+                data: {
+                    ssidOverrides: [
+                        { ssidEntryId: 1, overrideSsidEnable: false, overrideVlanEnable: false, ssidEnable: false },
+                        {
+                            ssidEntryId: 2,
+                            overrideSsidEnable: true,
+                            overrideVlanEnable: true,
+                            ssidEnable: true,
+                            overrideSsidName: 'Private override',
+                            overrideSsidPassword: 'Other-secret-42',
+                            vlanId: 42,
+                        },
+                    ],
+                },
             },
-        });
+            false
+        );
         expect(config[1]).toEqual(other);
         expect(result).toMatchObject({
             written: true,
@@ -215,7 +218,7 @@ describe('AP SSID override preservation', () => {
             throw new Error('response lost');
         });
         expect(await ops.updateApSsidOverride(mac, 1, { ssidEnable: false }, undefined, false)).toMatchObject({
-            written: true,
+            written: 'unknown',
             verified: true,
             acknowledgement: 'unknown',
         });
