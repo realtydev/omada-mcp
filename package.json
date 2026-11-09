@@ -4,10 +4,15 @@
     "description": "Full read/write Model Context Protocol server for TP-Link Omada SDN controllers — sites, devices, clients, VLANs, firewall, switch ports, Wi-Fi and WAN",
     "type": "module",
     "main": "dist/index.js",
-    "bin": "./dist/index.js",
+    "bin": {
+        "omada-mcp": "./dist/index.js",
+        "omada-runtime": "./dist/runtime.js"
+    },
     "files": [
         "dist",
         "README.md",
+        "README.Docker.md",
+        "docs/runtime.md",
         "LICENSE"
     ],
     "repository": {
@@ -47,6 +52,7 @@
         "test:watch": "yarn generate:build-info && vitest",
         "test:coverage": "yarn generate:build-info && vitest run --coverage",
         "audit": "yarn npm audit --all --recursive",
+        "test:package": "node scripts/check-package.mjs",
         "smoke:readonly": "node scripts/smoke-readonly.mjs",
         "dev": "yarn generate:build-info && tsx src/index.ts",
         "wan-guard": "node dist/wanGuard.js",

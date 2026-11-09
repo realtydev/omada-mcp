@@ -20,6 +20,10 @@ You:    Move it to 36 at 40 MHz, dry run first.
 Claude: (setApRadio dryRun=true → setApRadio) Done. Read back and verified.
 ```
 
+## Runtime management
+
+Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned updates and rollback of client-managed stdio processes or a persistent local Docker service. It verifies actual running builds with `getServerInfo`, preserves credential files, and can adopt an existing Compose service.
+
 ## Highlights
 
 - **91 tools, read and write.** Full CRUD for LAN networks/VLANs, LAN profiles, firewall ACLs, static routes, port forwarding, SSIDs, and switch ports (single and batch), plus device and client actions.
