@@ -9,7 +9,7 @@ export function registerDiagnoseWanTool(server: McpServer, client: OmadaClient):
         'diagnoseWan',
         {
             description:
-                'Collect gateway WAN link/internet status, current health and bounded site-wide ISP history. Preserves timestamp/unit evidence and partial failures. Does not run speed tests, reconnect WANs or change failover.',
+                'Collect gateway WAN link/internet status, current health and bounded site-wide ISP history. Preserves timestamp/unit evidence and partial failures. Optional baseline compares documented latency/loss evidence. Does not run speed tests, reconnect WANs or change failover.',
             inputSchema: networkDiagnosticSchema
                 .extend({ gatewayMac: z.string().regex(/^(?:[\da-f]{12}|(?:[\da-f]{2}[:-]){5}[\da-f]{2})$/i) })
                 .strict(),

@@ -131,7 +131,7 @@ const groups: Record<ToolCategory, readonly string[]> = {
 };
 
 const toolCategories = new Map(Object.entries(groups).flatMap(([category, names]) => names.map((name) => [name, category as ToolCategory] as const)));
-const discoveryTools = new Set(['searchApiOperations', 'describeApiOperation', 'executeApiOperation']);
+const discoveryTools = new Set(['searchApiOperations', 'describeApiOperation', 'executeApiOperation', 'refreshApiCatalog']);
 const statusTools = new Set(['getServerInfo', 'getControllerCapabilities']);
 const methods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -255,6 +255,8 @@ export class ToolAccessPolicy {
     }
 
     public allowsTool(name: string, destructive = false): boolean {
+        if (name === 'rollbackNetworkChange')
+            return ['clients', 'network', 'wireless'].some((category) => this.allowsCategory(category as ToolCategory, true));
         if (statusTools.has(name) || discoveryTools.has(name)) return true;
         if (name === 'genericApiCall')
             return (
@@ -267,6 +269,19 @@ export class ToolAccessPolicy {
     }
 
     public assertTool(name: string, args?: unknown, destructive = false): void {
+        if (name === 'rollbackNetworkChange' && args !== undefined) {
+            const input = args && typeof args === 'object' ? (args as Record<string, unknown>) : undefined;
+            const receipt = input && Object.hasOwn(input, 'receipt') ? input.receipt : input;
+            const resource = receipt && typeof receipt === 'object' ? (receipt as Record<string, unknown>).resource : undefined;
+            const categories: Record<string, ToolCategory> = {
+                'rate-limit-profile': 'clients',
+                'dhcp-reservation': 'network',
+                'ssid-basic': 'wireless',
+                'ap-radio': 'wireless',
+            };
+            if (typeof resource !== 'string' || !this.allowsCategory(categories[resource], true))
+                throw new Error('Rollback resource is not permitted by the configured tool policy.');
+        }
         if (!this.allowsTool(name, destructive)) throw new Error(`Tool ${name} is not permitted by the configured tool policy.`);
         if (
             name === 'getControllerCapabilities' &&

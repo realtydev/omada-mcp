@@ -27,7 +27,9 @@ export function toolRegistrationServer(server: McpServer, profile: ToolProfile, 
                     handler: ToolCallback<InputArgs>
                 ) => {
                     // Unknown naming families fail closed, even when they claim to be read-only.
-                    const discoveryRead = ['describeApiOperation', 'executeApiOperation'].includes(name) && config.annotations?.readOnlyHint === true;
+                    const discoveryRead =
+                        ['describeApiOperation', 'executeApiOperation', 'refreshApiCatalog'].includes(name) &&
+                        config.annotations?.readOnlyHint === true;
                     if (
                         policy.readOnly &&
                         ((!/^(get|list|search|diagnose)[A-Z]/.test(name) && !discoveryRead) || config.annotations?.destructiveHint === true)
