@@ -8,12 +8,12 @@ Call `getControllerCapabilities` to read controller metadata and the shared disc
 
 The report contains:
 
-- `controller`: version, metadata API version, and explicit `classic`, `msp`, or `unknown` mode from `/api/info`. Missing mode evidence stays unknown. MSP routing is currently unsupported; classic routes are not rewritten automatically.
+- `controller`: version, metadata API version, and explicit `classic`, `msp`, or `unknown` mode from `/api/info`. Missing mode evidence stays unknown. For explicit MSP mode, `mspRouting` reports `configured` or `not_configured` according to `OMADA_MSP_ID`; these states do not establish authenticated access or tested controller support. Dedicated classic routes are not rewritten automatically.
 - `configuration`: configured authentication mode, internal web credential availability, and whether a site was selected. Configured credentials do not establish successful authentication or permission.
 - `catalog`: live/bundled provenance, load time, fallback indicator, operation counts, unsupported-contract reasons, and feature advertisements. Preflight eligibility is distinct from full schema validation, permissions, and hardware support. Advertisements retain `controllerSupport:"not_tested"`.
 - `ssidEvidence`: an optional response-shape check for one explicitly selected SSID. The default is `not_requested`.
 
-A metadata `apiVer` of `3` does not establish Open API v3 execution support. Discovery retains its existing supported route versions. Bundled documentation is a snapshot, and even a live document does not prove that a device implements a feature.
+A metadata `apiVer` of `3` does not establish Open API v3 execution support. Discovery accepts controller-scoped and explicitly configured MSP-scoped Open API v1/v2 routes. Structural eligibility includes an MSP route even when its required scope identifier has not been configured; execution still rejects that missing configuration. Bundled documentation is a snapshot, and even a live document does not prove that a device implements a feature.
 
 ## Inspect one SSID
 

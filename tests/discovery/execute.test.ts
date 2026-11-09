@@ -1,3 +1,6 @@
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { OperationCatalog } from '../../src/discovery/catalog.js';
@@ -198,14 +201,14 @@ describe('discovered operation execution', () => {
         expect(request.request).not.toHaveBeenCalled();
     });
 
-    it('fails closed on a newer JSON Schema dialect rather than ignoring its constraints', async () => {
+    it('fails closed on a future OpenAPI version rather than ignoring its constraints', async () => {
         const { catalog, request, run } = setup();
-        catalog.document.openapi = '3.1.0';
-        await expect(run()).rejects.toThrow('OpenAPI 3.0 schema semantics');
+        catalog.document.openapi = '3.2.0';
+        await expect(run()).rejects.toThrow('supports OpenAPI 3.0 and 3.1');
         expect(request.request).not.toHaveBeenCalled();
     });
 
-    it.each(['multipart/form-data', 'application/octet-stream', 'application/x-www-form-urlencoded'])(
+    it.each(['application/octet-stream', 'application/x-www-form-urlencoded'])(
         'refuses unsupported body media %s before writes',
         async (contentType) => {
             const { request, run } = writeSetup({}, `${BASE}/things`, contentType);
@@ -213,6 +216,12 @@ describe('discovered operation execution', () => {
             expect(request.request).not.toHaveBeenCalled();
         }
     );
+
+    it('requires a configured transfer directory for multipart operations', async () => {
+        const { request, run } = writeSetup({}, `${BASE}/upload`, 'multipart/form-data');
+        await expect(run({ dryRun: false })).rejects.toThrow('OMADA_TRANSFER_DIR');
+        expect(request.request).not.toHaveBeenCalled();
+    });
 
     it('refuses a raw body for GET and unknown operation IDs', async () => {
         const { request, run } = setup();
@@ -458,5 +467,325 @@ describe('discovered operation execution', () => {
         body.self = body;
         await expect(run({ body })).rejects.toThrow('cycles');
         expect(request.request).not.toHaveBeenCalled();
+    });
+});
+
+describe('MSP and OpenAPI 3.1 execution', () => {
+    function modern(schema: unknown, components: Record<string, unknown> = {}) {
+        const catalog = new OperationCatalog(
+            {
+                openapi: '3.1.0',
+                paths: {
+                    [`${BASE}/modern`]: {
+                        patch: { operationId: 'modern', requestBody: { required: true, content: { 'application/json': { schema } } } },
+                    },
+                },
+                components: { schemas: components },
+            },
+            'live'
+        );
+        const request = {
+            request: vi.fn().mockResolvedValue({ errorCode: 0, result: {} }),
+            ensureSuccess: vi.fn((response) => response.result),
+        };
+        const run = (body: unknown, overrides: Partial<ExecuteApiOperationOptions> = {}) =>
+            executeDiscoveredOperation(catalog, request as unknown as RequestHandler, { operationId: 'modern', body, ...overrides }, context);
+        return { catalog, request, run };
+    }
+    it('uses JSON Schema 2020 prefixItems rather than treating its array as unrestricted', async () => {
+        const { run, request } = modern({ type: 'array', prefixItems: [{ type: 'string' }, { type: 'integer' }], items: false, minItems: 2 });
+        expect(await run(['a', 2])).toMatchObject({ dryRun: true, written: false });
+        await expect(run(['a', '2'], { dryRun: false })).rejects.toThrow('Invalid operation input');
+        await expect(run(['a', 2, 3], { dryRun: false })).rejects.toThrow('Invalid operation input');
+        expect(request.request).not.toHaveBeenCalled();
+    });
+    it('enforces unevaluatedProperties across composition and supports null unions', async () => {
+        const { run, request } = modern({
+            type: 'object',
+            allOf: [{ properties: { name: { type: ['string', 'null'] } }, required: ['name'] }],
+            unevaluatedProperties: false,
+        });
+        expect(await run({ name: null }, { dryRun: false })).toMatchObject({ written: true });
+        await expect(run({ name: 'okay', extra: true }, { dryRun: false })).rejects.toThrow('Invalid operation input');
+        expect(request.request).toHaveBeenCalledTimes(1);
+    });
+    it('preserves 3.1 ref siblings, nested component pointers and boolean schema semantics', async () => {
+        const { run } = modern({ $ref: '#/components/schemas/Root/$defs/Name', minLength: 4 }, { Root: { $defs: { Name: { type: 'string' } } } });
+        await expect(run('abc')).rejects.toThrow('Invalid operation input');
+        await expect(run('valid')).resolves.toMatchObject({ dryRun: true });
+        await expect(modern(false).run('anything')).rejects.toThrow('Invalid operation input');
+        await expect(modern(true).run({ arbitrary: 1 })).resolves.toMatchObject({ dryRun: true });
+        await expect(modern({ $ref: '#/components/schemas/Never' }, { Never: false }).run(null)).rejects.toThrow('Invalid operation input');
+    });
+    it('uses 3.1 null unions rather than the removed OpenAPI nullable extension', async () => {
+        const { run } = modern({ type: 'string', nullable: true });
+        await expect(run(null)).rejects.toThrow('Invalid operation input');
+        await expect(run('value')).resolves.toMatchObject({ dryRun: true });
+    });
+    it('validates 3.1 referenced objects and sibling properties together', async () => {
+        const { run } = modern(
+            { $ref: '#/components/schemas/Base', properties: { second: { type: 'integer' } }, unevaluatedProperties: false },
+            { Base: { type: 'object', properties: { first: { type: 'string' } } } }
+        );
+        await expect(run({ first: 'a', second: 2 })).resolves.toMatchObject({ dryRun: true });
+        await expect(run({ first: 'a', second: '2' })).rejects.toThrow('Invalid operation input');
+        await expect(run({ first: 'a', extra: true })).rejects.toThrow('Invalid operation input');
+    });
+    it('rejects unknown dialects and dynamic/external refs without network execution', async () => {
+        for (const schema of [
+            { $dynamicRef: '#dynamic' },
+            { $ref: 'https://external.invalid/schema' },
+            { $schema: 'https://external.invalid/dialect' },
+        ]) {
+            const { run, request } = modern(schema);
+            await expect(run({}, { dryRun: false })).rejects.toThrow();
+            expect(request.request).not.toHaveBeenCalled();
+        }
+        const { catalog, run, request } = modern({ type: 'string' });
+        catalog.document.jsonSchemaDialect = 'https://external.invalid/dialect';
+        await expect(run('value', { dryRun: false })).rejects.toThrow('Unsupported OpenAPI 3.1');
+        expect(request.request).not.toHaveBeenCalled();
+    });
+    it('requires an explicit MSP ID and never substitutes the controller ID', async () => {
+        const catalog = new OperationCatalog(
+            { openapi: '3.0.1', paths: { '/openapi/v1/msp/{mspId}/users': { get: { operationId: 'mspUsers' } } } },
+            'live'
+        );
+        const request = { request: vi.fn().mockResolvedValue({ errorCode: 0, result: [] }), ensureSuccess: vi.fn((response) => response.result) };
+        const run = (policy: typeof context & { mspId?: string }, params?: Record<string, unknown>) =>
+            executeDiscoveredOperation(catalog, request as unknown as RequestHandler, { operationId: 'mspUsers', params }, policy);
+        await expect(run(context)).rejects.toThrow('OMADA_MSP_ID');
+        expect(request.request).not.toHaveBeenCalled();
+        await expect(run({ ...context, mspId: 'msp-2', readOnly: true })).resolves.toMatchObject({ written: false });
+        expect(request.request.mock.calls[0][0]).toMatchObject({ url: '/openapi/v1/msp/msp-2/users' });
+        await expect(run({ ...context, mspId: 'msp-2' }, { mspId: 'override' })).rejects.toThrow('cannot be overridden');
+        await expect(run({ ...context, mspId: '../escape' })).rejects.toThrow('Path parameters');
+    });
+    it('still blocks MSP writes in read-only mode and previews by default otherwise', async () => {
+        const catalog = new OperationCatalog(
+            {
+                openapi: '3.1.0',
+                paths: {
+                    '/openapi/v1/msp/{mspId}/users': {
+                        post: {
+                            operationId: 'mspWrite',
+                            requestBody: {
+                                required: true,
+                                content: {
+                                    'application/json': {
+                                        schema: {
+                                            type: 'object',
+                                            properties: { name: { type: 'string' } },
+                                            required: ['name'],
+                                            additionalProperties: false,
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            'live'
+        );
+        const request = { request: vi.fn() };
+        const options = { operationId: 'mspWrite', body: { name: 'Test' } };
+        await expect(
+            executeDiscoveredOperation(catalog, request as unknown as RequestHandler, options, { ...context, mspId: 'msp', readOnly: true })
+        ).rejects.toThrow('Read-only');
+        expect(await executeDiscoveredOperation(catalog, request as unknown as RequestHandler, options, { ...context, mspId: 'msp' })).toMatchObject({
+            dryRun: true,
+        });
+        expect(request.request).not.toHaveBeenCalled();
+    });
+    it('uses the dedicated rate-limit profile workflow for actual updates', async () => {
+        const { request } = writeSetup();
+        const catalog = new OperationCatalog(
+            { openapi: '3.0.1', paths: { [`${BASE}/rate-limit-profile/{profileId}`]: { put: { operationId: 'profile' } } } },
+            'live'
+        );
+        await expect(
+            executeDiscoveredOperation(
+                catalog,
+                request as unknown as RequestHandler,
+                { operationId: 'profile', params: { profileId: 'profile-1' }, dryRun: false },
+                context
+            )
+        ).rejects.toThrow('updateRateLimitProfile');
+        expect(request.request).not.toHaveBeenCalled();
+    });
+});
+
+describe('discovered file transfers through the real helper', () => {
+    it('validates multipart previews and dispatches a native FormData upload only explicitly', async () => {
+        const root = await mkdtemp(join(tmpdir(), 'omada-executor-upload-'));
+        try {
+            await writeFile(join(root, 'fixture.pem'), 'test file bytes');
+            const catalog = new OperationCatalog(
+                {
+                    openapi: '3.0.1',
+                    paths: {
+                        [`${BASE}/upload`]: {
+                            post: {
+                                operationId: 'upload',
+                                requestBody: {
+                                    required: true,
+                                    content: {
+                                        'multipart/form-data': {
+                                            schema: {
+                                                type: 'object',
+                                                required: ['file', 'label'],
+                                                properties: { file: { type: 'string', format: 'binary' }, label: { type: 'string', minLength: 1 } },
+                                                additionalProperties: false,
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                'live'
+            );
+            const request = {
+                request: vi.fn().mockResolvedValue({ errorCode: 0, result: { accepted: true } }),
+                ensureSuccess: vi.fn((response) => response.result),
+            };
+            const options = { operationId: 'upload', body: { label: 'Test' }, files: { file: 'fixture.pem' } };
+            const policy = { ...context, transferDirectory: root, maxTransferBytes: 1024 };
+            const preview = await executeDiscoveredOperation(catalog, request as unknown as RequestHandler, options, policy);
+            expect(preview).toMatchObject({
+                dryRun: true,
+                written: false,
+                transfer: { upload: { files: [{ field: 'file', file: 'fixture.pem', bytes: 15 }] } },
+            });
+            expect(JSON.stringify(preview)).not.toContain('test file bytes');
+            expect(request.request).not.toHaveBeenCalled();
+            const result = await executeDiscoveredOperation(catalog, request as unknown as RequestHandler, { ...options, dryRun: false }, policy);
+            expect(result).toMatchObject({ written: true, result: { accepted: true } });
+            const config = request.request.mock.calls[0][0];
+            expect(config.data).toBeInstanceOf(FormData);
+            expect(config.headers).toEqual({ 'Content-Type': 'multipart/form-data' });
+            expect(await (config.data.get('file') as File).text()).toBe('test file bytes');
+            expect(config.data.get('label')).toBe('Test');
+            await expect(
+                executeDiscoveredOperation(
+                    catalog,
+                    request as unknown as RequestHandler,
+                    { operationId: 'upload', body: { label: 'Test' }, dryRun: false },
+                    policy
+                )
+            ).rejects.toThrow('required');
+            expect(request.request).toHaveBeenCalledTimes(1);
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+    it('previews downloads without writing and saves binary results exclusively with metadata', async () => {
+        const root = await mkdtemp(join(tmpdir(), 'omada-executor-download-'));
+        try {
+            const catalog = new OperationCatalog(
+                {
+                    openapi: '3.1.0',
+                    paths: {
+                        [`${BASE}/export`]: {
+                            get: {
+                                operationId: 'download',
+                                responses: { '200': { content: { 'application/octet-stream': { schema: { type: 'string', format: 'binary' } } } } },
+                            },
+                        },
+                    },
+                },
+                'live'
+            );
+            const request = { request: vi.fn().mockResolvedValue(Buffer.from('backup file')), ensureSuccess: vi.fn() };
+            const policy = { ...context, transferDirectory: root, maxTransferBytes: 1024 };
+            const options = { operationId: 'download', downloadFile: 'backup.bin' };
+            expect(
+                await executeDiscoveredOperation(catalog, request as unknown as RequestHandler, { ...options, dryRun: true }, policy)
+            ).toMatchObject({ dryRun: true, written: false });
+            await expect(readFile(join(root, 'backup.bin'))).rejects.toMatchObject({ code: 'ENOENT' });
+            expect(request.request).not.toHaveBeenCalled();
+            const result = await executeDiscoveredOperation(catalog, request as unknown as RequestHandler, options, policy);
+            expect(result).toMatchObject({
+                written: false,
+                result: { file: 'backup.bin', bytes: 11, sha256: expect.stringMatching(/^[a-f0-9]{64}$/) },
+            });
+            expect(await readFile(join(root, 'backup.bin'), 'utf8')).toBe('backup file');
+            expect(request.request.mock.calls[0][0]).toMatchObject({ responseType: 'arraybuffer', maxContentLength: 1024 });
+            expect(request.ensureSuccess).not.toHaveBeenCalled();
+            await expect(executeDiscoveredOperation(catalog, request as unknown as RequestHandler, options, policy)).rejects.toThrow(
+                'already exists'
+            );
+            expect(request.request).toHaveBeenCalledTimes(1);
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
+    });
+    it('blocks read-only transfers before filesystem access and rejects GET uploads', async () => {
+        const catalog = new OperationCatalog({ openapi: '3.0.1', paths: { [`${BASE}/export`]: { get: { operationId: 'download' } } } }, 'live');
+        const request = { request: vi.fn() };
+        for (const extra of [{ downloadFile: 'backup.bin' }, { files: { file: 'fixture.pem' } }]) {
+            await expect(
+                executeDiscoveredOperation(
+                    catalog,
+                    request as unknown as RequestHandler,
+                    { operationId: 'download', ...extra },
+                    { ...context, readOnly: true, transferDirectory: '/does-not-exist' }
+                )
+            ).rejects.toThrow('Read-only profile blocks file transfers');
+        }
+        await expect(
+            executeDiscoveredOperation(
+                catalog,
+                request as unknown as RequestHandler,
+                { operationId: 'download', files: { file: 'fixture.pem' } },
+                context
+            )
+        ).rejects.toThrow('GET operations');
+        expect(request.request).not.toHaveBeenCalled();
+    });
+});
+
+describe('schema keywords versus instance data', () => {
+    function run(schema: Record<string, unknown>, body: unknown) {
+        const catalog = new OperationCatalog(
+            {
+                openapi: '3.1.0',
+                paths: {
+                    [`${BASE}/keywords`]: {
+                        post: { operationId: 'keywords', requestBody: { required: true, content: { 'application/json': { schema } } } },
+                    },
+                },
+            },
+            'live'
+        );
+        const request = { request: vi.fn() };
+        return {
+            request,
+            result: executeDiscoveredOperation(catalog, request as unknown as RequestHandler, { operationId: 'keywords', body }, context),
+        };
+    }
+    it.each(['nullable', '$schema', '$id', '$ref', 'format'])(
+        'validates a property named %s without interpreting the property map as a schema',
+        async (key) => {
+            const schema = { type: 'object', properties: { [key]: { type: 'string' } }, required: [key], additionalProperties: false };
+            const invalid = run(schema, { [key]: 123 });
+            await expect(invalid.result).rejects.toThrow('Invalid operation input');
+            expect(invalid.request.request).not.toHaveBeenCalled();
+            await expect(run(schema, { [key]: 'literal value' }).result).resolves.toMatchObject({ dryRun: true });
+        }
+    );
+    it('enforces a nullable-named property without relying on additionalProperties rejection', async () => {
+        const schema = { type: 'object', properties: { nullable: { type: 'string' } }, required: ['nullable'] };
+        const invalid = run(schema, { nullable: 123 });
+        await expect(invalid.result).rejects.toThrow('Invalid operation input');
+        expect(invalid.request.request).not.toHaveBeenCalled();
+    });
+    it('retains const/enum/default/example values containing schema-looking keys as data', async () => {
+        const data = { $id: 'literal-id', $ref: 'https://external.invalid/data', $schema: 'not-a-dialect', nullable: true, format: 'binary' };
+        const schema = { type: 'object', const: data, enum: [data], default: data, examples: [data] };
+        await expect(run(schema, data).result).resolves.toMatchObject({ dryRun: true });
+        await expect(run(schema, { ...data, nullable: false }).result).rejects.toThrow('Invalid operation input');
     });
 });

@@ -149,6 +149,32 @@ describe('scoped tool policy', () => {
         expect(denied.allowsOperation(method, path)).toBe(false);
     });
 
+    it.each([
+        ['getTrafficHistory', 'monitoring', false],
+        ['getWifiHistory', 'wireless', false],
+        ['diagnoseWan', 'network', false],
+        ['updateRateLimitProfile', 'clients', true],
+        ['rollbackNetworkChange', 'clients', true],
+    ] as const)('keeps %s in its explicit workflow scope without broadening unrelated permissions', (name, category, write) => {
+        const granted = new ToolAccessPolicy('full', `${category}:rw`);
+        expect(granted.allowsTool(name)).toBe(true);
+        const other = 'devices';
+        expect(new ToolAccessPolicy('full', `${other}:rw`).allowsTool(name)).toBe(false);
+        expect(new ToolAccessPolicy('full', `${category}:r`).allowsTool(name)).toBe(!write);
+        if (write) expect(new ToolAccessPolicy('read-only', `${category}:rw`).allowsTool(name)).toBe(false);
+    });
+
+    it('aligns rate-profile discovery paths with update and rollback tool ownership', () => {
+        for (const suffix of ['/rate-limit-profiles', '/rate-limit-profile/{profileId}']) {
+            const path = `${PREFIX}${suffix}`;
+            expect(categoryForPath(path)).toBe('clients');
+            expect(new ToolAccessPolicy('full', 'clients:r').allowsOperation('GET', path)).toBe(true);
+            expect(new ToolAccessPolicy('full', 'clients:r').allowsOperation('PUT', path)).toBe(false);
+            expect(new ToolAccessPolicy('full', 'clients:rw').allowsOperation('PUT', path)).toBe(true);
+            expect(new ToolAccessPolicy('full', 'network:rw').allowsOperation('PUT', path)).toBe(false);
+        }
+    });
+
     it('guards configured client methods and optional SSID evidence without blocking internal dependencies', async () => {
         let reads = 0;
         const raw = {
@@ -337,6 +363,67 @@ describe('scoped MCP server isolation', () => {
             (await switching.callTool({ name: 'setSwitchPortName', arguments: { switchMac: 'AA-BB-CC-DD-EE-FF', port: 1, name: 'test' } })).isError
         ).toBeFalsy();
         expect(api.setSwitchPortName).toHaveBeenCalledTimes(1);
+    });
+
+    it('exposes only the diagnostics granted to each scoped MCP server', async () => {
+        const api = {
+            getTrafficHistory: vi.fn().mockResolvedValue({ sections: { traffic: { status: 'ok' } } }),
+            getWifiHistory: vi.fn().mockResolvedValue({ sections: { channels: { status: 'partial' } } }),
+            diagnoseWan: vi.fn().mockResolvedValue({ sections: { status: { status: 'ok' } } }),
+            updateRateLimitProfile: vi.fn(),
+            rollbackNetworkChange: vi.fn(),
+        };
+        for (const [category, name, arguments_] of [
+            ['monitoring', 'getTrafficHistory', { maxSamples: 3 }],
+            ['wireless', 'getWifiHistory', { apMac: 'AA-BB-CC-DD-EE-FF' }],
+            ['network', 'diagnoseWan', { gatewayMac: 'AA-BB-CC-DD-EE-FF' }],
+        ] as const) {
+            const client = await connect(api, `${category}:r`);
+            const names = (await client.listTools()).tools.map((tool) => tool.name);
+            expect(names).toContain(name);
+            expect(['getTrafficHistory', 'getWifiHistory', 'diagnoseWan'].filter((tool) => names.includes(tool))).toEqual([name]);
+            expect(names).not.toContain('updateRateLimitProfile');
+            expect(names).not.toContain('rollbackNetworkChange');
+            expect((await client.callTool({ name, arguments: arguments_ })).isError).toBeFalsy();
+            expect(api[name]).toHaveBeenCalledExactlyOnceWith(arguments_);
+        }
+        expect(api.updateRateLimitProfile).not.toHaveBeenCalled();
+        expect(api.rollbackNetworkChange).not.toHaveBeenCalled();
+    });
+
+    it('blocks rate-profile write and rollback attempts in unrelated or read-only scopes before backend calls', async () => {
+        const api = {
+            updateRateLimitProfile: vi.fn().mockResolvedValue({ written: true }),
+            rollbackNetworkChange: vi.fn().mockResolvedValue({ written: true }),
+        };
+        const argumentsByName = {
+            updateRateLimitProfile: { profileId: 'profile', settings: { name: 'After' }, dryRun: false },
+            rollbackNetworkChange: {
+                receipt: {
+                    version: 1,
+                    resource: 'rate-limit-profile',
+                    controllerId: 'controller',
+                    siteId: 'site',
+                    profileId: 'profile',
+                    before: { name: 'Before', upLimitEnable: false, downLimitEnable: false },
+                    applied: { name: 'After', upLimitEnable: false, downLimitEnable: false },
+                },
+                dryRun: false,
+            },
+        };
+        for (const scope of ['clients:r', 'network:rw', 'monitoring:rw']) {
+            const client = await connect(api, scope);
+            for (const name of ['updateRateLimitProfile', 'rollbackNetworkChange'] as const) {
+                expect((await client.callTool({ name, arguments: argumentsByName[name] })).isError).toBe(true);
+            }
+        }
+        expect(api.updateRateLimitProfile).not.toHaveBeenCalled();
+        expect(api.rollbackNetworkChange).not.toHaveBeenCalled();
+        const permitted = await connect(api, 'clients:rw');
+        for (const name of ['updateRateLimitProfile', 'rollbackNetworkChange'] as const) {
+            expect((await permitted.callTool({ name, arguments: argumentsByName[name] })).isError).toBeFalsy();
+            expect(api[name]).toHaveBeenCalledTimes(1);
+        }
     });
 
     it('cannot escalate configured read-only or category scope through full server options', async () => {

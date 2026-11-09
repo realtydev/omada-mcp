@@ -1,4 +1,4 @@
-import { access, mkdir, rm } from 'node:fs/promises';
+import { access, lstat, mkdir, realpath, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { Command, CommanderError, Option } from 'commander';
@@ -295,6 +295,24 @@ async function setup(
         if (credentials.OMADA_STRICT_SSL === 'false') throw new Error('OMADA_CA_FILE requires OMADA_STRICT_SSL=true');
         loadCaCertificates(caFile);
     }
+    const configuredTransfers = Object.hasOwn(credentials, 'OMADA_TRANSFER_DIR') ? credentials.OMADA_TRANSFER_DIR.trim() : undefined;
+    let transferDirectory: string | undefined;
+    if (configuredTransfers !== undefined) {
+        if (!isAbsolute(configuredTransfers)) throw new Error('OMADA_TRANSFER_DIR must be an absolute existing directory for Docker setup.');
+        try {
+            transferDirectory = await realpath(configuredTransfers);
+            const info = await lstat(transferDirectory);
+            if (!info.isDirectory() || (info.mode & 0o022) !== 0) throw new Error('Unsafe transfer directory');
+        } catch {
+            throw new Error('OMADA_TRANSFER_DIR must be an existing directory without group/world write access.');
+        }
+    }
+    const volumes = [
+        ...(caFile ? [{ type: 'bind', source: resolve(caFile).replaceAll('$', () => '$$'), target: containerCaFile, read_only: true }] : []),
+        ...(transferDirectory
+            ? [{ type: 'bind', source: transferDirectory.replaceAll('$', () => '$$'), target: '/transfers', read_only: false }]
+            : []),
+    ];
     const port = values.port ?? '3000';
     if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535) throw new Error('--port must be an integer from 1 to 65535.');
     const target = await releaseVersion(values.version ?? PACKAGE_VERSION);
@@ -316,6 +334,7 @@ async function setup(
                             .map((key) => [key, '${' + key + '}'])
                     ),
                     ...(caFile ? { OMADA_CA_FILE: containerCaFile } : {}),
+                    ...(transferDirectory ? { OMADA_TRANSFER_DIR: '/transfers' } : {}),
                     OMADA_ENV_FILE: '',
                     MCP_SERVER_USE_HTTP: 'true',
                     MCP_HTTP_BIND_ADDR: '0.0.0.0',
@@ -325,18 +344,7 @@ async function setup(
                     MCP_HTTP_NGROK_ENABLED: 'false',
                 },
                 ports: [`127.0.0.1:${Number(port)}:3000`],
-                ...(caFile
-                    ? {
-                          volumes: [
-                              {
-                                  type: 'bind',
-                                  source: resolve(caFile).replaceAll('$', () => '$$'),
-                                  target: containerCaFile,
-                                  read_only: true,
-                              },
-                          ],
-                      }
-                    : {}),
+                ...(volumes.length ? { volumes } : {}),
             },
         },
     });

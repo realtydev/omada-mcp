@@ -2,6 +2,8 @@ const SENSITIVE_KEY = /password|passwd|secret|token|cookie|authorization|psk|sec
 
 /** Redact values in tool/request logs; returned tool data is unaffected. */
 export function redactForLogs(value: unknown, depth = 0, seen = new WeakSet<object>()): unknown {
+    if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) return { binary: true, byteLength: value.byteLength };
+    if (value instanceof FormData) return { multipart: true };
     if (depth > 20) return '[depth limit]';
     if (typeof value === 'string') {
         if (/-----BEGIN (?:\w+ )?PRIVATE KEY-----/.test(value)) return '[redacted]';

@@ -585,6 +585,8 @@ __metadata:
     "@types/node": "npm:^24.19.2"
     "@vitest/coverage-v8": "npm:^5.1.0"
     "@vitest/ui": "npm:^5.1.0"
+    ajv: "npm:8.20.0"
+    ajv-formats: "npm:3.0.1"
     axios: "npm:^1.21.0"
     commander: "npm:15.0.0"
     dotenv: "npm:^18.0.9"
@@ -1028,7 +1030,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ajv-formats@npm:^3.0.1":
+"ajv-formats@npm:3.0.1, ajv-formats@npm:^3.0.1":
   version: 3.0.1
   resolution: "ajv-formats@npm:3.0.1"
   dependencies:
@@ -1042,7 +1044,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ajv@npm:^8.0.0, ajv@npm:^8.17.1":
+"ajv@npm:8.20.0, ajv@npm:^8.0.0, ajv@npm:^8.17.1":
   version: 8.20.0
   resolution: "ajv@npm:8.20.0"
   dependencies:

@@ -1,6 +1,17 @@
 import type { ToolProfile } from '../config.js';
 
-export const TOOL_CATEGORIES = ['system', 'devices', 'clients', 'wireless', 'switching', 'network', 'security', 'monitoring', 'maintenance'] as const;
+export const TOOL_CATEGORIES = [
+    'system',
+    'devices',
+    'clients',
+    'wireless',
+    'switching',
+    'network',
+    'security',
+    'monitoring',
+    'maintenance',
+    'msp',
+] as const;
 export type ToolCategory = (typeof TOOL_CATEGORIES)[number];
 type Permission = 'r' | 'w' | 'rw';
 
@@ -25,6 +36,8 @@ const groups: Record<ToolCategory, readonly string[]> = {
         'listClientsPastConnections',
         'getClientHistory',
         'updateClient',
+        'updateRateLimitProfile',
+        'rollbackNetworkChange',
         'blockClient',
         'unblockClient',
         'reconnectClient',
@@ -41,6 +54,7 @@ const groups: Record<ToolCategory, readonly string[]> = {
         'setSsidEnable',
         'setApRadio',
         'diagnoseWifi',
+        'getWifiHistory',
     ],
     switching: [
         'getSwitch',
@@ -66,6 +80,7 @@ const groups: Record<ToolCategory, readonly string[]> = {
     ],
     network: [
         'getGatewayWanStatus',
+        'diagnoseWan',
         'getInternetInfo',
         'getLanNetworkList',
         'getPortForwardingStatus',
@@ -102,6 +117,7 @@ const groups: Record<ToolCategory, readonly string[]> = {
     monitoring: [
         'getSiteTopology',
         'getSiteDashboard',
+        'getTrafficHistory',
         'diagnoseClient',
         'diagnoseLogs',
         'getGatewayWanSpeedTestResults',
@@ -111,6 +127,7 @@ const groups: Record<ToolCategory, readonly string[]> = {
         'setLogNotifications',
     ],
     maintenance: ['getFirmwareDetails', 'startFirmwareUpgrade', 'setSiteLed'],
+    msp: [],
 };
 
 const toolCategories = new Map(Object.entries(groups).flatMap(([category, names]) => names.map((name) => [name, category as ToolCategory] as const)));
@@ -135,9 +152,12 @@ export function parseToolCategories(value: string | undefined): ReadonlyMap<stri
 
 /** Classify canonical route ownership, never vendor tags or prose. Unknown families stay denied. */
 export function categoryForPath(path: string): ToolCategory | undefined {
-    let route = path.replace(/^\/openapi\/v[12]\/\{(?:omadacId|mspId)\}/, '');
+    const msp = /^\/openapi\/v[12]\/msp\/\{mspId\}(?=\/)/.test(path);
+    let route = path.replace(/^\/openapi\/v[12]\/(?:\{omadacId\}|msp\/\{mspId\})/, '');
     if (!route.startsWith('/') || /[?%#\\]/.test(route) || route.includes('//') || route.split('/').some((part) => part === '.' || part === '..'))
         return undefined;
+    // MSP authority spans customers and account administration; controller categories cannot grant it implicitly.
+    if (msp) return 'msp';
     if (route === '/sites') return 'system';
     const site = /^\/sites\/[^/]+(?:\/(.*))?$/.exec(route);
     if (site) route = `/${site[1] ?? ''}`;

@@ -11,7 +11,17 @@ const executeApiOperationSchema = z
             .record(z.string(), z.unknown())
             .optional()
             .describe('Documented path and query parameters; controller ID is supplied automatically'),
-        body: z.unknown().optional().describe('JSON request body matching describeApiOperation; binary and multipart uploads are unsupported'),
+        body: z.unknown().optional().describe('JSON body or non-file multipart fields matching describeApiOperation'),
+        files: z
+            .record(z.string(), z.union([z.string().min(1), z.array(z.string().min(1)).min(1).max(8)]))
+            .optional()
+            .describe('Multipart file fields mapped to filenames inside the configured transfer directory'),
+        downloadFile: z
+            .string()
+            .min(1)
+            .max(200)
+            .optional()
+            .describe('Save a GET file response to a new filename inside the configured transfer directory; never overwrites'),
         dryRun: z
             .boolean()
             .optional()
@@ -25,7 +35,7 @@ export function registerExecuteApiOperationTool(server: McpServer, client: Omada
         'executeApiOperation',
         {
             description:
-                'Validate and execute a discovered JSON Open API operation using the existing controller authentication and TLS checks. ' +
+                'Validate and execute a discovered JSON or file-transfer Open API operation using the existing controller authentication and TLS checks. ' +
                 'Inspect its schema first. Writes default to dry-run previews and do not provide dedicated-tool read-back verification. ' +
                 (readOnly ? 'This server permits GET operations only.' : 'Prefer a dedicated tool when it provides previews or verification.'),
             inputSchema: executeApiOperationSchema,

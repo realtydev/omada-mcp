@@ -15,7 +15,7 @@ interface Failure {
     httpStatus?: number;
     errorCode?: number;
 }
-type CapabilityConfig = Pick<EnvironmentConfig, 'authMode' | 'webUsername' | 'webPassword' | 'siteId' | 'requestTimeout'>;
+type CapabilityConfig = Pick<EnvironmentConfig, 'authMode' | 'webUsername' | 'webPassword' | 'siteId' | 'requestTimeout' | 'mspId'>;
 
 export interface GetControllerCapabilitiesOptions {
     siteId?: string;
@@ -34,7 +34,7 @@ interface ControllerMetadata {
     apiVersion?: string;
     mode: 'classic' | 'msp' | 'unknown';
     configured?: boolean;
-    mspRouting: 'not_applicable' | 'unsupported' | 'unknown';
+    mspRouting: 'not_applicable' | 'configured' | 'not_configured' | 'unknown';
     limitations: string[];
 }
 
@@ -112,7 +112,7 @@ function version(value: unknown): string | undefined {
 }
 
 function unsupportedReason(reason: string): string {
-    if (/controller-scoped/.test(reason)) return 'unsupported_path_scope';
+    if (/controller(?:- or MSP)?-scoped/.test(reason)) return 'unsupported_path_scope';
     if (/reference|resolve|cyclic/i.test(reason)) return 'unresolved_schema_reference';
     if (/parameter|serialization|style/i.test(reason)) return 'unsupported_parameter_contract';
     if (/body|json|schema|binary|content/i.test(reason)) return 'unsupported_body_or_schema';
@@ -191,10 +191,18 @@ export class ControllerCapabilityOperations {
                 ...(apiVersion ? { apiVersion } : {}),
                 mode,
                 ...(typeof data.configured === 'boolean' ? { configured: data.configured } : {}),
-                mspRouting: mode === 'msp' ? 'unsupported' : mode === 'classic' ? 'not_applicable' : 'unknown',
+                mspRouting:
+                    mode === 'msp' ? (this.config.mspId ? 'configured' : 'not_configured') : mode === 'classic' ? 'not_applicable' : 'unknown',
                 limitations: [
                     'Metadata API version does not establish support for the same Open API execution version.',
-                    ...(mode === 'msp' ? ['MSP site routing is not implemented; classic routes are not automatically rewritten.'] : []),
+                    ...(mode === 'msp'
+                        ? [
+                              'MSP discovery routes require an explicit OMADA_MSP_ID; dedicated classic routes are not automatically rewritten.',
+                              this.config.mspId
+                                  ? 'An MSP route identifier is configured; successful authentication, permission and controller support have not been tested.'
+                                  : 'Configure OMADA_MSP_ID before executing an MSP-scoped discovery operation.',
+                          ]
+                        : []),
                     ...(mode === 'unknown' ? ['Controller mode was not explicitly reported as a boolean mspMode.'] : []),
                 ],
             };
@@ -250,7 +258,7 @@ export class ControllerCapabilityOperations {
                     'Method counts do not classify all side effects: some non-GET operations are queries but remain excluded from read-only discovery.',
                     'Site-scoped operations require a site ID and access to that site; configured API credentials do not establish authentication or permission.',
                     'A bundled operation is snapshot documentation; even live documentation does not prove device support.',
-                    'Discovery execution supports controller-scoped Open API v1/v2 routes; MSP-scoped and other versioned paths remain unsupported.',
+                    'Discovery execution supports controller-scoped and explicitly configured MSP-scoped Open API v1/v2 routes; other versioned paths remain unsupported.',
                 ],
             };
         } catch (error) {

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -208,6 +208,59 @@ describe('runtime commands', () => {
         expect(await readFile(caFile, 'utf8')).toBe(certificate);
         expect(JSON.stringify(config)).not.toContain('BEGIN CERTIFICATE');
     });
+    it('mounts a private transfer directory alongside the CA without losing either binding', async () => {
+        const caFile = join(home, 'ca.pem');
+        await writeFile(caFile, await readFile(new URL('../fixtures/tls/ca.pem', import.meta.url)));
+        const transfers = join(home, 'transfers-${NETWORK}-$controller');
+        await mkdir(transfers, { mode: 0o700 });
+        const environment = `OMADA_CLIENT_SECRET=test-secret\nOMADA_CA_FILE='${caFile}'\nOMADA_TRANSFER_DIR='${transfers}'\n`;
+        await writeFile(envFile, environment);
+        await cli('setup', 'docker', '--env-file', envFile);
+        const config = JSON.parse(await readFile(join(home, 'compose.json'), 'utf8'));
+        expect(config.services['omada-mcp'].environment).toMatchObject({ OMADA_CA_FILE: '/certs/omada-ca.pem', OMADA_TRANSFER_DIR: '/transfers' });
+        expect(config.services['omada-mcp'].volumes).toEqual([
+            { type: 'bind', source: caFile, target: '/certs/omada-ca.pem', read_only: true },
+            { type: 'bind', source: (await realpath(transfers)).replaceAll('$', () => '$$'), target: '/transfers', read_only: false },
+        ]);
+        expect(await readFile(envFile, 'utf8')).toBe(environment);
+        expect(core.pullImage).toHaveBeenCalledTimes(1);
+        expect(core.switchDocker).toHaveBeenCalledTimes(1);
+    });
+    it('can mount a transfer directory without a private CA', async () => {
+        const transfers = join(home, 'transfers');
+        await mkdir(transfers, { mode: 0o700 });
+        await writeFile(envFile, `OMADA_TRANSFER_DIR='${transfers}'\n`);
+        await cli('setup', 'docker', '--env-file', envFile);
+        const config = JSON.parse(await readFile(join(home, 'compose.json'), 'utf8'));
+        expect(config.services['omada-mcp'].volumes).toEqual([
+            { type: 'bind', source: await realpath(transfers), target: '/transfers', read_only: false },
+        ]);
+    });
+    it.each(['relative/transfers', '', '   '])('rejects ambiguous transfer paths before image or service changes: %j', async (path) => {
+        await writeFile(envFile, `OMADA_TRANSFER_DIR='${path}'\n`);
+        await expect(cli('setup', 'docker', '--env-file', envFile)).rejects.toThrow('OMADA_TRANSFER_DIR must be an absolute existing directory');
+        expect(core.pullImage).not.toHaveBeenCalled();
+        expect(core.switchDocker).not.toHaveBeenCalled();
+        await expect(readFile(join(home, 'compose.json'))).rejects.toThrow();
+    });
+    it.each(['missing', 'file', 'group-writable', 'world-writable'])(
+        'rejects unavailable or writable-by-others transfer roots before deployment: %s',
+        async (kind) => {
+            const transfers = join(home, 'transfers');
+            if (kind === 'file') await writeFile(transfers, 'not a directory');
+            if (kind.includes('writable')) {
+                await mkdir(transfers, { mode: 0o700 });
+                await chmod(transfers, kind === 'group-writable' ? 0o720 : 0o702);
+            }
+            await writeFile(envFile, `OMADA_TRANSFER_DIR='${transfers}'\n`);
+            await expect(cli('setup', 'docker', '--env-file', envFile)).rejects.toThrow(
+                'OMADA_TRANSFER_DIR must be an existing directory without group/world write access'
+            );
+            expect(core.pullImage).not.toHaveBeenCalled();
+            expect(core.switchDocker).not.toHaveBeenCalled();
+            await expect(readFile(join(home, 'compose.json'))).rejects.toThrow();
+        }
+    );
     it.each(['relative.pem', '', '   '])('rejects ambiguous private CA paths before image or service changes: %j', async (path) => {
         await writeFile(envFile, `OMADA_CA_FILE='${path}'\n`);
         await expect(cli('setup', 'docker', '--env-file', envFile)).rejects.toThrow('OMADA_CA_FILE must be an absolute path');

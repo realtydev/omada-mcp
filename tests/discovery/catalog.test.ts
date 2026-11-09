@@ -57,7 +57,8 @@ describe('OperationCatalog', () => {
         );
         const msp = catalog.operations.filter((operation) => operation.path.startsWith('/openapi/v1/msp/'));
         expect(msp).toHaveLength(118);
-        expect(msp.every((operation) => operation.unsupportedReason?.includes('controller-scoped'))).toBe(true);
+        expect(msp.some((operation) => operation.unsupportedReason?.includes('controller-scoped'))).toBe(false);
+        expect(msp.find((operation) => operation.path === '/openapi/v1/msp/{mspId}/users')?.unsupportedReason).toBeUndefined();
     });
 
     it('records source, load time and explicit fallback provenance', () => {
@@ -242,7 +243,6 @@ describe('OperationCatalog', () => {
         { requestBody: { required: 'true', content: { 'application/json': { schema: {} } } } },
         { requestBody: { content: { 'application/json': {} } } },
         { requestBody: { $ref: '#/components/missing' } },
-        { requestBody: { content: { 'multipart/form-data': { schema: { type: 'object' } } } } },
     ])('marks malformed or unsupported request metadata as non-executable: %j', (metadata) => {
         const catalog = new OperationCatalog(fixture({ [`${PREFIX}/one`]: { post: { operationId: 'unsupported', ...metadata } } }), 'live');
         expect(catalog.get('unsupported')?.unsupportedReason).toBeTruthy();
@@ -342,4 +342,83 @@ describe('OperationCatalog', () => {
         for (let index = 0; index <= 2_000; index++) operations[`${PREFIX}/${index}`] = { get: {}, post: {}, patch: {}, put: {}, delete: {} };
         expect(() => new OperationCatalog(fixture(operations), 'live')).toThrow('too many operations');
     });
+});
+
+it('retains 3.1 boolean schemas and reference siblings in descriptions', () => {
+    const document = {
+        openapi: '3.1.0',
+        paths: {
+            '/openapi/v1/{omadacId}/one': {
+                post: {
+                    operationId: 'one',
+                    requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/Value', minLength: 4 } } } },
+                },
+            },
+        },
+        components: { schemas: { Value: { type: 'string' } } },
+    };
+    const catalog = new OperationCatalog(document, 'live');
+    expect(catalog.describe('one').requestBody?.schema).toMatchObject({ allOf: [{ type: 'string' }, { minLength: 4 }] });
+    const boolean = new OperationCatalog(
+        {
+            openapi: '3.1.0',
+            paths: {
+                '/openapi/v1/{omadacId}/two': { post: { operationId: 'two', requestBody: { content: { 'application/json': { schema: false } } } } },
+            },
+        },
+        'live'
+    );
+    expect(boolean.describe('two').requestBody?.schema).toEqual({ not: {} });
+});
+
+it.each([{ file: { contentType: 'application/pdf' } }, { config: { style: 'deepObject' } }, [], null])(
+    'marks explicit or invalid multipart encoding unsupported: %j',
+    (encoding) => {
+        const catalog = new OperationCatalog(
+            fixture({
+                [`${PREFIX}/upload`]: {
+                    post: {
+                        operationId: 'encodedUpload',
+                        requestBody: {
+                            content: {
+                                'multipart/form-data': {
+                                    schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } },
+                                    encoding,
+                                },
+                            },
+                        },
+                    },
+                },
+            }),
+            'live'
+        );
+        expect(catalog.get('encodedUpload')?.unsupportedReason).toContain('Explicit multipart encoding');
+        expect(catalog.describe('encodedUpload').unsupportedReason).toContain('Explicit multipart encoding');
+    }
+);
+it('preserves empty/default multipart encoding and all seven bundled multipart descriptors', () => {
+    const catalog = new OperationCatalog(
+        fixture({
+            [`${PREFIX}/upload`]: {
+                post: {
+                    operationId: 'defaultUpload',
+                    requestBody: {
+                        content: {
+                            'multipart/form-data': {
+                                schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } },
+                                encoding: {},
+                            },
+                        },
+                    },
+                },
+            },
+        }),
+        'live'
+    );
+    expect(catalog.get('defaultUpload')?.unsupportedReason).toBeUndefined();
+    const document = JSON.parse(readFileSync(new URL('../../docs/openapi/00-all.json', import.meta.url), 'utf8')) as ApiDocument;
+    const bundled = new OperationCatalog(document, 'bundled');
+    const multipart = bundled.operations.filter((operation) => operation.requestBody?.contentType === 'multipart/form-data');
+    expect(multipart).toHaveLength(7);
+    expect(multipart.every((operation) => operation.unsupportedReason === undefined)).toBe(true);
 });

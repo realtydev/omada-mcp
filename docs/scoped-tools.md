@@ -13,6 +13,7 @@ This example permits reads across known categories and writes only in `wireless`
 
 | Category      | Public command families                                        |
 | ------------- | -------------------------------------------------------------- |
+| `msp`         | Explicit MSP account/customer/admin routes                     |
 | `system`      | Site listing and controller/build information                  |
 | `devices`     | Device inventory, adoption, reboot and locating                |
 | `clients`     | Client diagnostics/settings/actions and rate-limit profiles    |
@@ -40,6 +41,8 @@ Scoped generic calls require canonical relative paths and supported methods/vers
 These are command/capability scopes. Composite diagnostics and authorized write preflights read the dependencies necessary for their defined result. A write permission can therefore return before/after evidence even without a separate read permission. This model does not provide per-record redaction or site tenancy; controller account permissions still determine available data.
 
 Canonical route ownership, not vendor prose/tags or resource names, controls discovered/raw permissions. Device firmware actions remain maintenance operations, and gateway wireless-setting routes remain wireless operations. Mixed settings endpoints are denied when their ownership cannot be established safely. Allowed raw operations still carry their documented API semantics; a category grant is not read-back verification.
+
+Canonical `/openapi/v1/msp/{mspId}/...` and v2 MSP routes use the separate `msp` category, rather than inheriting customer-site permissions. Set `msp:r` or `msp:rw` explicitly, or grant an `all` fallback; `system:r` alone does not grant MSP access. `OMADA_MSP_ID` is still required for execution. These scopes do not establish authentication or live MSP support.
 
 For read-only Wi-Fi work, a scope such as `system:r,wireless:r` keeps site selection and audit commands available. For broader observation with controlled writes, start with `all:r` and add only the categories that need `:rw`.
 

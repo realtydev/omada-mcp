@@ -1,6 +1,6 @@
 {
     "name": "@realtydev/omada-mcp",
-    "version": "0.9.0",
+    "version": "0.10.0",
     "description": "Full read/write Model Context Protocol server for TP-Link Omada SDN controllers — sites, devices, clients, VLANs, firewall, switch ports, Wi-Fi and WAN",
     "type": "module",
     "main": "dist/index.js",
@@ -14,6 +14,8 @@
         "README.Docker.md",
         "docs/runtime.md",
         "docs/api-discovery.md",
+        "docs/network-workflows.md",
+        "docs/file-transfers.md",
         "docs/controller-capabilities.md",
         "docs/switch-safety.md",
         "docs/wifi-audit.md",
@@ -72,6 +74,8 @@
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.32.2",
         "@ngrok/ngrok": "^1.7.0",
+        "ajv": "8.20.0",
+        "ajv-formats": "3.0.1",
         "axios": "^1.21.0",
         "commander": "15.0.0",
         "dotenv": "^18.0.9",

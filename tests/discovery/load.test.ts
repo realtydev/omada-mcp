@@ -114,9 +114,20 @@ describe('controller specification loading', () => {
         expect(fetch).toHaveBeenCalledTimes(2);
     });
     it('rejects wrong-version, empty, and malformed live documents', async () => {
-        for (const value of [{ openapi: '3.1.0', paths: {} }, 'html', { openapi: '3.0.1', paths: [] }]) {
+        for (const value of [{ openapi: '3.2.0', paths: {} }, 'html', { openapi: '3.0.1', paths: [] }]) {
             const catalogue = await new CatalogLoader(vi.fn().mockResolvedValue(value), 'auto', async () => doc()).get();
             expect(catalogue.source).toBe('bundled');
         }
     });
+});
+
+it('loads OpenAPI 3.1 and rejects mixed-dialect grouped documents', async () => {
+    const live = { openapi: '3.1.0', paths: { '/openapi/v1/{omadacId}/sites': { get: { operationId: 'sites' } } } };
+    expect((await new CatalogLoader(vi.fn().mockResolvedValue(live), 'live').get()).document.openapi).toBe('3.1.0');
+    const fetch = vi.fn((path: string): Promise<unknown> => {
+        if (path.endsWith('00%20All')) return Promise.reject(new Error('404'));
+        if (path.endsWith('swagger-config')) return Promise.resolve({ urls: [{ url: 'a' }, { url: 'b' }] });
+        return Promise.resolve(path.endsWith('/a') ? live : doc('other'));
+    });
+    await expect(new CatalogLoader(fetch, 'live').get()).rejects.toThrow('Live OpenAPI discovery failed');
 });

@@ -21,6 +21,8 @@ export interface ExecuteApiOperationOptions {
     params?: Record<string, unknown>;
     body?: unknown;
     dryRun?: boolean;
+    files?: Record<string, string | string[]>;
+    downloadFile?: string;
 }
 
 /** Discovery stays lazy so existing tools and offline stdio initialization retain their behavior. */
@@ -29,7 +31,18 @@ export class DiscoveryOperations {
     constructor(
         private readonly request: RequestHandler,
         http: AxiosInstance,
-        private readonly config: Pick<EnvironmentConfig, 'omadacId' | 'siteId' | 'toolProfile' | 'toolCategories' | 'apiSpec' | 'requestTimeout'>,
+        private readonly config: Pick<
+            EnvironmentConfig,
+            | 'omadacId'
+            | 'mspId'
+            | 'siteId'
+            | 'toolProfile'
+            | 'toolCategories'
+            | 'apiSpec'
+            | 'requestTimeout'
+            | 'transferDirectory'
+            | 'maxTransferBytes'
+        >,
         loader?: CatalogLoader
     ) {
         this.loader =
@@ -46,7 +59,7 @@ export class DiscoveryOperations {
     }
 
     private readOnly(policy: DiscoveryPolicy): boolean {
-        return this.config.toolProfile === 'read-only' || policy.readOnly === true;
+        return this.config.toolProfile === 'read-only' || policy.readOnly === true || policy.accessPolicy?.readOnly === true;
     }
 
     private accessPolicy(policy: DiscoveryPolicy): ToolAccessPolicy {
@@ -83,6 +96,9 @@ export class DiscoveryOperations {
         const catalogue: OperationCatalog = await this.loader.get();
         return await executeDiscoveredOperation(catalogue, this.request, options, {
             omadacId: this.config.omadacId,
+            mspId: this.config.mspId,
+            transferDirectory: this.config.transferDirectory,
+            maxTransferBytes: this.config.maxTransferBytes,
             siteId: this.config.siteId,
             readOnly: this.readOnly(policy),
             accessPolicy: this.accessPolicy(policy),

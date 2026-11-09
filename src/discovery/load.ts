@@ -11,12 +11,12 @@ function document(value: unknown): ApiDocument {
     const result = value as ApiDocument;
     if (
         typeof result.openapi !== 'string' ||
-        !result.openapi.startsWith('3.0.') ||
+        !/^3\.[01](?:\.|$)/.test(result.openapi) ||
         !result.paths ||
         typeof result.paths !== 'object' ||
         Array.isArray(result.paths)
     ) {
-        throw new Error('Expected an OpenAPI 3.0 document with paths');
+        throw new Error('Expected an OpenAPI 3.0 or 3.1 document with paths');
     }
     if (Buffer.byteLength(JSON.stringify(result)) > MAX_SPEC_BYTES) throw new Error('OpenAPI document exceeds the 16 MiB limit');
     return result;
@@ -85,9 +85,17 @@ async function liveDocument(fetcher: SpecFetcher): Promise<ApiDocument> {
         const all = groups.find((group) => typeof group.name === 'string' && /\ball\b/i.test(group.name));
         if (all) return document(await fetcher(all.path));
         const merged: ApiDocument = { openapi: '3.0.1', info: {}, paths: Object.create(null), components: Object.create(null), tags: [] };
+        let hasDialect = false;
         for (const group of groups) {
             // All advertised groups must load: a partial catalogue must not masquerade as complete.
             const part = document(await fetcher(group.path));
+            if (!hasDialect) {
+                hasDialect = true;
+                merged.openapi = part.openapi;
+                if (part.jsonSchemaDialect !== undefined) merged.jsonSchemaDialect = part.jsonSchemaDialect;
+            } else if (part.openapi !== merged.openapi || part.jsonSchemaDialect !== merged.jsonSchemaDialect) {
+                throw new Error('Controller documentation groups use conflicting schema dialects');
+            }
             const paths = merged.paths as Record<string, unknown>;
             for (const [path, item] of Object.entries(part.paths as Record<string, unknown>)) {
                 if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('Invalid OpenAPI path item');
