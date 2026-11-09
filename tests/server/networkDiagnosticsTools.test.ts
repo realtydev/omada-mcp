@@ -3,6 +3,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OmadaClient } from '../../src/omadaClient/index.js';
+import { diagnosticSnapshot } from '../../src/omadaClient/networkDiagnosticComparison.js';
 import { registerDiagnoseWanTool } from '../../src/tools/diagnoseWan.js';
 import { registerGetTrafficHistoryTool } from '../../src/tools/getTrafficHistory.js';
 import { registerGetWifiHistoryTool } from '../../src/tools/getWifiHistory.js';
@@ -54,12 +55,68 @@ describe('network diagnostics MCP adapters', () => {
         const { client, api } = await setup();
         const { tools } = await client.listTools();
         for (const tool of tools) {
-            const baseline = tool.inputSchema.properties?.baseline as { properties: { version: { const: number } } };
+            const baseline = tool.inputSchema.properties?.baseline as {
+                type: string;
+                additionalProperties: boolean;
+                required: string[];
+                properties: { version: { const: number } };
+            };
+            expect(baseline.type).toBe('object');
+            expect(baseline.additionalProperties).toBe(false);
+            expect(baseline.required).toEqual(expect.arrayContaining(['version', 'scope', 'metrics', 'window']));
             expect(baseline.properties.version.const).toBe(1);
         }
         const result = await client.callTool({ name: 'getTrafficHistory', arguments: { baseline: { version: 999 } } });
         expect(result.isError).toBe(true);
         expect(api.getTrafficHistory).not.toHaveBeenCalled();
+    });
+    it('retains the derived strict JSON schema and accepts a valid portable baseline over MCP', async () => {
+        const { client, api } = await setup();
+        const { tools } = await client.listTools();
+        for (const tool of tools) {
+            expect(tool.inputSchema.properties?.baseline).toMatchObject({
+                type: 'object',
+                additionalProperties: false,
+                required: expect.arrayContaining([
+                    'version',
+                    'kind',
+                    'capturedAt',
+                    'completedAt',
+                    'source',
+                    'scope',
+                    'window',
+                    'maxSamples',
+                    'sources',
+                    'metrics',
+                    'incomplete',
+                    'exclusions',
+                ]),
+                properties: {
+                    metrics: { type: 'array', maxItems: 1024, items: { type: 'object', properties: { points: { type: 'array', maxItems: 1000 } } } },
+                },
+            });
+        }
+        const baseline = diagnosticSnapshot({
+            kind: 'traffic',
+            controller: 'controller',
+            site: 'site',
+            capturedAt: 300_000,
+            completedAt: 300_001,
+            start: 100,
+            end: 200,
+            maxSamples: 100,
+            sections: {
+                traffic: {
+                    status: 'ok',
+                    truncated: false,
+                    data: { apTrafficActivities: { data: [{ time: 150, txData: 1, rxData: 0 }] }, switchTrafficActivities: { data: [] } },
+                },
+            },
+        });
+        const options = { start: 100, end: 200, maxSamples: 100, baseline };
+        const result = await client.callTool({ name: 'getTrafficHistory', arguments: options });
+        expect(result.isError).toBeFalsy();
+        expect(api.getTrafficHistory).toHaveBeenCalledExactlyOnceWith(options);
     });
     it('rejects aggregate point and byte budgets in the MCP schema before invoking the client', async () => {
         const { client, api } = await setup();

@@ -132,7 +132,7 @@ export function validateDiagnosticBaseline(value: unknown): NetworkDiagnosticSna
     if (value === undefined) return undefined;
     const budgetError = diagnosticBudgetError(value);
     if (budgetError) throw new Error(budgetError);
-    const parsed = networkDiagnosticSnapshotSchema.safeParse(value);
+    const parsed = networkDiagnosticSnapshotShape.safeParse(value);
     if (!parsed.success) throw new Error('Invalid diagnostic baseline snapshot');
     const result = parsed.data;
     if (

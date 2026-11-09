@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-09
+
+### Added
+
+- `refreshApiCatalog` atomically refreshes discovery snapshots and reports sanitized HTTP, timeout, TLS, document and group failures. Concurrent refreshes coalesce; failed live-only refreshes retain the previous catalogue.
+- Bounded diagnostic snapshots and scope-matched baseline comparisons for traffic, RF and WAN evidence, without inferred traffic totals or undocumented metric arithmetic.
+- Verified rollback receipts for DHCP create/update/delete, AP radio settings and complete secret-free open/enterprise SSID basic settings. Resource-specific permissions, drift checks, row identity checks and bounded verification preserve existing rate-limit receipts.
+- Read-only `yarn smoke:compatibility` qualification with explicit unavailable environments and safe numeric error observations. MSP/OpenAPI 3.1 and web-session protocol fixtures do not imply real hardware qualification.
+
+### Fixed
+
+- DHCP reconciliation handles redacted transport failures without replaying mutations. Lost acknowledgements remain `written:"unknown"` even when read-back verifies the desired state.
+- Diagnostic baseline aggregate point and byte limits are enforced before nested input parsing.
+
 ## [0.10.1] - 2026-11-09
 
 ### Fixed

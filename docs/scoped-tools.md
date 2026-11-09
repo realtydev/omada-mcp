@@ -32,7 +32,7 @@ With the variable unset, existing full/read-only behavior is preserved. Explicit
 
 One policy governs tool registration and handler invocation, configured client methods, discovery search/describe/execute, and generic API calls. Per-server restrictions intersect configured client restrictions; one server cannot broaden a shared client's access or change another server's policy.
 
-Discovery/status helpers remain usable, but discovered operations are filtered and authorized independently. Optional SSID evidence in `getControllerCapabilities` requires wireless read permission. A denied operation cannot be enabled through a preview, operation ID or raw path.
+Discovery/status helpers, including `refreshApiCatalog`, remain usable, but discovered operations are filtered and authorized independently. Optional SSID evidence in `getControllerCapabilities` requires wireless read permission. A denied operation cannot be enabled through a preview, operation ID or raw path.
 
 Scoped generic calls require canonical relative paths and supported methods/versions. Absolute URLs, encoded traversal/separators, controller-prefix substitution and controller query overrides are rejected before HTTP. Unknown or mixed-operation routes without a reliable category stay denied. Raw `callApi` is unavailable on a scoped client. The global `read-only` profile retains its existing exclusion of `genericApiCall`; category-scoped read access can expose generic GET calls with runtime enforcement.
 
@@ -47,3 +47,5 @@ Canonical `/openapi/v1/msp/{mspId}/...` and v2 MSP routes use the separate `msp`
 For read-only Wi-Fi work, a scope such as `system:r,wireless:r` keeps site selection and audit commands available. For broader observation with controlled writes, start with `all:r` and add only the categories that need `:rw`.
 
 Controller 6.3.0.45 validation confirmed denied discovery and generic writes stopped before HTTP, and server options could not broaden configured scopes or read-only access. With `all:r,clients:rw`, a guarded test created and renamed a disabled, unassigned rate-limit profile, verified both results, deleted it, and confirmed existing profiles were unchanged. The guard permitted exactly those three mutations.
+
+`rollbackNetworkChange` follows the receipt resource: `clients:w` for rate-limit profiles, `network:w` for DHCP reservations, and `wireless:w` for SSID/AP radio changes. Listing the shared tool does not grant authority over another category; both server and configured-client checks enforce the resource at invocation.

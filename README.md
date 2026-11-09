@@ -12,7 +12,7 @@
 
 </div>
 
-> **Release:** [v0.10.1](https://github.com/realtydev/omada-mcp/releases/tag/v0.10.1) includes 104 tools, automatic API discovery, richer diagnostics and verified profile rollback. Use `getServerInfo` to confirm the running build.
+> **Release:** [v0.11.0](https://github.com/realtydev/omada-mcp/releases/tag/v0.11.0) includes 105 tools, automatic API discovery, discovery refresh, diagnostic comparisons and extended verified rollback. Use `getServerInfo` to confirm the running build.
 
 ```text
 You:    Why is the guest SSID slow on the upstairs AP?
@@ -29,10 +29,10 @@ Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned
 ## Highlights
 
 - **Automatic API discovery.** `searchApiOperations` → `describeApiOperation` → `executeApiOperation`. Prefer the controller's live specification, with an explicit bundled fallback containing 1,676 indexed operations. Unsupported operations are identified; a catalogue entry does not prove device support. See [API discovery](docs/api-discovery.md).
-- **104 tools, including 54 in read-only mode before category filtering.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
-- **Traffic, RF and WAN diagnostics.** Bounded history and timestamped evidence distinguish missing metrics, partial results and truncation. See [network workflows](docs/network-workflows.md).
+- **105 tools, including 55 in read-only mode before category filtering.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
+- **Traffic, RF and WAN diagnostics.** Bounded history and timestamped evidence distinguish missing metrics, partial results and truncation. See [network workflows](docs/network-workflows.md) and [diagnostic comparisons](docs/diagnostic-comparisons.md).
 - **MSP, OpenAPI 3.1 and files.** Explicit MSP scope, JSON Schema 2020 validation and opt-in bounded multipart uploads/binary downloads. See [file transfers](docs/file-transfers.md).
-- **Guarded configuration changes.** Discovered writes default to validated previews. Radio, DHCP, SSID, switch-port, rate-limit profile and log-notification writes retain dedicated safeguards. Rate-limit profile changes include drift-checked rollback receipts. Other discovered writes explicitly report that they have not been verified by reading settings back.
+- **Guarded configuration changes.** Discovered writes default to validated previews. Radio, DHCP, SSID, switch-port, rate-limit profile and log-notification writes retain dedicated safeguards. Eligible rate-limit, DHCP, AP radio and secret-free SSID changes include drift-checked rollback receipts. Other discovered writes explicitly report that they have not been verified by reading settings back.
 - **Wi-Fi audit snapshots and scoped tools.** Compare AP radio configuration across matching snapshots with [Wi-Fi audits](docs/wifi-audit.md), and limit dedicated/discovered operations with [category scopes](docs/scoped-tools.md).
 - **Explicit read-only access.** `MCP_TOOL_PROFILE=read-only` blocks writes, including discovered operations. Controller permissions still govern which data is accessible.
 - **Two API surfaces.** The official Omada Open API, plus the controller's internal web UI API for features the Open API doesn't expose (ACLs, routes, port forwarding on OC200).
@@ -290,12 +290,13 @@ DHCP writes support `dryRun`. Inspect `verification.status`: `verified` confirms
 
 ### Generic
 
-| Tool                   | Description                                                                              |
-| ---------------------- | ---------------------------------------------------------------------------------------- |
-| `genericApiCall`       | Invoke any Omada OpenAPI endpoint directly                                               |
-| `searchApiOperations`  | Search API operations by keyword, category or HTTP method                                |
-| `describeApiOperation` | Inspect an operation’s parameters, schemas and limitations                               |
-| `executeApiOperation`  | Execute validated JSON, multipart or file-download operations; writes preview by default |
+| Tool                   | Description                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
+| `genericApiCall`       | Invoke any Omada OpenAPI endpoint directly                                                       |
+| `searchApiOperations`  | Search API operations by keyword, category or HTTP method                                        |
+| `refreshApiCatalog`    | Refresh the configured catalogue with sanitized discovery diagnostics and safe cache replacement |
+| `describeApiOperation` | Inspect an operation’s parameters, schemas and limitations                                       |
+| `executeApiOperation`  | Execute validated JSON, multipart or file-download operations; writes preview by default         |
 
 See [network workflows](docs/network-workflows.md) for diagnostics and verified profile rollback, and [file transfers](docs/file-transfers.md) for bounded upload/download configuration.
 
@@ -416,3 +417,5 @@ Maintained by [realtydev](https://github.com/realtydev).
 ## License
 
 [MIT](LICENSE)
+
+Read-only qualification for additional controllers is documented in [compatibility validation](docs/compatibility-validation.md). Missing MSP/Fusion hardware remains explicitly untested.
