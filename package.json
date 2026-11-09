@@ -15,6 +15,7 @@
         "docs/runtime.md",
         "docs/api-discovery.md",
         "docs/network-workflows.md",
+        "docs/network-diagnosis.md",
         "docs/diagnostic-comparisons.md",
         "docs/compatibility-validation.md",
         "docs/file-transfers.md",

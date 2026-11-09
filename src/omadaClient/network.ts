@@ -591,8 +591,11 @@ export class NetworkOperations {
         timeEnd?: number,
         module?: 'System' | 'Device' | 'Client',
         keyPrefix?: string,
-        excludeKeyPrefix?: string
+        excludeKeyPrefix?: string,
+        scanOptions?: { maxPages: number }
     ): Promise<PaginatedResult<unknown> & { scanTruncated?: boolean }> {
+        const maxPages = scanOptions?.maxPages ?? EVENT_SCAN_MAX_PAGES;
+        if (!Number.isSafeInteger(maxPages) || maxPages < 1 || maxPages > EVENT_SCAN_MAX_PAGES) throw new Error('Invalid event scan page bound');
         const resolvedSiteId = this.site.resolveSiteId(siteId);
         const resolvedTimeEnd = timeEnd ?? Date.now();
         const resolvedTimeStart = timeStart ?? resolvedTimeEnd - 7 * 24 * 60 * 60 * 1000;
@@ -621,16 +624,21 @@ export class NetworkOperations {
                 pageSize: EVENT_SCAN_PAGE_SIZE,
             });
             const result = this.request.ensureSuccess(response);
+            if (!Array.isArray(result.data)) throw new Error('Event scan did not return a record array');
             for (const event of result.data ?? []) {
                 const key = event.key ?? '';
                 if ((keyPrefix === undefined || key.startsWith(keyPrefix)) && (excludeKeyPrefix === undefined || !key.startsWith(excludeKeyPrefix))) {
                     matches.push(event);
                 }
             }
+            if (!Number.isSafeInteger(result.totalRows) || Number(result.totalRows) < 0) {
+                scanTruncated = true;
+                break;
+            }
             if (scanPage * EVENT_SCAN_PAGE_SIZE >= (result.totalRows ?? 0)) {
                 break;
             }
-            if (scanPage >= EVENT_SCAN_MAX_PAGES) {
+            if (scanPage >= maxPages) {
                 scanTruncated = true;
                 break;
             }

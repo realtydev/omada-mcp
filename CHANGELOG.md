@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- `diagnoseNetwork` composes bounded read-only inventory, WAN/Wi-Fi, switch coverage, inherited VLANs, topology and incident evidence, with qualified channel-overlap candidates, explicit signal policy and matching historical loop recovery. Operating channels now accept the controller’s channel/frequency format.
 - AP SSID reads now distinguish native override fields, inherited WLAN VLAN settings and resolved configured tagging by stable SSID ID, leaving missing or advanced evidence unknown.
 - Managed-switch port coverage joins public configuration and guarded web telemetry, includes non-PoE switches, separates administrative/link state and adds an explicit coverage report without changing the legacy array shape.
 - Read-only RF planning reports combine configuration, native status, successful-deployment evidence, bounded history and optional per-device/radio detail, with explicit partial-failure and tool-scope handling.

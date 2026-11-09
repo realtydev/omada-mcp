@@ -55,6 +55,7 @@ import { MonitorOperations, type SiteDashboardOptions, type SiteDashboardResult 
 import { type ListVpnConnectionsOptions, MonitoringOperations } from './monitoring.js';
 import { NetworkOperations } from './network.js';
 import { NetworkChangeOperations, type NetworkChangeReceipt } from './networkChange.js';
+import { NetworkDiagnosisOperations, type NetworkDiagnosisOptions } from './networkDiagnosis.js';
 import {
     type NetworkDiagnosticOptions,
     NetworkDiagnosticsOperations,
@@ -119,6 +120,7 @@ export class OmadaClient {
 
     private readonly switchOps: SwitchOperations;
     private readonly switchPortReadOps: SwitchPortReadOperations;
+    private readonly networkDiagnosisOps: NetworkDiagnosisOperations;
 
     private readonly logNotificationOps: LogNotificationOperations;
 
@@ -176,6 +178,7 @@ export class OmadaClient {
         );
         this.diagnosticsOps = new DiagnosticsOperations(this);
         this.wifiAuditOps = new WifiAuditOperations(this, { omadacId: options.omadacId, siteId: options.siteId });
+        this.networkDiagnosisOps = new NetworkDiagnosisOperations(this, this.siteOps);
 
         // Initialize internal API support if web credentials are configured
         if (options.webUsername && options.webPassword) {
@@ -223,6 +226,9 @@ export class OmadaClient {
     public async diagnoseWifi(options: GetWifiAuditOptions = {}): Promise<WifiAuditResult> {
         return await this.wifiAuditOps.diagnoseWifi(options);
     }
+    public async diagnoseNetwork(options: NetworkDiagnosisOptions = {}) {
+        return await this.networkDiagnosisOps.diagnoseNetwork(options);
+    }
 
     public async getSiteDashboard(options: SiteDashboardOptions = {}): Promise<SiteDashboardResult> {
         return await this.monitorOps.getSiteDashboard(options);
@@ -254,8 +260,8 @@ export class OmadaClient {
     }
 
     // Client operations
-    public async listClients(siteId?: string): Promise<OmadaClientInfo[]> {
-        return await this.clientOps.listClients(siteId);
+    public async listClients(siteId?: string, readOptions?: PaginationReadOptions): Promise<OmadaClientInfo[]> {
+        return readOptions === undefined ? await this.clientOps.listClients(siteId) : await this.clientOps.listClients(siteId, readOptions);
     }
 
     public async getClient(identifier: string, siteId?: string): Promise<OmadaClientInfo | undefined> {
@@ -406,9 +412,12 @@ export class OmadaClient {
         timeEnd?: number,
         module?: 'System' | 'Device' | 'Client',
         keyPrefix?: string,
-        excludeKeyPrefix?: string
+        excludeKeyPrefix?: string,
+        scanOptions?: { maxPages: number }
     ): Promise<PaginatedResult<unknown> & { scanTruncated?: boolean }> {
-        return await this.networkOps.listEvents(siteId, page, pageSize, timeStart, timeEnd, module, keyPrefix, excludeKeyPrefix);
+        return scanOptions === undefined
+            ? await this.networkOps.listEvents(siteId, page, pageSize, timeStart, timeEnd, module, keyPrefix, excludeKeyPrefix)
+            : await this.networkOps.listEvents(siteId, page, pageSize, timeStart, timeEnd, module, keyPrefix, excludeKeyPrefix, scanOptions);
     }
 
     public async listAlerts(
