@@ -1,6 +1,8 @@
-import { spawn } from 'node:child_process';
-import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { access, chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -15,6 +17,7 @@ export interface BuildInfo {
 }
 export interface Selection {
     version: string;
+    gitCommit?: string;
     entry?: string;
     image?: string;
 }
@@ -29,31 +32,30 @@ export interface RuntimeState {
     url?: string;
 }
 export type Runner = (command: string, args: string[], cwd?: string, environment?: Record<string, string>) => Promise<string>;
-export const run: Runner = (command, args, cwd, environment) =>
-    new Promise((resolveResult, reject) => {
-        const child = spawn(command, args, {
+const executeFile = promisify(execFile);
+export const run: Runner = async (command, args, cwd, environment) => {
+    try {
+        const { stdout } = await executeFile(command, args, {
             cwd,
             env: {
                 ...process.env,
                 ...environment,
                 PATH: `${dirname(process.execPath)}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}`,
             },
-            stdio: ['ignore', 'pipe', 'pipe'],
             timeout: 300_000,
+            maxBuffer: 1_048_576,
+            windowsHide: true,
         });
-        let output = '';
-        // Never forward subprocess diagnostics: Compose and npm may include credentials or private URLs.
-        child.stdout.on('data', (chunk: Buffer) => {
-            output += chunk.toString();
-        });
-        child.stderr.resume();
-        child.on('error', () => reject(new Error(`Cannot run ${command}. Check that it is installed and available.`)));
-        child.on('close', (code) =>
-            code === 0
-                ? resolveResult(output.trim())
-                : reject(new Error(`${command} failed (exit ${code ?? 'signal'}). Check its installation, configuration and network access.`))
+        return stdout.trim();
+    } catch (error) {
+        // Subprocess errors can contain complete private output; expose only the exit code.
+        const code = (error as { code?: string | number }).code;
+        if (code === 'ENOENT' || code === 'EACCES') throw new Error(`Cannot run ${command}. Check that it is installed and available.`);
+        throw new Error(
+            `${command} failed (${typeof code === 'number' ? `exit ${code}` : 'timeout or execution error'}). Check its installation, configuration and network access.`
         );
-    });
+    }
+};
 
 export function version(value: string): string {
     if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/.test(value)) {
@@ -149,7 +151,7 @@ export async function probe(state: RuntimeState, selection = state.current, doct
         const part = result.content.find((item) => item.type === 'text');
         if (!part || typeof part.text !== 'string') throw new Error();
         const info = JSON.parse(part.text) as BuildInfo;
-        if (info.packageVersion !== selection.version || typeof info.gitCommit !== 'string' || typeof info.buildTime !== 'string') throw new Error();
+        verifyBuild(info, selection);
         if (doctor) {
             const sites = await client.callTool({ name: 'listSites', arguments: {} }, undefined, { timeout: 35_000 });
             if (sites.isError) throw new Error();
@@ -169,7 +171,7 @@ export async function installStdio(home: string, target: string, archive?: strin
     const entry = join(destination, 'node_modules', PACKAGE, 'dist/index.js');
     try {
         const metadata = JSON.parse(await readFile(join(destination, 'node_modules', PACKAGE, 'package.json'), 'utf8')) as { version?: string };
-        if (metadata.version === target) return { version: target, entry };
+        if (metadata.version === target) return await installedSelection(target, entry);
         throw new Error('Installed version metadata differs. Remove the incomplete version directory before retrying.');
     } catch (error) {
         if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
@@ -192,11 +194,31 @@ export async function installStdio(home: string, target: string, archive?: strin
         ]);
         const metadata = JSON.parse(await readFile(join(destination, 'node_modules', PACKAGE, 'package.json'), 'utf8')) as { version?: string };
         if (metadata.version !== target) throw new Error('Archive version does not match --version.');
+        return await installedSelection(target, entry);
     } catch (error) {
         await rm(destination, { recursive: true, force: true });
         throw error;
     }
-    return { version: target, entry };
+}
+export function verifyBuild(info: BuildInfo, selection: Selection): void {
+    if (
+        info.packageVersion !== selection.version ||
+        !/^[a-f0-9]{7,40}(?:-dirty)?$/.test(info.gitCommit) ||
+        !Number.isFinite(Date.parse(info.buildTime)) ||
+        (selection.gitCommit && selection.gitCommit !== info.gitCommit && !selection.gitCommit.startsWith(info.gitCommit))
+    ) {
+        throw new Error('Running build identity does not match the selected artifact.');
+    }
+}
+async function installedSelection(target: string, entry: string): Promise<Selection> {
+    await access(entry);
+    const { PACKAGE_VERSION: packageVersion, GIT_COMMIT: gitCommit } = (await import(
+        pathToFileURL(join(dirname(entry), 'generated/buildInfo.js')).href
+    )) as { PACKAGE_VERSION?: unknown; GIT_COMMIT?: unknown };
+    if (packageVersion !== target || typeof gitCommit !== 'string' || !/^[a-f0-9]{7,40}(?:-dirty)?$/.test(gitCommit)) {
+        throw new Error('Installed archive has missing or mismatched build identity. Reinstall the exact release archive.');
+    }
+    return { version: target, entry, gitCommit };
 }
 export async function writeLauncher(home: string): Promise<string> {
     const path = join(home, 'stdio.mjs');
@@ -239,10 +261,15 @@ export async function pullImage(target: string, execute: Runner = run): Promise<
             await rm(config, { recursive: true, force: true });
         }
     }
-    const digests = JSON.parse(await execute('docker', ['image', 'inspect', image, '--format', '{{json .RepoDigests}}'])) as string[];
-    const digest = digests.find((item) => item.startsWith(`${IMAGE}@sha256:`));
+    const metadata = JSON.parse(await execute('docker', ['image', 'inspect', image, '--format', '{{json .}}'])) as {
+        RepoDigests?: string[];
+        Config?: { Labels?: Record<string, string> };
+    };
+    const digest = metadata.RepoDigests?.find((item) => item.startsWith(`${IMAGE}@sha256:`));
     if (!digest) throw new Error('Pulled image has no registry digest; the service was not changed.');
-    return { version: target, image: digest };
+    const gitCommit = metadata.Config?.Labels?.['org.opencontainers.image.revision'];
+    if (!gitCommit || !/^[a-f0-9]{40}$/.test(gitCommit)) throw new Error('Pulled image has no valid build revision; the service was not changed.');
+    return { version: target, image: digest, gitCommit };
 }
 export type Prober = typeof probe;
 export async function switchDocker(

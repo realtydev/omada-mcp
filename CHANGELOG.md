@@ -11,7 +11,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - `locateDevice` blinks a single device; `setSiteLed` explicitly controls LEDs across a site.
 - Weekly CI reruns dependency auditing and validation even when the repository has no new commits.
 
-- Focused `omada-runtime` CLI: setup, doctor, status, exact-version updates and rollback for client-managed stdio and persistent local Docker services, including adoption of existing Compose deployments.
+- Commander-powered `omada-runtime` CLI with command-specific help: setup, doctor, status, exact-version updates and rollback for client-managed stdio and persistent local Docker services, including adoption of existing Compose deployments.
 - Release runtime archives with executable package bins and an archive/launcher MCP smoke check in CI.
 
 ### Fixed

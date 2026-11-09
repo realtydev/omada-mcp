@@ -69,6 +69,15 @@ describe('runtime commands', () => {
         ])
             await expect(runCli(argv)).rejects.toThrow();
     });
+    it('generates command-specific help and reports the CLI version', async () => {
+        await runCli(['setup', 'docker', '--help']);
+        expect(process.stdout.write).toHaveBeenCalledWith(expect.stringContaining('--compose-file'));
+        vi.mocked(process.stdout.write).mockClear();
+        await runCli(['status', 'stdio', '--help']);
+        expect(process.stdout.write).not.toHaveBeenCalledWith(expect.stringContaining('--compose-file'));
+        await runCli(['--cli-version']);
+        expect(process.stdout.write).toHaveBeenCalledWith(expect.stringMatching(/^\d+\.\d+\.\d+/));
+    });
     it('sets up stdio and prints a stable client launcher without credentials', async () => {
         await cli('setup', 'stdio', '--env-file', envFile, '--version', '0.7.0', '--package', '/tmp/local.tgz');
         expect(core.installStdio).toHaveBeenCalledWith(home, '0.7.0', '/tmp/local.tgz');
@@ -101,7 +110,7 @@ describe('runtime commands', () => {
     });
     it('requires an explicit update version and handles no-op and rollback history', async () => {
         await setupState('stdio');
-        await expect(cli('update', 'stdio')).rejects.toThrow('requires --version');
+        await expect(cli('update', 'stdio')).rejects.toThrow('--version');
         await cli('update', 'stdio', '--version', '0.7.0');
         expect(core.installStdio).not.toHaveBeenCalled();
         await cli('rollback', 'stdio');
@@ -136,7 +145,10 @@ describe('runtime commands', () => {
             if (args.includes('ps')) return Promise.resolve('container-id');
             if (args.includes('image'))
                 return Promise.resolve(
-                    JSON.stringify({ RepoDigests: [current.image], Config: { Labels: { 'org.opencontainers.image.version': '0.7.0' } } })
+                    JSON.stringify({
+                        RepoDigests: [current.image],
+                        Config: { Labels: { 'org.opencontainers.image.version': '0.7.0', 'org.opencontainers.image.revision': 'a'.repeat(40) } },
+                    })
                 );
             return Promise.resolve('sha256:image');
         });
@@ -214,6 +226,14 @@ describe('runtime commands', () => {
             await expect(cli('setup', 'docker', '--env-file', envFile, '--port', port)).rejects.toThrow('integer');
         vi.mocked(core.run).mockResolvedValue('existing-container');
         await expect(cli('setup', 'docker', '--env-file', envFile)).rejects.toThrow('already exists');
+    });
+    it('retains recovery state and reports uncertainty when initial cleanup fails', async () => {
+        vi.mocked(core.switchDocker).mockRejectedValueOnce(new Error('not ready'));
+        vi.mocked(core.run).mockImplementation((_command, args) =>
+            args.includes('rm') ? Promise.reject(new Error('daemon unavailable')) : Promise.resolve('')
+        );
+        await expect(cli('setup', 'docker', '--env-file', envFile)).rejects.toThrow('cleanup could not be confirmed');
+        expect(await core.readState(home, 'docker')).toMatchObject({ current, envFile });
     });
     it('removes only a newly created service after initial readiness failure', async () => {
         vi.mocked(core.switchDocker).mockRejectedValueOnce(new Error('not ready'));
