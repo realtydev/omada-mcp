@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosRequestHeaders } from 'axios';
 
 import type { OmadaApiResponse, PaginatedResult } from '../types/index.js';
@@ -6,6 +7,7 @@ import { logger } from '../utils/logger.js';
 import type { RequestAuthManager } from './auth.js';
 
 const DEFAULT_PAGE_SIZE = 200;
+const MAX_PAGINATION_PAGES = 1000;
 
 /**
  * HTTP request handler for Omada API calls with authentication and retry logic.
@@ -95,14 +97,14 @@ export class RequestHandler {
             const errorCode = (response.data as { errorCode?: number } | undefined)?.errorCode;
             const errorMsg = (response.data as { msg?: string } | undefined)?.msg;
 
-            if (retry && (this.isAuthErrorCode(errorCode) || this.isTokenExpiredMessage(errorMsg))) {
+            if (retry && (this.isAuthErrorCode(errorCode) || this.isExpiredAuthMessage(errorMsg))) {
                 logger.warn('Omada authentication error in response, retrying with fresh token', {
                     method,
                     url,
                     errorCode,
                     message: errorMsg,
                 });
-                this.auth.clearToken();
+                this.auth.clearToken(authHeaders);
                 return this.request<T>(config, false);
             }
 
@@ -124,15 +126,15 @@ export class RequestHandler {
                 });
             }
 
-            if (!retry || !axios.isAxiosError(error)) {
+            if (!axios.isAxiosError(error)) {
                 throw error;
             }
 
             const status = error.response?.status;
             const errorCode = (error.response?.data as { errorCode?: number } | undefined)?.errorCode;
 
-            if (status === 401 || status === 403 || this.isAuthErrorCode(errorCode)) {
-                this.auth.clearToken();
+            if (retry && (status === 401 || status === 403 || this.isAuthErrorCode(errorCode))) {
+                this.auth.clearToken(authHeaders);
                 return this.request<T>(config, false);
             }
 
@@ -179,32 +181,59 @@ export class RequestHandler {
     /**
      * Fetch all pages of a paginated API endpoint.
      */
-    public async fetchPaginated<T>(path: string, params: Record<string, unknown> = {}): Promise<T[]> {
+    public async fetchPaginated<T>(path: string, params: Record<string, unknown> = {}, pageSize = DEFAULT_PAGE_SIZE): Promise<T[]> {
+        if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 1000) {
+            throw new Error('Pagination pageSize must be an integer between 1 and 1000.');
+        }
         const records: T[] = [];
-        let page = 1;
+        const seenPages = new Set<string>();
         let totalRows: number | undefined;
 
-        // Fetch sequential pages because OpenAPI requires explicit pagination parameters.
-        do {
+        // Never return a partial collection as successful absence: mutation verification depends
+        // on these reads. A changing collection must be retried rather than silently truncated.
+        for (let page = 1; page <= MAX_PAGINATION_PAGES; page += 1) {
             const response = await this.get<OmadaApiResponse<PaginatedResult<T>>>(path, {
                 ...params,
                 page,
-                pageSize: DEFAULT_PAGE_SIZE,
+                pageSize,
             });
-
             const result = this.ensureSuccess(response);
-            const pageData = result.data ?? [];
-            totalRows = result.totalRows ?? totalRows;
-
-            records.push(...pageData);
-            page += 1;
-
-            if (pageData.length === 0) {
-                break;
+            if (!result || typeof result !== 'object' || Array.isArray(result) || !Array.isArray(result.data)) {
+                throw new Error(`Invalid pagination response for ${path}: expected a result object with a data array.`);
             }
-        } while (!totalRows || records.length < totalRows);
-
-        return records;
+            if (result.totalRows !== undefined) {
+                if (!Number.isSafeInteger(result.totalRows) || result.totalRows < 0) {
+                    throw new Error(`Invalid pagination response for ${path}: totalRows must be a non-negative safe integer.`);
+                }
+                if (totalRows !== undefined && totalRows !== result.totalRows) {
+                    throw new Error(`Incomplete pagination for ${path}: totalRows changed during collection; retry the read.`);
+                }
+                totalRows = result.totalRows;
+            }
+            if (result.currentPage !== undefined && (!Number.isSafeInteger(result.currentPage) || result.currentPage !== page)) {
+                throw new Error(`Incomplete pagination for ${path}: the controller did not return requested page ${page}.`);
+            }
+            const pageData = result.data;
+            if (totalRows !== undefined && records.length + pageData.length > totalRows) {
+                throw new Error(`Invalid pagination response for ${path}: returned more records than totalRows.`);
+            }
+            if (pageData.length === 0) {
+                if (totalRows !== undefined && records.length < totalRows) {
+                    throw new Error(`Incomplete pagination for ${path}: an empty page arrived before totalRows was reached.`);
+                }
+                return records;
+            }
+            const fingerprint = createHash('sha256').update(JSON.stringify(pageData)).digest('hex');
+            if (seenPages.has(fingerprint)) {
+                throw new Error(`Incomplete pagination for ${path}: a non-empty page repeated; the controller may be ignoring pagination.`);
+            }
+            seenPages.add(fingerprint);
+            records.push(...pageData);
+            if (totalRows !== undefined && records.length === totalRows) {
+                return records;
+            }
+        }
+        throw new Error(`Incomplete pagination for ${path}: exceeded the ${MAX_PAGINATION_PAGES}-page safety limit.`);
     }
 
     /**
@@ -237,7 +266,7 @@ export class RequestHandler {
     /**
      * Check if an error message indicates token expiration.
      */
-    private isTokenExpiredMessage(message?: string): boolean {
+    private isExpiredAuthMessage(message?: string): boolean {
         if (!message) {
             return false;
         }
@@ -247,7 +276,9 @@ export class RequestHandler {
             lowerMsg.includes('access token has expired') ||
             lowerMsg.includes('token has expired') ||
             lowerMsg.includes('token expired') ||
-            lowerMsg.includes('re-initiate the refreshtoken')
+            lowerMsg.includes('re-initiate the refreshtoken') ||
+            (this.auth.mode === 'web' &&
+                (lowerMsg.includes('session expired') || lowerMsg.includes('session has expired') || lowerMsg.includes('not logged in')))
         );
     }
 

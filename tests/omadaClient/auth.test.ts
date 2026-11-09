@@ -4,6 +4,20 @@ import { AuthManager, WebAuthManager } from '../../src/omadaClient/auth.js';
 import type { OmadaApiResponse, TokenResult } from '../../src/types/index.js';
 import * as loggerModule from '../../src/utils/logger.js';
 
+function deferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (reason: Error) => void;
+    const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+    });
+    return { promise, resolve, reject };
+}
+
+const oauthResponse = (accessToken: string, expiresIn = 3600) => ({
+    data: { errorCode: 0, result: { accessToken, refreshToken: `${accessToken}-refresh`, expiresIn, tokenType: 'Bearer' } },
+});
+
 describe('AuthManager', () => {
     let authManager: AuthManager;
     let mockHttp: AxiosInstance;
@@ -27,6 +41,88 @@ describe('AuthManager', () => {
 
     afterEach(() => {
         vi.restoreAllMocks();
+    });
+
+    describe('concurrent token lifecycle', () => {
+        it('shares one cold login across concurrent callers', async () => {
+            vi.mocked(mockHttp.post).mockResolvedValue(oauthResponse('shared-token'));
+            const tokens = await Promise.all(Array.from({ length: 10 }, () => authManager.getAccessToken()));
+            expect(tokens).toEqual(Array(10).fill('shared-token'));
+            expect(mockHttp.post).toHaveBeenCalledTimes(1);
+        });
+
+        it('shares one refresh for expired tokens', async () => {
+            vi.mocked(mockHttp.post).mockResolvedValueOnce(oauthResponse('initial', 1)).mockResolvedValueOnce(oauthResponse('refreshed'));
+            await authManager.getAccessToken();
+            await expect(Promise.all(Array.from({ length: 10 }, () => authManager.getAccessToken()))).resolves.toEqual(Array(10).fill('refreshed'));
+            expect(mockHttp.post).toHaveBeenCalledTimes(2);
+            expect(mockHttp.post).toHaveBeenLastCalledWith(
+                '/openapi/authorize/token',
+                { client_id: clientId, client_secret: clientSecret },
+                { params: { grant_type: 'refresh_token', refresh_token: 'initial-refresh' } }
+            );
+        });
+
+        it('shares one credentials fallback when a refresh fails', async () => {
+            vi.mocked(mockHttp.post)
+                .mockResolvedValueOnce(oauthResponse('initial', 1))
+                .mockRejectedValueOnce(new Error('Refresh rejected'))
+                .mockResolvedValueOnce(oauthResponse('replacement'));
+            await authManager.getAccessToken();
+            await expect(Promise.all(Array.from({ length: 10 }, () => authManager.getAccessToken()))).resolves.toEqual(Array(10).fill('replacement'));
+            expect(mockHttp.post).toHaveBeenCalledTimes(3);
+        });
+
+        it('releases failed authentication so the next batch can retry', async () => {
+            vi.mocked(mockHttp.post).mockRejectedValueOnce(new Error('Unavailable')).mockResolvedValueOnce(oauthResponse('recovered'));
+            const failures = await Promise.allSettled(Array.from({ length: 3 }, () => authManager.getAccessToken()));
+            expect(failures.every((result) => result.status === 'rejected')).toBe(true);
+            expect(mockHttp.post).toHaveBeenCalledTimes(1);
+            await expect(authManager.getAccessToken()).resolves.toBe('recovered');
+            expect(mockHttp.post).toHaveBeenCalledTimes(2);
+        });
+
+        it.each(['success', 'failure'] as const)('discards an invalidated login with a late %s', async (outcome) => {
+            const oldLogin = deferred<ReturnType<typeof oauthResponse>>();
+            vi.mocked(mockHttp.post).mockReturnValueOnce(oldLogin.promise).mockResolvedValueOnce(oauthResponse('current'));
+            const oldCaller = authManager.getAccessToken();
+            authManager.clearToken();
+            await expect(authManager.getAccessToken()).resolves.toBe('current');
+            if (outcome === 'success') {
+                oldLogin.resolve(oauthResponse('obsolete'));
+            } else {
+                oldLogin.reject(new Error('Old request failed'));
+            }
+            await expect(oldCaller).resolves.toBe('current');
+            await expect(authManager.getAccessToken()).resolves.toBe('current');
+            expect(mockHttp.post).toHaveBeenCalledTimes(2);
+        });
+
+        it('ignores late rejections of old headers while fresh authentication is pending', async () => {
+            const freshLogin = deferred<ReturnType<typeof oauthResponse>>();
+            vi.mocked(mockHttp.post).mockResolvedValueOnce(oauthResponse('old')).mockReturnValueOnce(freshLogin.promise);
+            const oldHeaders = await authManager.getAuthHeaders();
+            authManager.clearToken(oldHeaders);
+            const first = authManager.getAuthHeaders();
+            authManager.clearToken(oldHeaders);
+            const second = authManager.getAuthHeaders();
+            freshLogin.resolve(oauthResponse('current'));
+            await expect(Promise.all([first, second])).resolves.toEqual([
+                { Authorization: 'AccessToken=current' },
+                { Authorization: 'AccessToken=current' },
+            ]);
+            authManager.clearToken(oldHeaders);
+            await expect(authManager.getAccessToken()).resolves.toBe('current');
+            expect(mockHttp.post).toHaveBeenCalledTimes(2);
+        });
+
+        it('rejects successful envelopes that omit the access token and allows retry', async () => {
+            vi.mocked(mockHttp.post)
+                .mockResolvedValueOnce({ data: { errorCode: 0, result: {} } })
+                .mockResolvedValueOnce(oauthResponse('valid'));
+            await expect(authManager.getAccessToken()).rejects.toThrow('no access token');
+            await expect(authManager.getAccessToken()).resolves.toBe('valid');
+        });
     });
 
     describe('getAccessToken', () => {
@@ -215,7 +311,7 @@ describe('AuthManager', () => {
             );
         });
 
-        it('should handle missing result in response', async () => {
+        it('should reject a response without credentials', async () => {
             const mockResponse: OmadaApiResponse<TokenResult> = {
                 errorCode: 0,
                 msg: 'Success',
@@ -223,10 +319,7 @@ describe('AuthManager', () => {
 
             (mockHttp.post as ReturnType<typeof vi.fn>).mockResolvedValue({ data: mockResponse });
 
-            const token = await authManager.getAccessToken();
-
-            // Should return empty string when token is undefined
-            expect(token).toBe('');
+            await expect(authManager.getAccessToken()).rejects.toThrow('no access token');
         });
 
         it('should handle zero or negative expiresIn', async () => {
@@ -301,6 +394,25 @@ describe('WebAuthManager', () => {
 
     afterEach(() => {
         vi.restoreAllMocks();
+    });
+
+    it('discards an invalidated web login instead of overwriting its replacement', async () => {
+        const oldLogin = deferred<{ data: { errorCode: number; result: { token: string } }; headers: Record<string, string[]> }>();
+        vi.mocked(mockHttp.post)
+            .mockReturnValueOnce(oldLogin.promise)
+            .mockResolvedValueOnce({
+                data: { errorCode: 0, result: { token: 'current-csrf' } },
+                headers: { 'set-cookie': ['SESSION=current; Path=/'] },
+            });
+        const auth = new WebAuthManager(mockHttp, 'admin', 'password', 'controller');
+        const first = auth.getAuthHeaders();
+        auth.clearToken();
+        await expect(auth.getAuthHeaders()).resolves.toMatchObject({ 'Csrf-Token': 'current-csrf' });
+        oldLogin.resolve({ data: { errorCode: 0, result: { token: 'old-csrf' } }, headers: { 'set-cookie': ['SESSION=old'] } });
+        await expect(first).resolves.toMatchObject({ 'Csrf-Token': 'current-csrf', Cookie: 'SESSION=current' });
+        auth.clearToken({ 'Csrf-Token': 'old-csrf' });
+        await expect(auth.getAuthHeaders()).resolves.toMatchObject({ 'Csrf-Token': 'current-csrf' });
+        expect(mockHttp.post).toHaveBeenCalledTimes(2);
     });
 
     it('should login and return Fusion web auth headers', async () => {

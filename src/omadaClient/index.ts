@@ -35,10 +35,19 @@ import { ApRadioOperations } from './apRadio.js';
 import { AuthManager, type RequestAuthManager, WebAuthManager } from './auth.js';
 import { ClientOperations } from './client.js';
 import { DeviceOperations } from './device.js';
+import {
+    type DhcpReservation,
+    type DhcpReservationConfig,
+    DhcpReservationOperations,
+    type DhcpReservationUpdate,
+    type DhcpReservationWriteResult,
+} from './dhcpReservation.js';
+import { type DiagnoseClientResult, type DiagnoseLogsResult, DiagnosticsOperations } from './diagnostics.js';
 import { GenericOperations } from './generic.js';
 import { InternalAuthManager } from './internalAuth.js';
 import { InternalRequestHandler } from './internalRequest.js';
 import { LogNotificationOperations } from './logNotification.js';
+import { type ListVpnConnectionsOptions, MonitoringOperations } from './monitoring.js';
 import { NetworkOperations } from './network.js';
 import { RequestHandler } from './request.js';
 import { SecurityOperations } from './security.js';
@@ -67,6 +76,12 @@ export class OmadaClient {
     private readonly securityOps: SecurityOperations;
 
     private readonly networkOps: NetworkOperations;
+
+    private readonly diagnosticsOps: DiagnosticsOperations;
+
+    private readonly dhcpReservationOps: DhcpReservationOperations;
+
+    private readonly monitoringOps: MonitoringOperations;
 
     private readonly actionOps: ActionOperations;
 
@@ -109,17 +124,21 @@ export class OmadaClient {
         this.clientOps = new ClientOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.securityOps = new SecurityOperations(this.request, this.buildOmadaPath.bind(this));
         this.networkOps = new NetworkOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.dhcpReservationOps = new DhcpReservationOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.monitoringOps = new MonitoringOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.logNotificationOps = new LogNotificationOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.apRadioOps = new ApRadioOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.actionOps = new ActionOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.genericOps = new GenericOperations(this.request, this.buildOmadaPath.bind(this));
         this.switchOps = new SwitchOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.diagnosticsOps = new DiagnosticsOperations(this);
 
         // Initialize internal API support if web credentials are configured
         if (options.webUsername && options.webPassword) {
             const internalAuth = new InternalAuthManager(this.http, options.webUsername, options.webPassword, options.omadacId);
             const internalReq = new InternalRequestHandler(this.http, internalAuth, options.omadacId);
             this.networkOps.setInternalRequest(internalReq);
+            this.monitoringOps.setInternalRequest(internalReq);
             logger.info('Internal web UI API enabled for ACL management');
         }
     }
@@ -180,6 +199,26 @@ export class OmadaClient {
         return await this.securityOps.getThreatList(options);
     }
 
+    public async getSiteTopology(siteId?: string): Promise<unknown> {
+        return await this.monitoringOps.getSiteTopology(siteId);
+    }
+
+    public async listVpnConnections(options: ListVpnConnectionsOptions = {}): Promise<unknown[]> {
+        return await this.monitoringOps.listVpnConnections(options);
+    }
+
+    public async getGatewayWanSpeedTestResults(gatewayMac: string, siteId?: string): Promise<unknown> {
+        return await this.monitoringOps.getGatewayWanSpeedTestResults(gatewayMac, siteId);
+    }
+
+    public async diagnoseClient(clientMac: string, siteId?: string, timeStart?: number, timeEnd?: number): Promise<DiagnoseClientResult> {
+        return await this.diagnosticsOps.diagnoseClient(clientMac, siteId, timeStart, timeEnd);
+    }
+
+    public async diagnoseLogs(siteId?: string, timeStart?: number, timeEnd?: number, pageSize?: number): Promise<DiagnoseLogsResult> {
+        return await this.diagnosticsOps.diagnoseLogs(siteId, timeStart, timeEnd, pageSize);
+    }
+
     // Network operations
     public async getInternetInfo(siteId?: string): Promise<unknown> {
         return await this.networkOps.getInternetInfo(siteId);
@@ -215,6 +254,27 @@ export class OmadaClient {
 
     public async getIpsSetting(siteId?: string): Promise<unknown> {
         return await this.networkOps.getIpsSetting(siteId);
+    }
+
+    public async listDhcpReservations(siteId?: string, searchKey?: string): Promise<DhcpReservation[]> {
+        return await this.dhcpReservationOps.listDhcpReservations(siteId, searchKey);
+    }
+
+    public async createDhcpReservation(reservation: DhcpReservationConfig, siteId?: string, dryRun?: boolean): Promise<DhcpReservationWriteResult> {
+        return await this.dhcpReservationOps.createDhcpReservation(reservation, siteId, dryRun);
+    }
+
+    public async updateDhcpReservation(
+        mac: string,
+        settings: DhcpReservationUpdate,
+        siteId?: string,
+        dryRun?: boolean
+    ): Promise<DhcpReservationWriteResult> {
+        return await this.dhcpReservationOps.updateDhcpReservation(mac, settings, siteId, dryRun);
+    }
+
+    public async deleteDhcpReservation(mac: string, siteId?: string, dryRun?: boolean): Promise<DhcpReservationWriteResult> {
+        return await this.dhcpReservationOps.deleteDhcpReservation(mac, siteId, dryRun);
     }
 
     // Network write operations

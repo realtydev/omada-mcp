@@ -6,6 +6,7 @@ import type { EnvironmentConfig } from '../config.js';
 import type { OmadaClient } from '../omadaClient/index.js';
 import { normalizePath, resolvePort } from '../utils/config-validations.js';
 import { logger } from '../utils/logger.js';
+import { SessionRegistry } from './sessionRegistry.js';
 import { createSseTransport, getSseMessagePath, handleSseConnection, handleSseMessage } from './sse.js';
 import { handleStreamRequest, type StreamTransportState } from './stream.js';
 
@@ -146,8 +147,17 @@ export async function startHttpServer(client: OmadaClient, config: EnvironmentCo
     const endpointPath = normalizePath(config.httpPath ?? (transport === 'sse' ? '/sse' : '/mcp'));
 
     // Track transports by session ID for stateful mode
-    const sseTransports = new Map<string, { transport: SSEServerTransport; server: ReturnType<typeof createSseTransport>['server'] }>();
-    const streamTransports = new Map<string, StreamTransportState>();
+    const maxSessions = config.httpMaxSessions ?? 100;
+    const idleTimeoutMs = config.httpSessionIdleTimeoutMs ?? 1_800_000;
+    const sseTransports = new SessionRegistry<{ transport: SSEServerTransport; server: ReturnType<typeof createSseTransport>['server'] }>(
+        maxSessions,
+        idleTimeoutMs
+    );
+    const streamTransports = new SessionRegistry<StreamTransportState>(maxSessions, idleTimeoutMs);
+    const rejectCapacity = (res: ServerResponse) => {
+        res.setHeader('Retry-After', '60');
+        sendJson(res, 503, { error: 'MCP session capacity reached. Retry later or close an existing session.' });
+    };
 
     const httpServer = http.createServer((req, res) => {
         void (async () => {
@@ -219,26 +229,34 @@ export async function startHttpServer(client: OmadaClient, config: EnvironmentCo
                     // SSE Transport handling
                     if (url.pathname === endpointPath) {
                         if (req.method === 'GET') {
-                            // Establish SSE connection
-                            const messagePath = getSseMessagePath();
-                            const { transport: sseTransport, server: sseServer } = await handleSseConnection(client, config, messagePath, req, res);
-
-                            // Store transport for later message handling
-                            sseTransports.set(sseTransport.sessionId, { transport: sseTransport, server: sseServer });
-
-                            // Clean up on close
-                            sseTransport.onclose = () => {
-                                sseTransports.delete(sseTransport.sessionId);
-                            };
+                            await sseTransports.expireIdle();
+                            const release = sseTransports.reserve();
+                            if (!release) {
+                                rejectCapacity(res);
+                                return;
+                            }
+                            try {
+                                const messagePath = getSseMessagePath();
+                                const state = await handleSseConnection(client, config, messagePath, req, res);
+                                sseTransports.add(state.transport.sessionId, state);
+                            } finally {
+                                release();
+                            }
                         } else {
                             sendJson(res, 405, { error: 'Method Not Allowed' });
                         }
                     } else if (url.pathname === getSseMessagePath()) {
                         if (req.method === 'POST') {
                             // Handle SSE message
-                            const sessionId = req.headers['mcp-session-id'] as string | undefined;
+                            const headerId = req.headers['mcp-session-id'];
+                            const queryId = url.searchParams.get('sessionId');
+                            if (Array.isArray(headerId) || (headerId && queryId && headerId !== queryId)) {
+                                sendJson(res, 400, { error: 'Conflicting or invalid session IDs' });
+                                return;
+                            }
+                            const sessionId = headerId ?? queryId;
                             if (!sessionId) {
-                                sendJson(res, 400, { error: 'Missing Mcp-Session-Id header' });
+                                sendJson(res, 400, { error: 'Missing sessionId query parameter or Mcp-Session-Id header' });
                                 return;
                             }
 
@@ -248,7 +266,7 @@ export async function startHttpServer(client: OmadaClient, config: EnvironmentCo
                                 return;
                             }
 
-                            await handleSseMessage(session.transport, req, res, parsedBody);
+                            await sseTransports.handle(sessionId, () => handleSseMessage(session.transport, req, res, parsedBody));
                         } else {
                             sendJson(res, 405, { error: 'Method Not Allowed' });
                         }
@@ -258,26 +276,45 @@ export async function startHttpServer(client: OmadaClient, config: EnvironmentCo
                 } else {
                     // Streamable HTTP Transport handling
                     if (url.pathname === endpointPath) {
-                        // Check for existing session in stateful mode
-                        const sessionId = req.headers['mcp-session-id'] as string | undefined;
+                        const sessionId = req.headers['mcp-session-id'];
+                        if (Array.isArray(sessionId)) {
+                            sendJson(res, 400, { error: 'Invalid Mcp-Session-Id header' });
+                            return;
+                        }
                         let existingState: StreamTransportState | undefined;
-
                         if (config.stateful && sessionId) {
                             existingState = streamTransports.get(sessionId);
+                            if (!existingState) {
+                                sendJson(res, 404, { error: 'Session not found' });
+                                return;
+                            }
                         }
-
-                        const state = await handleStreamRequest(client, config, req, res, parsedBody, existingState);
-
-                        // Store transport for stateful sessions
-                        if (config.stateful && state && state.transport.sessionId) {
-                            streamTransports.set(state.transport.sessionId, state);
-
-                            // Clean up on close
-                            state.transport.onclose = () => {
-                                if (state.transport.sessionId) {
-                                    streamTransports.delete(state.transport.sessionId);
+                        if (existingState && sessionId) {
+                            if (req.method === 'GET') {
+                                // A persistent event stream is not an in-flight tool operation.
+                                await handleStreamRequest(client, config, req, res, parsedBody, existingState);
+                            } else {
+                                await streamTransports.handle(sessionId, () =>
+                                    handleStreamRequest(client, config, req, res, parsedBody, existingState)
+                                );
+                            }
+                        } else {
+                            if (config.stateful) {
+                                await streamTransports.expireIdle();
+                            }
+                            const release = config.stateful ? streamTransports.reserve() : () => undefined;
+                            if (!release) {
+                                rejectCapacity(res);
+                                return;
+                            }
+                            try {
+                                const state = await handleStreamRequest(client, config, req, res, parsedBody);
+                                if (config.stateful && state?.transport.sessionId) {
+                                    streamTransports.add(state.transport.sessionId, state);
                                 }
-                            };
+                            } finally {
+                                release();
+                            }
                         }
                     } else {
                         sendJson(res, 404, { error: 'Not Found' });
@@ -351,31 +388,7 @@ export async function startHttpServer(client: OmadaClient, config: EnvironmentCo
             httpServer.close(() => resolve());
         });
     const closeSessions: ShutdownHandler = async () => {
-        // Close SSE transport sessions
-        for (const [sessionId, session] of sseTransports) {
-            try {
-                await session.server.close();
-                await session.transport.close();
-                logger.info('Closed SSE session', { sessionId });
-            } catch (error) {
-                logger.error('Error closing SSE session', { sessionId, error });
-            }
-        }
-        sseTransports.clear();
-
-        // Close Streamable HTTP transport sessions
-        for (const [sessionId, state] of streamTransports) {
-            if (state) {
-                try {
-                    await state.server.close();
-                    await state.transport.close();
-                    logger.info('Closed stream session', { sessionId });
-                } catch (error) {
-                    logger.error('Error closing stream session', { sessionId, error });
-                }
-            }
-        }
-        streamTransports.clear();
+        await Promise.all([sseTransports.close(), streamTransports.close()]);
     };
 
     for (const signal of ['SIGINT', 'SIGTERM'] as const) {

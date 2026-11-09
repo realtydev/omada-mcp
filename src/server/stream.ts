@@ -19,7 +19,7 @@ export type { StreamTransportState };
  * This implements the MCP protocol version 2025-03-26
  */
 export function createStreamTransport(client: OmadaClient, config: EnvironmentConfig): StreamTransportState {
-    const mcpServer = createServer(client);
+    const mcpServer = createServer(client, config);
 
     const enableStatefulSessions = config.stateful;
     const sessionIdGenerator = enableStatefulSessions ? () => randomUUID() : undefined;
@@ -76,11 +76,34 @@ export async function handleStreamRequest(
     // Reuse existing transport if provided, otherwise create new one
     const state = existingTransport ?? createStreamTransport(client, config);
 
-    if (!existingTransport) {
-        await state.server.connect(state.transport);
-    }
+    let closing = false;
+    const closeCreatedState = async () => {
+        if (existingTransport || closing) {
+            return;
+        }
+        closing = true;
+        const results = await Promise.allSettled([state.server.close(), state.transport.close()]);
+        for (const result of results) {
+            if (result.status === 'rejected') {
+                logger.error('Error closing Streamable HTTP request', { error: result.reason });
+            }
+        }
+    };
 
     try {
+        if (!existingTransport) {
+            // Stateless responses may stream after handleRequest resolves. Keep the MCP server
+            // alive until that response finishes or disconnects, then release its resources.
+            if (!config.stateful) {
+                res.once('finish', () => {
+                    void closeCreatedState();
+                });
+                res.once('close', () => {
+                    void closeCreatedState();
+                });
+            }
+            await state.server.connect(state.transport);
+        }
         await state.transport.handleRequest(req, res, parsedBody);
 
         logger.debug('Streamable HTTP request handled', {
@@ -88,6 +111,7 @@ export async function handleStreamRequest(
             sessionId: req.headers['mcp-session-id'] ?? undefined,
         });
     } catch (error) {
+        await closeCreatedState();
         logger.error('Failed to handle Streamable HTTP request', {
             error,
             method: req.method,
@@ -101,6 +125,10 @@ export async function handleStreamRequest(
 
     // Return state for session management if stateful
     if (config.stateful) {
+        if (!existingTransport && !state.transport.sessionId) {
+            await closeCreatedState();
+            return;
+        }
         return state;
     }
 }

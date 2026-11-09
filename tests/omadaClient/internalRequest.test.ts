@@ -5,8 +5,7 @@ describe('InternalRequestHandler', () => {
         request: ReturnType<typeof vi.fn>;
     };
     let mockAuthManager: {
-        getCsrfToken: ReturnType<typeof vi.fn>;
-        getSessionCookie: ReturnType<typeof vi.fn>;
+        getAuthHeaders: ReturnType<typeof vi.fn>;
         clearSession: ReturnType<typeof vi.fn>;
     };
 
@@ -16,8 +15,7 @@ describe('InternalRequestHandler', () => {
         };
 
         mockAuthManager = {
-            getCsrfToken: vi.fn().mockResolvedValue('test-csrf-token'),
-            getSessionCookie: vi.fn().mockResolvedValue('TPOMADA_SESSIONID=test-session'),
+            getAuthHeaders: vi.fn().mockResolvedValue({ 'Csrf-Token': 'test-csrf-token', Cookie: 'TPOMADA_SESSIONID=test-session' }),
             clearSession: vi.fn(),
         };
     });
@@ -162,6 +160,21 @@ describe('InternalRequestHandler', () => {
     });
 
     describe('HTTP-level failures', () => {
+        it('keeps final authentication failure details after the one permitted retry', async () => {
+            const { InternalRequestHandler } = await import('../../src/omadaClient/internalRequest.js');
+            const unauthorized = Object.assign(new Error('Unauthorized'), {
+                isAxiosError: true,
+                response: { status: 401, data: { errorCode: -44106, msg: 'Session expired' } },
+            });
+            mockAxiosInstance.request.mockRejectedValue(unauthorized);
+            const handler = new InternalRequestHandler(mockAxiosInstance as never, mockAuthManager as never, 'test-omadac');
+            await expect(handler.get('/sites/site-123/devices')).rejects.toThrow(
+                'Internal API request failed: GET /test-omadac/api/v2/sites/site-123/devices (HTTP 401) (errorCode: -44106) - Session expired'
+            );
+            expect(mockAxiosInstance.request).toHaveBeenCalledTimes(2);
+            expect(mockAuthManager.clearSession).toHaveBeenCalledTimes(1);
+        });
+
         it('should surface the method, endpoint, status, and response message for a non-auth HTTP error', async () => {
             const { InternalRequestHandler } = await import('../../src/omadaClient/internalRequest.js');
 

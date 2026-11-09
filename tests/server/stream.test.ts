@@ -20,6 +20,7 @@ vi.mock('../../src/utils/logger.js', () => ({
 vi.mock('../../src/server/common.js', () => ({
     createServer: vi.fn(() => ({
         connect: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
         server: {
             oninitialized: undefined,
             onclose: undefined,
@@ -39,6 +40,7 @@ vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => {
             onsessionclosed?: (sessionId: string) => void;
         }) {
             this.handleRequest = vi.fn().mockResolvedValue(undefined);
+            Object.assign(this, { close: vi.fn().mockResolvedValue(undefined), sessionId: 'test-stream-session' });
             this.onerror = undefined;
         }),
     };
@@ -87,6 +89,7 @@ describe('Stream Server', () => {
 
         // Mock ServerResponse
         mockRes = {
+            once: vi.fn(),
             writeHead: vi.fn(),
             write: vi.fn(),
             end: vi.fn(),
@@ -224,6 +227,32 @@ describe('Stream Server', () => {
             expect(vi.mocked(createServer)).toHaveBeenCalled();
         });
 
+        it('keeps stateless streaming responses alive until finish and closes resources once', async () => {
+            await handleStreamRequest(mockClient, mockConfigStateless, mockReq, mockRes);
+            const transport = vi.mocked(StreamableHTTPServerTransport).mock.instances[0];
+            const server = vi.mocked(createServer).mock.results[0].value;
+            expect(transport.close).not.toHaveBeenCalled();
+            expect(server.close).not.toHaveBeenCalled();
+            const callbacks = vi.mocked(mockRes.once).mock.calls;
+            const finish = callbacks.find(([event]) => event === 'finish')?.[1];
+            const disconnect = callbacks.find(([event]) => event === 'close')?.[1];
+            expect(finish).toBeTypeOf('function');
+            finish?.();
+            disconnect?.();
+            expect(transport.close).toHaveBeenCalledTimes(1);
+            expect(server.close).toHaveBeenCalledTimes(1);
+        });
+
+        it('releases a new stateful transport when a request fails to initialize a session', async () => {
+            vi.mocked(StreamableHTTPServerTransport).mockImplementationOnce(function (this: Record<string, unknown>) {
+                this.handleRequest = vi.fn().mockResolvedValue(undefined);
+                this.close = vi.fn().mockResolvedValue(undefined);
+            } as never);
+            await expect(handleStreamRequest(mockClient, mockConfigStateful, mockReq, mockRes)).resolves.toBeUndefined();
+            expect(vi.mocked(StreamableHTTPServerTransport).mock.instances[0].close).toHaveBeenCalledTimes(1);
+            expect(vi.mocked(createServer).mock.results[0].value.close).toHaveBeenCalledTimes(1);
+        });
+
         it('should reuse existing transport when provided', async () => {
             const existingTransport: StreamTransportState = {
                 transport: new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }),
@@ -353,6 +382,7 @@ describe('Stream Server', () => {
             // @ts-expect-error - Mock implementation for testing error handling
             vi.mocked(StreamableHTTPServerTransport).mockImplementationOnce(function (this: Record<string, unknown>) {
                 this.handleRequest = vi.fn().mockRejectedValue(testError);
+                this.close = vi.fn().mockResolvedValue(undefined);
                 this.onerror = undefined;
             });
 

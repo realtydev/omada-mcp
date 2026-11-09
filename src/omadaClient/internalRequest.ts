@@ -74,15 +74,14 @@ export class InternalRequestHandler {
      * Make an authenticated request to the internal API with retry on session expiry.
      */
     private async request<T>(config: AxiosRequestConfig, retry = true): Promise<T> {
-        const csrfToken = await this.auth.getCsrfToken();
-        const sessionCookie = await this.auth.getSessionCookie();
+        const authHeaders = await this.auth.getAuthHeaders();
+        const csrfToken = authHeaders['Csrf-Token'];
 
         const requestConfig: AxiosRequestConfig = {
             ...config,
             headers: {
                 ...(config.headers ?? {}),
-                'Csrf-Token': csrfToken,
-                Cookie: sessionCookie,
+                ...authHeaders,
             },
             withCredentials: true,
         };
@@ -124,7 +123,7 @@ export class InternalRequestHandler {
 
             if (retry && this.isSessionExpired(errorCode, errorMsg)) {
                 logger.warn('Internal API session expired, re-logging in', { method, url, errorCode });
-                this.auth.clearSession();
+                this.auth.clearSession(csrfToken);
                 return this.request<T>(config, false);
             }
 
@@ -138,12 +137,12 @@ export class InternalRequestHandler {
                 message: error instanceof Error ? error.message : String(error),
             });
 
-            if (!retry || !axios.isAxiosError(error)) {
+            if (!axios.isAxiosError(error)) {
                 throw error;
             }
 
-            if (status === 401 || status === 403) {
-                this.auth.clearSession();
+            if (retry && (status === 401 || status === 403)) {
+                this.auth.clearSession(csrfToken);
                 return this.request<T>(config, false);
             }
 
