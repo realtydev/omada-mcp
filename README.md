@@ -12,7 +12,7 @@
 
 </div>
 
-> **Release availability:** Automatic API discovery is merged on `main` and awaits the next release. This README describes `main` (97 tools); the published [v0.8.0 release](https://github.com/realtydev/omada-mcp/releases/tag/v0.8.0) has 94 tools, plus the runtime CLI, dashboard and guarded configuration workflows. Build from source below to use discovery now. Use `getServerInfo` to confirm the running build.
+> **Release:** [v0.9.0](https://github.com/realtydev/omada-mcp/releases/tag/v0.9.0) includes 97 tools, automatic API discovery and runtime client setup. Use `getServerInfo` to confirm the running build.
 
 ```text
 You:    Why is the guest SSID slow on the upstairs AP?
@@ -29,7 +29,7 @@ Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned
 ## Highlights
 
 - **Automatic API discovery.** `searchApiOperations` → `describeApiOperation` → `executeApiOperation`. Prefer the controller's live specification, with an explicit bundled fallback containing 1,676 indexed operations. Unsupported operations are identified; a catalogue entry does not prove device support. See [API discovery](docs/api-discovery.md).
-- **97 tools on main, including 49 in read-only mode.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
+- **97 tools, including 49 in read-only mode.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
 - **Guarded configuration changes.** Discovered writes default to validated previews. Radio, DHCP and log-notification writes retain their dedicated preservation and read-back checks. Other discovered writes explicitly report that they have not been verified by reading settings back.
 - **Explicit read-only access.** `MCP_TOOL_PROFILE=read-only` blocks writes, including discovered operations. Controller permissions still govern which data is accessible.
 - **Two API surfaces.** The official Omada Open API, plus the controller's internal web UI API for features the Open API doesn't expose (ACLs, routes, port forwarding on OC200).

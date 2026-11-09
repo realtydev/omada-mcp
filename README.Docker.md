@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server for TP-Link Omada network diagnostics and configuration, with stdio and HTTP transports and a runtime CLI for managed Docker setup, updates and rollback.
 
-> **Release availability:** The published [v0.8.0 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.8.0) provides 94 tools and runtime management. Automatic API discovery is merged on `main` (97 tools) and awaits the next published image. To use it now, build the image from `main` with `docker build -t omada-mcp:local .` and use that image name in the examples below. `getServerInfo` identifies the running build.
+> **Release:** The [v0.9.0 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.9.0) includes 97 tools, automatic API discovery and runtime client setup. `getServerInfo` identifies the running build.
 
 ## Runtime management
 
@@ -79,7 +79,7 @@ The HTTP server will be available at `http://localhost:3000/mcp` (stream transpo
 
 - OAuth client-credentials authentication with automatic token refresh, plus web-session authentication for Fusion gateways
 - 97 tools for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
-- Automatic API discovery on `main`: search, describe and execute documented JSON operations with live/bundled source information and write previews
+- Automatic API discovery: search, describe and execute documented JSON operations with live/bundled source information and write previews
 - Dedicated dashboard, topology and client/log diagnostics, with guarded DHCP, radio and log-notification workflows
 - Read-only profile enforced for dedicated tools and discovered operations
 - Runtime CLI for setup, doctor, status, version-pinned updates and rollback

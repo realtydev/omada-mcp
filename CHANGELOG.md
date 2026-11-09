@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-08
+
 ### Added
 
 - Execa-backed runtime commands with bounded output, process cleanup and redacted errors.
@@ -112,7 +114,8 @@ First release as **realtydev/omada-mcp**: 78 tools, published to `ghcr.io/realty
 
 Released as [MiguelTVMS/tplink-omada-mcp](https://github.com/MiguelTVMS/tplink-omada-mcp).
 
-[Unreleased]: https://github.com/realtydev/omada-mcp/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/realtydev/omada-mcp/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/realtydev/omada-mcp/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/realtydev/omada-mcp/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/realtydev/omada-mcp/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/realtydev/omada-mcp/compare/v0.6.0...v0.6.1
