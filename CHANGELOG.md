@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-08
+
 ### Added
 
 - DHCP reservation list/create/update/delete tools with strict inputs, previews, no-op detection, and bounded read-back verification. Uncertain writes are reconciled without replaying mutations.
@@ -75,6 +77,7 @@ First release as **realtydev/omada-mcp**: 78 tools, published to `ghcr.io/realty
 
 Released as [MiguelTVMS/tplink-omada-mcp](https://github.com/MiguelTVMS/tplink-omada-mcp).
 
-[Unreleased]: https://github.com/realtydev/omada-mcp/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/realtydev/omada-mcp/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/realtydev/omada-mcp/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/realtydev/omada-mcp/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/realtydev/omada-mcp/releases/tag/v0.6.0
