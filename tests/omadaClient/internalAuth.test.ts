@@ -44,6 +44,45 @@ describe('InternalAuthManager', () => {
         });
     });
 
+    describe('concurrent sessions', () => {
+        const response = (token: string) => ({ data: { errorCode: 0, result: { token } }, headers: { 'set-cookie': [`SESSION=${token}; Path=/`] } });
+
+        it('shares login across concurrent token and cookie requests', async () => {
+            vi.mocked(mockHttp.post).mockResolvedValue(response('shared'));
+            await expect(Promise.all([authManager.getCsrfToken(), authManager.getSessionCookie(), authManager.getCsrfToken()])).resolves.toEqual([
+                'shared',
+                'SESSION=shared',
+                'shared',
+            ]);
+            expect(mockHttp.post).toHaveBeenCalledTimes(1);
+        });
+
+        it('allows retry after a shared login failure', async () => {
+            vi.mocked(mockHttp.post).mockRejectedValueOnce(new Error('Login failed')).mockResolvedValueOnce(response('recovered'));
+            const failures = await Promise.allSettled([authManager.getCsrfToken(), authManager.getSessionCookie()]);
+            expect(failures.every((result) => result.status === 'rejected')).toBe(true);
+            expect(mockHttp.post).toHaveBeenCalledTimes(1);
+            await expect(authManager.getCsrfToken()).resolves.toBe('recovered');
+            expect(mockHttp.post).toHaveBeenCalledTimes(2);
+        });
+
+        it('discards an invalidated pending login and ignores late rejections of old tokens', async () => {
+            let resolveOld!: (value: ReturnType<typeof response>) => void;
+            const oldLogin = new Promise<ReturnType<typeof response>>((resolve) => {
+                resolveOld = resolve;
+            });
+            vi.mocked(mockHttp.post).mockReturnValueOnce(oldLogin).mockResolvedValueOnce(response('current'));
+            const first = authManager.getCsrfToken();
+            authManager.clearSession();
+            await expect(authManager.getSessionCookie()).resolves.toBe('SESSION=current');
+            resolveOld(response('obsolete'));
+            await expect(first).resolves.toBe('current');
+            authManager.clearSession('obsolete');
+            await expect(authManager.getCsrfToken()).resolves.toBe('current');
+            expect(mockHttp.post).toHaveBeenCalledTimes(2);
+        });
+    });
+
     describe('getCsrfToken', () => {
         it('should log in and return the CSRF token on first call', async () => {
             (mockHttp.post as ReturnType<typeof vi.fn>).mockResolvedValue({

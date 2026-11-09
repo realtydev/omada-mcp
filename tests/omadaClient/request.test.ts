@@ -12,6 +12,7 @@ describe('RequestHandler', () => {
         getAuthHeaders: ReturnType<typeof vi.fn>;
         refreshAccessToken: ReturnType<typeof vi.fn>;
         clearToken?: ReturnType<typeof vi.fn>;
+        mode?: 'oauth' | 'web';
     };
 
     beforeEach(() => {
@@ -77,6 +78,54 @@ describe('RequestHandler', () => {
     });
 
     describe('request', () => {
+        it('keeps retry errors detailed and retries authentication only once', async () => {
+            const { RequestHandler } = await import('../../src/omadaClient/request.js');
+            vi.mocked(axios.isAxiosError).mockReturnValue(true);
+            mockAxiosInstance.request
+                .mockRejectedValueOnce({ response: { status: 401, data: { errorCode: -44106, msg: 'Expired' } } })
+                .mockRejectedValueOnce({ response: { status: 403, data: { errorCode: -44112, msg: 'Still unauthorized' } } });
+            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+            await expect(handler.get('/api/secure')).rejects.toThrow(
+                'Omada API request failed: GET /api/secure (HTTP 403) (errorCode: -44112) - Still unauthorized'
+            );
+            expect(mockAxiosInstance.request).toHaveBeenCalledTimes(2);
+            expect(mockAuthManager.clearToken).toHaveBeenCalledExactlyOnceWith({ Authorization: 'AccessToken=test-access-token' });
+        });
+
+        it.each(['session expired', 'session has expired', 'not logged in'])(
+            'refreshes a web session for an explicit %s response',
+            async (message) => {
+                const { RequestHandler } = await import('../../src/omadaClient/request.js');
+                mockAuthManager.mode = 'web';
+                mockAxiosInstance.request
+                    .mockResolvedValueOnce({ data: { errorCode: -1, msg: message } })
+                    .mockResolvedValueOnce({ data: { errorCode: 0, result: { recovered: true } } });
+                const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+                await expect(handler.get('/api/web')).resolves.toEqual({ errorCode: 0, result: { recovered: true } });
+                expect(mockAxiosInstance.request).toHaveBeenCalledTimes(2);
+                expect(mockAuthManager.clearToken).toHaveBeenCalledTimes(1);
+            }
+        );
+
+        it('does not apply web-session message heuristics to OAuth responses', async () => {
+            const { RequestHandler } = await import('../../src/omadaClient/request.js');
+            mockAuthManager.mode = 'oauth';
+            mockAxiosInstance.request.mockResolvedValue({ data: { errorCode: -1, msg: 'not logged in' } });
+            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+            await expect(handler.get('/api/oauth')).resolves.toEqual({ errorCode: -1, msg: 'not logged in' });
+            expect(mockAuthManager.clearToken).not.toHaveBeenCalled();
+            expect(mockAxiosInstance.request).toHaveBeenCalledTimes(1);
+        });
+
+        it('bounds retries for repeated HTTP 200 authentication failures', async () => {
+            const { RequestHandler } = await import('../../src/omadaClient/request.js');
+            mockAxiosInstance.request.mockResolvedValue({ data: { errorCode: -44106, msg: 'Expired' } });
+            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+            await expect(handler.get('/api/oauth')).resolves.toEqual({ errorCode: -44106, msg: 'Expired' });
+            expect(mockAuthManager.clearToken).toHaveBeenCalledTimes(1);
+            expect(mockAxiosInstance.request).toHaveBeenCalledTimes(2);
+        });
+
         it('should handle successful response', async () => {
             const { RequestHandler } = await import('../../src/omadaClient/request.js');
 
@@ -126,7 +175,7 @@ describe('RequestHandler', () => {
             expect(result).toEqual({ errorCode: 0, msg: 'Success', result: { refreshed: true } });
         });
 
-        it('should retry on 401 if retry=false', async () => {
+        it('should not retry on 401 if retry=false', async () => {
             const { RequestHandler } = await import('../../src/omadaClient/request.js');
 
             mockAxiosInstance.request.mockRejectedValue({

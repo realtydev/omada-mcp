@@ -95,14 +95,14 @@ export class RequestHandler {
             const errorCode = (response.data as { errorCode?: number } | undefined)?.errorCode;
             const errorMsg = (response.data as { msg?: string } | undefined)?.msg;
 
-            if (retry && (this.isAuthErrorCode(errorCode) || this.isTokenExpiredMessage(errorMsg))) {
+            if (retry && (this.isAuthErrorCode(errorCode) || this.isExpiredAuthMessage(errorMsg))) {
                 logger.warn('Omada authentication error in response, retrying with fresh token', {
                     method,
                     url,
                     errorCode,
                     message: errorMsg,
                 });
-                this.auth.clearToken();
+                this.auth.clearToken(authHeaders);
                 return this.request<T>(config, false);
             }
 
@@ -124,15 +124,15 @@ export class RequestHandler {
                 });
             }
 
-            if (!retry || !axios.isAxiosError(error)) {
+            if (!axios.isAxiosError(error)) {
                 throw error;
             }
 
             const status = error.response?.status;
             const errorCode = (error.response?.data as { errorCode?: number } | undefined)?.errorCode;
 
-            if (status === 401 || status === 403 || this.isAuthErrorCode(errorCode)) {
-                this.auth.clearToken();
+            if (retry && (status === 401 || status === 403 || this.isAuthErrorCode(errorCode))) {
+                this.auth.clearToken(authHeaders);
                 return this.request<T>(config, false);
             }
 
@@ -237,7 +237,7 @@ export class RequestHandler {
     /**
      * Check if an error message indicates token expiration.
      */
-    private isTokenExpiredMessage(message?: string): boolean {
+    private isExpiredAuthMessage(message?: string): boolean {
         if (!message) {
             return false;
         }
@@ -247,7 +247,9 @@ export class RequestHandler {
             lowerMsg.includes('access token has expired') ||
             lowerMsg.includes('token has expired') ||
             lowerMsg.includes('token expired') ||
-            lowerMsg.includes('re-initiate the refreshtoken')
+            lowerMsg.includes('re-initiate the refreshtoken') ||
+            (this.auth.mode === 'web' &&
+                (lowerMsg.includes('session expired') || lowerMsg.includes('session has expired') || lowerMsg.includes('not logged in')))
         );
     }
 

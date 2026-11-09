@@ -9,13 +9,19 @@ export type AuthMode = 'oauth' | 'web';
 
 export interface RequestAuthManager {
     getAuthHeaders(): Promise<Record<string, string>>;
-    clearToken(): void;
+    readonly mode?: AuthMode;
+    clearToken(rejectedHeaders?: Record<string, string>): void;
 }
 
 /**
  * Authentication state management for the Omada client.
  */
 export class AuthManager implements RequestAuthManager {
+    public readonly mode = 'oauth' as const;
+
+    private generation = 0;
+
+    private pendingAuthentication?: { generation: number; promise: Promise<void> };
     private accessToken?: string;
 
     private refreshToken?: string;
@@ -33,8 +39,7 @@ export class AuthManager implements RequestAuthManager {
      * Get the current access token, refreshing if necessary.
      */
     public async getAccessToken(): Promise<string> {
-        await this.ensureAccessToken();
-        return this.accessToken ?? '';
+        return await this.ensureAccessToken();
     }
 
     public async getAuthHeaders(): Promise<Record<string, string>> {
@@ -45,36 +50,76 @@ export class AuthManager implements RequestAuthManager {
     /**
      * Clear the current authentication token.
      */
-    public clearToken(): void {
+    public clearToken(rejectedHeaders?: Record<string, string>): void {
+        // A late rejection of old credentials must not invalidate a newer login.
+        if (rejectedHeaders && rejectedHeaders.Authorization !== `AccessToken=${this.accessToken ?? ''}`) {
+            return;
+        }
+        this.generation += 1;
         this.accessToken = undefined;
         this.refreshToken = undefined;
         this.tokenExpiresAt = undefined;
     }
 
-    /**
-     * Ensure a valid access token is available, refreshing or re-authenticating if necessary.
-     */
-    private async ensureAccessToken(): Promise<void> {
-        if (this.accessToken && this.tokenExpiresAt && Date.now() < this.tokenExpiresAt) {
-            return;
-        }
-
-        if (this.refreshToken) {
+    /** Share authentication within a credential generation and discard superseded responses. */
+    private async ensureAccessToken(): Promise<string> {
+        for (;;) {
+            if (this.accessToken && this.tokenExpiresAt && Date.now() < this.tokenExpiresAt) {
+                return this.accessToken;
+            }
+            const generation = this.generation;
+            let operation = this.pendingAuthentication;
+            if (!operation || operation.generation !== generation) {
+                operation = {
+                    generation,
+                    promise: this.acquireToken(generation).finally(() => {
+                        if (this.pendingAuthentication === operation) {
+                            this.pendingAuthentication = undefined;
+                        }
+                    }),
+                };
+                this.pendingAuthentication = operation;
+            }
             try {
-                await this.authenticate('refresh_token');
-                return;
-            } catch {
-                this.clearToken();
+                await operation.promise;
+            } catch (error) {
+                if (generation === this.generation) {
+                    throw error;
+                }
+            }
+            if (generation === this.generation && this.accessToken) {
+                return this.accessToken;
             }
         }
+    }
 
-        await this.authenticate('client_credentials');
+    private async acquireToken(generation: number): Promise<void> {
+        let token: TokenResult;
+        const refreshToken = this.refreshToken;
+        if (refreshToken) {
+            try {
+                token = await this.authenticate('refresh_token', refreshToken);
+            } catch {
+                if (generation !== this.generation) {
+                    return;
+                }
+                this.accessToken = undefined;
+                this.refreshToken = undefined;
+                this.tokenExpiresAt = undefined;
+                token = await this.authenticate('client_credentials');
+            }
+        } else {
+            token = await this.authenticate('client_credentials');
+        }
+        if (generation === this.generation) {
+            this.setToken(token);
+        }
     }
 
     /**
      * Authenticate with the Omada controller using the specified grant type.
      */
-    private async authenticate(grantType: 'client_credentials' | 'refresh_token'): Promise<void> {
+    private async authenticate(grantType: 'client_credentials' | 'refresh_token', refreshToken?: string): Promise<TokenResult> {
         const params: Record<string, string> = { grant_type: grantType };
         const body: Record<string, string> = {
             client_id: this.clientId,
@@ -84,11 +129,11 @@ export class AuthManager implements RequestAuthManager {
         if (grantType === 'client_credentials') {
             body.omadacId = this.omadacId;
         } else {
-            if (!this.refreshToken) {
+            if (!refreshToken) {
                 throw new Error('No refresh token available to refresh the access token');
             }
 
-            params.refresh_token = this.refreshToken;
+            params.refresh_token = refreshToken;
         }
 
         try {
@@ -102,8 +147,11 @@ export class AuthManager implements RequestAuthManager {
                 throw new Error(data.msg ?? 'Omada authentication failed');
             }
 
-            const token = data.result ?? ({} as TokenResult);
-            this.setToken(token);
+            const token = data.result;
+            if (!token?.accessToken) {
+                throw new Error('Omada authentication succeeded but no access token returned');
+            }
+            return token;
         } catch (error) {
             logger.error('Omada authentication failed', {
                 grantType,
@@ -131,11 +179,14 @@ export class AuthManager implements RequestAuthManager {
  * Fusion gateway web-session authentication for OpenAPI requests.
  */
 export class WebAuthManager implements RequestAuthManager {
+    public readonly mode = 'web' as const;
+
+    private generation = 0;
     private csrfToken?: string;
 
     private sessionCookie?: string;
 
-    private pendingLogin?: Promise<void>;
+    private pendingLogin?: { generation: number; promise: Promise<void> };
 
     constructor(
         private readonly http: AxiosInstance,
@@ -159,24 +210,41 @@ export class WebAuthManager implements RequestAuthManager {
         return headers;
     }
 
-    public clearToken(): void {
+    public clearToken(rejectedHeaders?: Record<string, string>): void {
+        if (rejectedHeaders && rejectedHeaders['Csrf-Token'] !== this.csrfToken) {
+            return;
+        }
+        this.generation += 1;
         this.csrfToken = undefined;
         this.sessionCookie = undefined;
     }
 
     private async ensureSession(): Promise<void> {
-        if (this.csrfToken) {
-            return;
+        while (!this.csrfToken) {
+            const generation = this.generation;
+            let operation = this.pendingLogin;
+            if (!operation || operation.generation !== generation) {
+                operation = {
+                    generation,
+                    promise: this.login(generation).finally(() => {
+                        if (this.pendingLogin === operation) {
+                            this.pendingLogin = undefined;
+                        }
+                    }),
+                };
+                this.pendingLogin = operation;
+            }
+            try {
+                await operation.promise;
+            } catch (error) {
+                if (generation === this.generation) {
+                    throw error;
+                }
+            }
         }
-
-        // Share one login between concurrent requests so they don't each open a session.
-        this.pendingLogin ??= this.login().finally(() => {
-            this.pendingLogin = undefined;
-        });
-        await this.pendingLogin;
     }
 
-    private async login(): Promise<void> {
+    private async login(generation: number): Promise<void> {
         const loginPath = `/${encodeURIComponent(this.omadacId)}/api/v2/login`;
 
         try {
@@ -196,6 +264,9 @@ export class WebAuthManager implements RequestAuthManager {
                 throw new Error('Omada web authentication succeeded but no CSRF token returned');
             }
 
+            if (generation !== this.generation) {
+                return;
+            }
             this.csrfToken = token;
             this.sessionCookie = this.extractSessionCookie(response.headers['set-cookie']);
 
