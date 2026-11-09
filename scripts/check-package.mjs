@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -32,6 +32,22 @@ try {
     await assert.rejects(probe(state, { ...selection, gitCommit: '0'.repeat(40) }), /Cannot verify/);
     await atomicJson(statePath(home, 'stdio'), state);
     const launcher = await writeLauncher(home);
+    const { configureClient } = await import(pathToFileURL(join(dirname(selection.entry), 'runtime/clients.js')).href);
+    for (const name of ['cursor', 'claude-desktop']) {
+        const configPath = join(temporary, `${name}.json`);
+        const original = '{\n  "mcpServers": {"other": {"command": "other"}}\n}\n';
+        await writeFile(configPath, original, { mode: 0o600 });
+        const configured = await configureClient(home, state, name, { configPath });
+        assert.equal(configured.changed, true);
+        assert.equal(configured.refresh.status, 'action-required');
+        assert.equal(await readFile(configured.backupPath, 'utf8'), original);
+        const entries = JSON.parse(await readFile(configPath, 'utf8')).mcpServers;
+        assert.equal(entries.other.command, 'other');
+        assert.equal(entries.omada.command, process.execPath);
+        assert.deepEqual(entries.omada.args, [launcher]);
+        assert.equal(entries.omada.env, undefined);
+        assert.equal((await configureClient(home, state, name, { configPath })).changed, false);
+    }
     // A hostile cwd dotenv must not turn the stdio launcher into an HTTP server.
     await writeFile(join(home, '.env.local'), 'MCP_SERVER_USE_HTTP=true\nOMADA_CLIENT_SECRET=wrong\n');
     const client = new Client({ name: 'package-check', version: '1.0.0' });
@@ -70,7 +86,7 @@ try {
         await direct.close();
     }
     process.stdout.write(
-        `Package archive, executable bins, getServerInfo and stable stdio launcher passed (${info.packageVersion}/${info.gitCommit}).\n`
+        `Package archive, executable bins, client setup, getServerInfo and stable stdio launcher passed (${info.packageVersion}/${info.gitCommit}).\n`
     );
 } finally {
     await rm(temporary, { recursive: true, force: true });

@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- Execa-backed runtime commands with bounded output, process cleanup and redacted errors.
+- Automatic runtime setup for Codex, Cursor and Claude Desktop, with native client configuration mappings, private backups and explicit replacement of conflicting Omada entries.
+- Registered-client refresh after verified updates and rollbacks, a reconnect command, supported Codex reload requests and optional graceful desktop restarts on macOS. Refresh results identify remaining manual actions separately from runtime readiness.
+
 ## [0.8.0] - 2026-11-08
 
 ### Added

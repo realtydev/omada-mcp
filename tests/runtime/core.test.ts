@@ -91,6 +91,20 @@ describe('runtime boundaries', () => {
         await atomicJson(statePath(home, 'stdio'), docker());
         await expect(readState(home, 'stdio')).rejects.toThrow('setup stdio');
     });
+    it('runs literal arguments with closed stdin and redacts failed command output', async () => {
+        const literal = 'test-secret; $(echo injected) `echo injected` $TOKEN';
+        expect(await run(process.execPath, ['-e', 'process.stdout.write(process.argv[1])', literal])).toBe(literal);
+        expect(await run(process.execPath, ['-e', 'process.stdin.on("end",()=>process.stdout.write("closed")); process.stdin.resume();'])).toBe(
+            'closed'
+        );
+        const failure = run(process.execPath, [
+            '-e',
+            'process.stdout.write("private-stdout"); process.stderr.write("private-stderr"); process.exit(9)',
+        ]);
+        await expect(failure).rejects.toThrow('exit 9');
+        await expect(failure).rejects.not.toThrow(/private-stdout|private-stderr/);
+        await expect(run(process.execPath, ['-e', 'process.stdout.write("x".repeat(2_000_000))'])).rejects.toThrow('execution error');
+    });
     it('locks mutations across modes and releases after errors', async () => {
         await expect(
             withLock(home, async () => {

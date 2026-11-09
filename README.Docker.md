@@ -4,7 +4,7 @@ A Model Context Protocol (MCP) server that exposes TP-Link Omada controller APIs
 
 ## Runtime management
 
-Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned updates and rollback of client-managed stdio processes or a persistent local Docker service. It verifies actual running builds with `getServerInfo`, preserves credential files, and can adopt an existing Compose service.
+Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned updates and rollback of client-managed stdio processes or a persistent local Docker service. It verifies actual running builds with `getServerInfo`, preserves credential files, and can adopt an existing Compose service. Setup can configure Codex, Cursor and Claude Desktop automatically; updates report client reload results and support optional desktop restarts.
 
 ## Quick Start
 
