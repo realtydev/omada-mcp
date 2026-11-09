@@ -17,6 +17,7 @@ import {
     run,
     statePath,
     switchDocker,
+    verifyBuild,
     verifyDockerSelection,
     version,
     withLock,
@@ -25,7 +26,7 @@ import {
 
 let home: string;
 const current = { version: '0.7.0', image: `${IMAGE}@sha256:old` };
-const candidate = { version: '0.8.0', image: `${IMAGE}@sha256:new` };
+const candidate = { version: '0.8.0', gitCommit: 'a'.repeat(40), image: `${IMAGE}@sha256:new` };
 const info = { packageVersion: '0.8.0', gitCommit: 'abc123', buildTime: '2026-11-08T00:00:00Z' };
 const docker = (): RuntimeState => ({
     mode: 'docker',
@@ -60,6 +61,15 @@ describe('runtime boundaries', () => {
         await expect(releaseVersion('latest')).rejects.toThrow('Cannot resolve');
         fetcher.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
         await expect(releaseVersion('latest')).rejects.toThrow('exact version');
+    });
+    it('rejects a same-version stale commit and invalid build identities', () => {
+        const expected = { ...candidate, gitCommit: 'abcdef0123456789abcdef0123456789abcdef0123' };
+        const valid = { ...info, gitCommit: 'abcdef0' };
+        expect(() => verifyBuild(valid, expected)).not.toThrow();
+        expect(() => verifyBuild({ ...valid, gitCommit: '7654321' }, expected)).toThrow('identity');
+        expect(() => verifyBuild({ ...valid, gitCommit: '' }, expected)).toThrow('identity');
+        expect(() => verifyBuild({ ...valid, buildTime: 'invalid' }, expected)).toThrow('identity');
+        expect(() => verifyBuild({ ...valid, packageVersion: '0.7.0' }, expected)).toThrow('identity');
     });
     it('accepts loopback HTTP only', () => {
         expect(localUrl('http://127.0.0.1:3000/mcp')).toContain('/mcp');
@@ -119,8 +129,13 @@ describe('runtime boundaries', () => {
 describe('versioned stdio installation', () => {
     const metadata = async (target = '0.8.0') => {
         const folder = join(home, 'versions/0.8.0/node_modules/@realtydev/omada-mcp');
-        await mkdir(folder, { recursive: true });
-        await writeFile(join(folder, 'package.json'), JSON.stringify({ version: target }));
+        await mkdir(join(folder, 'dist/generated'), { recursive: true });
+        await writeFile(join(folder, 'package.json'), JSON.stringify({ version: target, type: 'module' }));
+        await writeFile(join(folder, 'dist/index.js'), '');
+        await writeFile(
+            join(folder, 'dist/generated/buildInfo.js'),
+            `export const PACKAGE_VERSION = ${JSON.stringify(target)};\nexport const GIT_COMMIT = "abc1234";\n`
+        );
     };
     it('installs a release archive with scripts disabled and reuses the pinned install', async () => {
         const execute = vi.fn(async () => {
@@ -151,7 +166,11 @@ describe('versioned stdio installation', () => {
 
 describe('Docker pinning and recovery', () => {
     it('pins pulled images to immutable registry digests', async () => {
-        const execute = vi.fn(async (_command: string, args: string[]) => (args[0] === 'pull' ? '' : JSON.stringify([candidate.image])));
+        const execute = vi.fn(async (_command: string, args: string[]) =>
+            args[0] === 'pull'
+                ? ''
+                : JSON.stringify({ RepoDigests: [candidate.image], Config: { Labels: { 'org.opencontainers.image.revision': candidate.gitCommit } } })
+        );
         expect(await pullImage('0.8.0', execute)).toEqual(candidate);
         expect(execute.mock.calls[0]).toEqual(['docker', ['pull', `${IMAGE}:0.8.0`]]);
     });
@@ -165,7 +184,9 @@ describe('Docker pinning and recovery', () => {
                 expect(args).toContain('pull');
                 return Promise.resolve('');
             }
-            return Promise.resolve(JSON.stringify([candidate.image]));
+            return Promise.resolve(
+                JSON.stringify({ RepoDigests: [candidate.image], Config: { Labels: { 'org.opencontainers.image.revision': candidate.gitCommit } } })
+            );
         });
         expect(await pullImage('0.8.0', execute)).toEqual(candidate);
         expect(configPath).toContain('omada-docker-');
@@ -190,7 +211,7 @@ describe('Docker pinning and recovery', () => {
         ).toBe('test$value');
     });
     it('does not change the service when the pull has no registry digest', async () => {
-        await expect(pullImage('0.8.0', async (_command, args) => (args[0] === 'pull' ? '' : '[]'))).rejects.toThrow('no registry digest');
+        await expect(pullImage('0.8.0', async (_command, args) => (args[0] === 'pull' ? '' : '{}'))).rejects.toThrow('no registry digest');
     });
     it('changes only the selected Compose service and saves history after readiness', async () => {
         const execute = vi.fn(async () => '');

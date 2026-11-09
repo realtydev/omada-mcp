@@ -586,6 +586,7 @@ __metadata:
     "@vitest/coverage-v8": "npm:^5.1.0"
     "@vitest/ui": "npm:^5.1.0"
     axios: "npm:^1.21.0"
+    commander: "npm:15.0.0"
     dotenv: "npm:^18.0.9"
     pino: "npm:^10.4.0"
     tsx: "npm:^4.23.15"
@@ -1159,6 +1160,13 @@ __metadata:
   dependencies:
     delayed-stream: "npm:~1.0.0"
   checksum: 10c0/0dbb829577e1b1e839fa82b40c07ffaf7de8a09b935cadd355a73652ae70a88b4320db322f6634a4ad93424292fa80973ac6480986247f1734a1137debf271d5
+  languageName: node
+  linkType: hard
+
+"commander@npm:15.0.0":
+  version: 15.0.0
+  resolution: "commander@npm:15.0.0"
+  checksum: 10c0/539229c171914ea1ccd45ee5f10d924289a12a684ea3a7a44147abe54003c35ed6de9ae4ad198d88c29fdf403dca0428451a388234e6dc01b6faa978fb207206
   languageName: node
   linkType: hard
 

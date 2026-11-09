@@ -29,6 +29,7 @@ try {
     const state = { mode: 'stdio', current: selection, envFile: credentials };
     const info = await probe(state);
     assert.equal(info.packageVersion, metadata.version);
+    await assert.rejects(probe(state, { ...selection, gitCommit: '0'.repeat(40) }), /Cannot verify/);
     await atomicJson(statePath(home, 'stdio'), state);
     const launcher = await writeLauncher(home);
     // A hostile cwd dotenv must not turn the stdio launcher into an HTTP server.
@@ -56,6 +57,10 @@ try {
     }
     const help = await execute(join(home, 'versions', metadata.version, 'node_modules/.bin/omada-runtime'), ['--help'], { env });
     assert.match(help.stdout, /setup stdio/);
+    const dockerHelp = await execute(join(home, 'versions', metadata.version, 'node_modules/.bin/omada-runtime'), ['setup', 'docker', '--help'], {
+        env,
+    });
+    assert.match(dockerHelp.stdout, /--compose-file/);
     const direct = new Client({ name: 'bin-check', version: '1.0.0' });
     const directTransport = new StdioClientTransport({
         command: join(home, 'versions', metadata.version, 'node_modules/.bin/omada-mcp'),

@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-08
+
 ### Added
 
 - Automatic API discovery with `searchApiOperations`, `describeApiOperation`, and `executeApiOperation`, alongside existing tools. Live controller documentation is preferred; `OMADA_API_SPEC` selects automatic fallback, live-only or bundled mode.
@@ -15,7 +17,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - `locateDevice` blinks a single device; `setSiteLed` explicitly controls LEDs across a site.
 - Weekly CI reruns dependency auditing and validation even when the repository has no new commits.
 
-- Focused `omada-runtime` CLI: setup, doctor, status, exact-version updates and rollback for client-managed stdio and persistent local Docker services, including adoption of existing Compose deployments.
+- Commander-powered `omada-runtime` CLI with command-specific help: setup, doctor, status, exact-version updates and rollback for client-managed stdio and persistent local Docker services, including adoption of existing Compose deployments.
 - Release runtime archives with executable package bins and an archive/launcher MCP smoke check in CI.
 
 ### Fixed
@@ -103,7 +105,8 @@ First release as **realtydev/omada-mcp**: 78 tools, published to `ghcr.io/realty
 
 Released as [MiguelTVMS/tplink-omada-mcp](https://github.com/MiguelTVMS/tplink-omada-mcp).
 
-[Unreleased]: https://github.com/realtydev/omada-mcp/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/realtydev/omada-mcp/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/realtydev/omada-mcp/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/realtydev/omada-mcp/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/realtydev/omada-mcp/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/realtydev/omada-mcp/releases/tag/v0.6.0
