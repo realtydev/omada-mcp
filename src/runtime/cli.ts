@@ -1,8 +1,9 @@
 import { access, mkdir, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { PACKAGE_VERSION } from '../generated/buildInfo.js';
+import { loadCaCertificates } from '../omadaClient/httpOptions.js';
 import {
     atomicJson,
     composeArgs,
@@ -188,6 +189,13 @@ async function setup(home: string, mode: 'stdio' | 'docker', values: Record<stri
     if (option('project') || option('service') || option('url')) throw new Error('--project, --service and --url require --compose-file adoption.');
     if (!envFile) throw new Error('New Docker setup requires --env-file PATH or adopt an existing --compose-file.');
     const credentials = await readEnv(envFile);
+    const caFile = Object.hasOwn(credentials, 'OMADA_CA_FILE') ? credentials.OMADA_CA_FILE.trim() : undefined;
+    const containerCaFile = '/certs/omada-ca.pem';
+    if (caFile !== undefined) {
+        if (!isAbsolute(caFile)) throw new Error('OMADA_CA_FILE must be an absolute path to a readable PEM certificate file for Docker setup.');
+        if (credentials.OMADA_STRICT_SSL === 'false') throw new Error('OMADA_CA_FILE requires OMADA_STRICT_SSL=true');
+        loadCaCertificates(caFile);
+    }
     const port = option('port') ?? '3000';
     if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535) throw new Error('--port must be an integer from 1 to 65535.');
     const target = await releaseVersion(option('version') ?? PACKAGE_VERSION);
@@ -208,6 +216,7 @@ async function setup(home: string, mode: 'stdio' | 'docker', values: Record<stri
                             .filter((key) => /^(OMADA_|MCP_)/.test(key))
                             .map((key) => [key, '${' + key + '}'])
                     ),
+                    ...(caFile ? { OMADA_CA_FILE: containerCaFile } : {}),
                     OMADA_ENV_FILE: '',
                     MCP_SERVER_USE_HTTP: 'true',
                     MCP_HTTP_BIND_ADDR: '0.0.0.0',
@@ -217,6 +226,18 @@ async function setup(home: string, mode: 'stdio' | 'docker', values: Record<stri
                     MCP_HTTP_NGROK_ENABLED: 'false',
                 },
                 ports: [`127.0.0.1:${Number(port)}:3000`],
+                ...(caFile
+                    ? {
+                          volumes: [
+                              {
+                                  type: 'bind',
+                                  source: resolve(caFile).replaceAll('$', () => '$$'),
+                                  target: containerCaFile,
+                                  read_only: true,
+                              },
+                          ],
+                      }
+                    : {}),
             },
         },
     });

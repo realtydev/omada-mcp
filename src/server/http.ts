@@ -38,7 +38,7 @@ function sendJson(res: ServerResponse, statusCode: number, body: unknown): void 
 }
 
 function sanitizeHeaders(headers: IncomingHttpHeaders): Record<string, unknown> {
-    const sanitized: Record<string, unknown> = {};
+    const sanitized: Record<string, unknown> = Object.create(null);
 
     for (const [key, value] of Object.entries(headers)) {
         if (value === undefined) {
@@ -74,7 +74,7 @@ function sanitizePayload(payload: unknown): unknown {
     }
 
     if (typeof payload === 'object') {
-        const sanitized: Record<string, unknown> = {};
+        const sanitized: Record<string, unknown> = Object.create(null);
         for (const [key, value] of Object.entries(payload)) {
             sanitized[key] = isSensitiveKey(key) ? maskValue(value) : sanitizePayload(value);
         }

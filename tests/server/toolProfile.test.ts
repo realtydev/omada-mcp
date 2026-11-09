@@ -52,7 +52,15 @@ describe('tool exposure profiles', () => {
         expect(tools.every((tool) => tool.annotations?.readOnlyHint === true && tool.annotations?.destructiveHint === false)).toBe(true);
         expect(tools.filter((tool) => MUTATING.test(tool.name))).toEqual([]);
         expect(tools.some((tool) => tool.name === 'genericApiCall')).toBe(false);
-        for (const name of ['getApRfScanResults', 'getApAfcStatus', 'listDhcpReservations', 'getSiteTopology', 'diagnoseClient', 'diagnoseLogs']) {
+        for (const name of [
+            'getApRfScanResults',
+            'getApAfcStatus',
+            'listDhcpReservations',
+            'getSiteTopology',
+            'getSiteDashboard',
+            'diagnoseClient',
+            'diagnoseLogs',
+        ]) {
             expect(tools.some((tool) => tool.name === name)).toBe(true);
         }
         const result = await client.callTool({ name: 'listSites', arguments: {} });

@@ -312,7 +312,7 @@ export class NetworkOperations {
     public async updateLanProfile(profileId: string, data: Record<string, unknown>, siteId?: string): Promise<unknown> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
         const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/lan-profiles/${encodeURIComponent(profileId)}`);
-        const response = await this.request.put<OmadaApiResponse<unknown>>(path, data);
+        const response = await this.request.request<OmadaApiResponse<unknown>>({ method: 'PATCH', url: path, data });
         return this.request.ensureSuccess(response);
     }
 
@@ -517,7 +517,7 @@ export class NetworkOperations {
             return this.internalRequest!.ensureSuccess(response);
         }
 
-        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/setting/firewall/acls`);
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/acls/osg-acls`);
         return await this.request.fetchPaginated<unknown>(path);
     }
 
@@ -536,7 +536,7 @@ export class NetworkOperations {
             return this.internalRequest!.ensureSuccess(response);
         }
 
-        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/setting/firewall/acls`);
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/acls/osg-acls`);
         const response = await this.request.post<OmadaApiResponse<unknown>>(path, data);
         return this.request.ensureSuccess(response);
     }
@@ -556,7 +556,7 @@ export class NetworkOperations {
             return this.internalRequest!.ensureSuccess(response);
         }
 
-        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/setting/firewall/acls/${encodeURIComponent(aclId)}`);
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/acls/osg-acls/${encodeURIComponent(aclId)}`);
         const response = await this.request.put<OmadaApiResponse<unknown>>(path, data);
         return this.request.ensureSuccess(response);
     }
@@ -576,7 +576,7 @@ export class NetworkOperations {
             return this.internalRequest!.ensureSuccess(response);
         }
 
-        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/setting/firewall/acls/${encodeURIComponent(aclId)}`);
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/acls/${encodeURIComponent(aclId)}`);
         const response = await this.request.delete<OmadaApiResponse<unknown>>(path);
         return this.request.ensureSuccess(response);
     }

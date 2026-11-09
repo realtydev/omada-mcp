@@ -1,6 +1,34 @@
 import { describe, expect, it, vi } from 'vitest';
 
 describe('Device and Client Action Tools', () => {
+    it('passes explicit adoption credentials without changing other action arguments', async () => {
+        const { registerAdoptDeviceTool } = await import('../../src/tools/adoptDevice.js');
+        const adoptDevice = vi.fn().mockResolvedValue({});
+        const registerTool = vi.fn((_, _schema, handler) => handler({ deviceMac: 'mac', username: 'admin', password: 'device-password' }, {}));
+        registerAdoptDeviceTool({ registerTool } as never, { adoptDevice } as never);
+        expect(adoptDevice).toHaveBeenCalledWith('mac', undefined, { username: 'admin', password: 'device-password' });
+    });
+
+    it('passes dryRun and a complete rate limit to client updates', async () => {
+        const { registerUpdateClientTool } = await import('../../src/tools/updateClient.js');
+        const updateClient = vi.fn().mockResolvedValue({});
+        const rateLimit = { mode: 1, rateLimitProfileId: 'profile' };
+        const registerTool = vi.fn((_, _schema, handler) => handler({ clientMac: 'mac', rateLimit, dryRun: true }, {}));
+        registerUpdateClientTool({ registerTool } as never, { updateClient } as never);
+        expect(updateClient).toHaveBeenCalledWith('mac', { rateLimit }, undefined, true);
+    });
+
+    it('registers device identification separately from the site-wide policy', async () => {
+        const { registerLocateDeviceTool } = await import('../../src/tools/locateDevice.js');
+        const { registerSetSiteLedTool } = await import('../../src/tools/setSiteLed.js');
+        const locateDevice = vi.fn().mockResolvedValue({});
+        const setSiteLed = vi.fn().mockResolvedValue({});
+        const registerTool = vi.fn((_, _schema, handler) => handler({ deviceMac: 'mac', enable: false, siteId: 'site' }, {}));
+        registerLocateDeviceTool({ registerTool } as never, { locateDevice } as never);
+        registerSetSiteLedTool({ registerTool } as never, { setSiteLed } as never);
+        expect(locateDevice).toHaveBeenCalledWith('mac', false, 'site');
+        expect(setSiteLed).toHaveBeenCalledWith(false, 'site');
+    });
     describe('registerAdoptDeviceTool', () => {
         it('should register the tool and pass deviceMac through to the client', async () => {
             const { registerAdoptDeviceTool } = await import('../../src/tools/adoptDevice.js');
@@ -17,7 +45,7 @@ describe('Device and Client Action Tools', () => {
                 expect.objectContaining({ description: expect.any(String) }),
                 expect.any(Function)
             );
-            expect(mockClient.adoptDevice).toHaveBeenCalledWith('00:11:22:33:44:55', 'test-site');
+            expect(mockClient.adoptDevice).toHaveBeenCalledWith('00:11:22:33:44:55', 'test-site', { username: undefined, password: undefined });
         });
     });
 
@@ -227,7 +255,12 @@ describe('Device and Client Action Tools', () => {
                 expect.objectContaining({ description: expect.any(String) }),
                 expect.any(Function)
             );
-            expect(mockClient.updateClient).toHaveBeenCalledWith('aa:bb:cc:dd:ee:ff', { name: 'Laptop', fixedIp: '192.168.1.50' }, 'test-site');
+            expect(mockClient.updateClient).toHaveBeenCalledWith(
+                'aa:bb:cc:dd:ee:ff',
+                { name: 'Laptop', fixedIp: '192.168.1.50' },
+                'test-site',
+                undefined
+            );
         });
     });
 

@@ -46,6 +46,8 @@ omada-runtime rollback docker
 
 The generated Compose service restarts with Docker (`unless-stopped`) and publishes only `127.0.0.1:3000`. It forces Streamable HTTP at `/mcp`, disables ngrok, and passes parsed credential values to Compose in memory. The generated configuration stores variable names, never their values. Each setup/update/rollback reads the original credential file again; its values, including quotes and dollar signs, are preserved. Adding a new variable name after setup also requires adding that variable reference to the generated Compose environment mapping. Setup prints the local HTTP client configuration. HTTP clients connect to this persistent service instead of spawning servers.
 
+For a private controller CA, put an absolute host path in `OMADA_CA_FILE` and keep `OMADA_STRICT_SSL=true`. Fresh Docker setup validates the PEM bundle and mounts it read-only at `/certs/omada-ca.pem`. Existing Compose deployments must already mount the bundle and set `OMADA_CA_FILE` to its container path before adoption. Managed stdio uses the configured file path directly.
+
 To adopt an existing running Compose service without restarting it:
 
 ```bash

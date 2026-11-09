@@ -26,7 +26,7 @@ Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned
 
 ## Highlights
 
-- **91 tools, read and write.** Full CRUD for LAN networks/VLANs, LAN profiles, firewall ACLs, static routes, port forwarding, SSIDs, and switch ports (single and batch), plus device and client actions.
+- **94 tools, read and write.** Full CRUD for LAN networks/VLANs, LAN profiles, firewall ACLs, static routes, port forwarding, SSIDs, and switch ports (single and batch), plus device and client actions.
 - **Safe by design.** Every write tool is annotated `destructiveHint`, rejects unknown fields instead of silently dropping them, and the riskiest ones (`setApRadio`, `setLogNotifications`) support dry runs and verify the result by reading it back.
 - **Two API surfaces.** The official Omada Open API, plus the controller's internal web UI API for features the Open API doesn't expose (ACLs, routes, port forwarding on OC200).
 - **Three auth modes.** Open API OAuth client credentials, Fusion gateway web-session auth, and optional web UI credentials for internal-API tools.
@@ -128,7 +128,8 @@ Endpoints: `http://localhost:3000/mcp` (Streamable HTTP) or `/sse` (SSE), with `
 | `OMADA_SITE_ID`       | No         | -       | Default site ID                                                            |
 | `OMADA_WEB_USERNAME`  | Web mode   | -       | Omada web UI username                                                      |
 | `OMADA_WEB_PASSWORD`  | Web mode   | -       | Omada web UI password                                                      |
-| `OMADA_STRICT_SSL`    | No         | `true`  | SSL verification (`false` for self-signed)                                 |
+| `OMADA_STRICT_SSL`    | No         | `true`  | SSL certificate and hostname verification                                  |
+| `OMADA_CA_FILE`       | No         | —       | PEM CA file/bundle added to default trust; requires strict SSL             |
 | `OMADA_TIMEOUT`       | No         | `30000` | Request timeout (ms)                                                       |
 
 For Fusion gateways that do not expose Platform Integration OAuth credentials, set `OMADA_AUTH_MODE=web` and provide `OMADA_WEB_USERNAME` / `OMADA_WEB_PASSWORD`. The server logs in through `/{omadacId}/api/v2/login` and uses that web session for OpenAPI requests.
@@ -164,6 +165,7 @@ For Fusion gateways that do not expose Platform Integration OAuth credentials, s
 | `getApAfcStatus`                | AFC status for supported 6 GHz APs; requires compatible controller and AP firmware                                                                                  |
 | `getApAvailableChannels`        | Allowed radio channels and controller channel indices for use with `setApRadio`                                                                                     |
 | `getSiteTopology`               | Controller-discovered topology, uplinks and link speeds; requires web UI credentials                                                                                |
+| `getSiteDashboard`              | Wi-Fi, traffic, wireless retry/drop averages, switch and PoE summaries with explicit partial results                                                                |
 | `listVpnConnections`            | Paginated tunnel/IPsec or protocol-filtered site-to-site, server and client VPN status                                                                              |
 | `getGatewayWanSpeedTestResults` | Read saved gateway WAN speed-test results without starting a test                                                                                                   |
 | `listDhcpReservations`          | Read all DHCP reservation pages, optionally filtered by search text                                                                                                 |
@@ -220,7 +222,7 @@ The AP diagnostics use the bundled `docs/openapi/03-device.json` operations `get
 | `updateSsid`            | Update an SSID's basic config (name, band, security, VLAN, PSK, etc.)                                                    |
 | `setSsidEnable`         | Enable or disable an SSID network-wide                                                                                   |
 | `updateSwitchPort`      | Update switch port config (profile, PoE, speed, STP)                                                                     |
-| `updateClient`          | Update client settings                                                                                                   |
+| `updateClient`          | Update name, fixed IPv4 or rate limits through setting-specific endpoints; supports dry-run previews                     |
 | `setSwitchNetworks`     | Set switch VLAN trunking configuration                                                                                   |
 | `createRoute`           | Create a static route (internal web UI API only)                                                                         |
 | `updateRoute`           | Update a static route by ID (internal web UI API only)                                                                   |
@@ -255,11 +257,13 @@ DHCP writes support `dryRun`. Inspect `verification.status`: `verified` confirms
 | Tool                   | Description                                                                                                                                                                                                |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `rebootDevice`         | Reboot a device                                                                                                                                                                                            |
-| `adoptDevice`          | Adopt a device                                                                                                                                                                                             |
+| `adoptDevice`          | Start adopting one device, with optional device username/password                                                                                                                                          |
 | `blockClient`          | Block a client                                                                                                                                                                                             |
 | `unblockClient`        | Unblock a client                                                                                                                                                                                           |
 | `reconnectClient`      | Reconnect a client                                                                                                                                                                                         |
-| `setDeviceLed`         | Set device LED setting                                                                                                                                                                                     |
+| `setDeviceLed`         | Deprecated: returns unsupported; choose `locateDevice` or `setSiteLed` explicitly                                                                                                                          |
+| `locateDevice`         | Start or stop blinking a single device for identification                                                                                                                                                  |
+| `setSiteLed`           | Enable or disable device LEDs across the whole site                                                                                                                                                        |
 | `setLogNotifications`  | Turn alert/event log notification types on or off for a site; dry run supported, returns a before/after diff (live config write)                                                                           |
 | `setApRadio`           | Change one AP radio band: enable, channel index, width, tx power. Reads back and verifies, fails if the controller does not apply it; dry run supported (live config write, can drop clients on that band) |
 | `startFirmwareUpgrade` | Start firmware upgrade                                                                                                                                                                                     |
@@ -285,6 +289,8 @@ Set `MCP_TOOL_PROFILE=read-only` to expose read tools and diagnostics while excl
 
 HTTP/SSE sessions default to a 30-minute idle timeout (`MCP_HTTP_SESSION_IDLE_TIMEOUT_MS=1800000`) and a limit of 100 sessions (`MCP_HTTP_MAX_SESSIONS=100`). Capacity includes sessions being initialized. Full capacity returns HTTP 503 with a retry hint. Active tool calls are protected from idle expiry; keeping an event stream open alone does not keep a session alive. SSE accepts the SDK's `sessionId` query parameter as well as the legacy session header.
 
+`getSiteDashboard` defaults to the last hour and accepts epoch-second `start`/`end` windows up to 24 hours. PoE is a current snapshot. Results cap each device list at 50 and mark truncation or unavailable sections explicitly; wireless charts and per-port details are omitted. Units are controller-defined: Wi-Fi traffic KB, per-device traffic MB, switch traffic bytes, PoE watts.
+
 Topology is the controller's discovered view and can omit unmanaged hops. Client diagnostics report unavailable sections, topology age, and unresolved paths explicitly. Log diagnostics return bounded samples and identify truncation; an incomplete result is not a clean bill of health. VPN `s2s`, `server`, and `client` queries require a controller protocol code in `vpnType` (for example, IPsec site-to-site uses `2`). Saved speed results may be absent until a test has been run separately. These new reads and DHCP reservation CRUD were validated on OC200 / Controller 6.3.0.45 with an ER8411. The DHCP test used a disabled synthetic reservation and verified its removal. VPN status was validated with empty connection tables; no VPN configuration was created.
 
 ## WAN failover guard
@@ -302,7 +308,7 @@ It is disabled and dry-run by default. Read [docs/wan-guard.md](docs/wan-guard.m
 This server can change live network configuration. Some good habits:
 
 - Give the MCP client an Open API app scoped to what you need; use a **viewer** role if you only want read tools.
-- Keep `OMADA_STRICT_SSL=true` unless your controller uses a self-signed certificate on a trusted LAN.
+- Keep `OMADA_STRICT_SSL=true`. For a private CA or self-signed controller, set `OMADA_CA_FILE` to its trusted PEM certificate/bundle. Requests do not follow redirects; configure the controller's final URL directly.
 - Leave `MCP_HTTP_BIND_ADDR` at `127.0.0.1` unless you put the HTTP server behind authentication. The MCP endpoint itself is unauthenticated.
 - Ask your assistant to use dry runs where available, and to read settings back after writes.
 
