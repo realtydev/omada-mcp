@@ -343,7 +343,7 @@ describe('RequestHandler', () => {
             expect(result).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
         });
 
-        it('should stop when page returns empty data', async () => {
+        it('rejects a premature empty page instead of returning a partial collection', async () => {
             const { RequestHandler } = await import('../../src/omadaClient/request.js');
 
             mockAxiosInstance.request
@@ -369,10 +369,110 @@ describe('RequestHandler', () => {
                 });
 
             const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
-            const result = await handler.fetchPaginated<{ id: number }>('/api/items');
-
+            await expect(handler.fetchPaginated<{ id: number }>('/api/items')).rejects.toThrow('empty page arrived before totalRows');
             expect(mockAxiosInstance.request).toHaveBeenCalledTimes(2);
-            expect(result).toEqual([{ id: 1 }]);
+        });
+
+        it.each([undefined, null, [], {}, { data: null }, { data: {} }, { data: 'not rows' }])(
+            'rejects malformed successful result %s instead of treating it as an empty collection',
+            async (result) => {
+                const { RequestHandler } = await import('../../src/omadaClient/request.js');
+                mockAxiosInstance.request.mockResolvedValue({ data: { errorCode: 0, result } });
+                const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+                await expect(handler.fetchPaginated('/api/items')).rejects.toThrow('expected a result object with a data array');
+                expect(mockAxiosInstance.request).toHaveBeenCalledTimes(1);
+            }
+        );
+
+        it.each([-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1, null, '2'])(
+            'rejects invalid totalRows %s',
+            async (totalRows) => {
+                const { RequestHandler } = await import('../../src/omadaClient/request.js');
+                mockAxiosInstance.request.mockResolvedValue({ data: { errorCode: 0, result: { data: [], totalRows } } });
+                const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+                await expect(handler.fetchPaginated('/api/items')).rejects.toThrow('totalRows must be a non-negative safe integer');
+            }
+        );
+
+        it('accepts a verified empty collection with totalRows zero', async () => {
+            const { RequestHandler } = await import('../../src/omadaClient/request.js');
+            mockAxiosInstance.request.mockResolvedValue({ data: { errorCode: 0, result: { data: [], totalRows: 0, currentPage: 1 } } });
+            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+            await expect(handler.fetchPaginated('/api/items')).resolves.toEqual([]);
+            expect(mockAxiosInstance.request).toHaveBeenCalledTimes(1);
+        });
+
+        it('collects through a terminal empty page when totals are absent', async () => {
+            const { RequestHandler } = await import('../../src/omadaClient/request.js');
+            mockAxiosInstance.request
+                .mockResolvedValueOnce({ data: { errorCode: 0, result: { data: [{ id: 1 }], currentPage: 1 } } })
+                .mockResolvedValueOnce({ data: { errorCode: 0, result: { data: [{ id: 2 }], currentPage: 2 } } })
+                .mockResolvedValueOnce({ data: { errorCode: 0, result: { data: [], currentPage: 3 } } });
+            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+            await expect(handler.fetchPaginated('/api/items')).resolves.toEqual([{ id: 1 }, { id: 2 }]);
+            expect(mockAxiosInstance.request).toHaveBeenCalledTimes(3);
+        });
+
+        it('rejects totals changing mid-read rather than claiming snapshot completeness', async () => {
+            const { RequestHandler } = await import('../../src/omadaClient/request.js');
+            mockAxiosInstance.request
+                .mockResolvedValueOnce({ data: { errorCode: 0, result: { data: [{ id: 1 }], totalRows: 3 } } })
+                .mockResolvedValueOnce({ data: { errorCode: 0, result: { data: [{ id: 2 }], totalRows: 2 } } });
+            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+            await expect(handler.fetchPaginated('/api/items')).rejects.toThrow('totalRows changed during collection');
+        });
+
+        it.each([0, 1])('rejects record counts exceeding declared totalRows %s', async (totalRows) => {
+            const { RequestHandler } = await import('../../src/omadaClient/request.js');
+            mockAxiosInstance.request.mockResolvedValue({ data: { errorCode: 0, result: { data: [{ id: 1 }, { id: 2 }], totalRows } } });
+            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+            await expect(handler.fetchPaginated('/api/items')).rejects.toThrow('more records than totalRows');
+        });
+
+        it('rejects a controller that repeats a page instead of confirming absence from duplicate rows', async () => {
+            const { RequestHandler } = await import('../../src/omadaClient/request.js');
+            mockAxiosInstance.request.mockResolvedValue({ data: { errorCode: 0, result: { data: [{ mac: 'AA-BB-CC-DD-EE-FF' }], totalRows: 2 } } });
+            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+            await expect(handler.fetchPaginated('/api/items')).rejects.toThrow('a non-empty page repeated');
+            expect(mockAxiosInstance.request).toHaveBeenCalledTimes(2);
+        });
+
+        it('rejects non-advancing page metadata', async () => {
+            const { RequestHandler } = await import('../../src/omadaClient/request.js');
+            mockAxiosInstance.request
+                .mockResolvedValueOnce({ data: { errorCode: 0, result: { data: [{ id: 1 }], currentPage: 1 } } })
+                .mockResolvedValueOnce({ data: { errorCode: 0, result: { data: [{ id: 2 }], currentPage: 1 } } });
+            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+            await expect(handler.fetchPaginated('/api/items')).rejects.toThrow('did not return requested page 2');
+        });
+
+        it('fails explicitly at the finite page ceiling without returning partial records', async () => {
+            const { RequestHandler } = await import('../../src/omadaClient/request.js');
+            mockAxiosInstance.request.mockImplementation(async (config) => ({
+                data: { errorCode: 0, result: { data: [{ id: config.params.page }] } },
+            }));
+            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+            await expect(handler.fetchPaginated('/api/items')).rejects.toThrow('1000-page safety limit');
+            expect(mockAxiosInstance.request).toHaveBeenCalledTimes(1000);
+        });
+
+        it('supports a smaller endpoint-specific page size without changing the default call shape', async () => {
+            const { RequestHandler } = await import('../../src/omadaClient/request.js');
+            mockAxiosInstance.request.mockResolvedValue({ data: { errorCode: 0, result: { data: [], totalRows: 0 } } });
+            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+            await handler.fetchPaginated('/api/vpn', { 'filters.vpnType': 5 }, 100);
+            expect(mockAxiosInstance.request).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    params: { 'filters.vpnType': 5, page: 1, pageSize: 100 },
+                })
+            );
+        });
+
+        it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 1001])('rejects invalid pageSize %s before requesting', async (pageSize) => {
+            const { RequestHandler } = await import('../../src/omadaClient/request.js');
+            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+            await expect(handler.fetchPaginated('/api/items', {}, pageSize)).rejects.toThrow('integer between 1 and 1000');
+            expect(mockAxiosInstance.request).not.toHaveBeenCalled();
         });
 
         it('should pass additional params to each page request', async () => {
