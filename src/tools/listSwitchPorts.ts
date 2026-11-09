@@ -16,7 +16,8 @@ export function registerListSwitchPortsTool(server: McpServer, client: OmadaClie
             description:
                 'List switch port telemetry including link state, speed, duplex, traffic, STP, LLDP and PoE. ' +
                 'Optionally filter by switch MAC. Supports Agile Series switches through the site-wide PoE port endpoint. ' +
-                'Controllers may omit non-PoE switches and gateway-integrated ports; telemetry fields depend on firmware.',
+                'Includes configured ports from managed-switch inventory and web-API telemetry for non-PoE switches when available. ' +
+                'Missing telemetry is explicit per port; incomplete inventories fail with a pointer to getSwitchPortOverview. Gateway-integrated ports are outside scope.',
             inputSchema: listSwitchPortsSchema.shape,
             annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
         },
