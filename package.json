@@ -65,6 +65,7 @@
         "@modelcontextprotocol/sdk": "^1.32.2",
         "@ngrok/ngrok": "^1.7.0",
         "axios": "^1.21.0",
+        "commander": "15.0.0",
         "dotenv": "^18.0.9",
         "pino": "^10.4.0",
         "zod": "^4.6.7"

@@ -1,6 +1,6 @@
 # Runtime CLI
 
-`omada-runtime` manages exact releases of the existing MCP server. Node 24+ is required. Docker mode additionally requires Docker Engine and Docker Compose v2. The CLI uses the current Docker context or `DOCKER_HOST`.
+`omada-runtime` uses Commander for command parsing and help, and manages exact releases of the existing MCP server. Node 24+ is required. Docker mode additionally requires Docker Engine and Docker Compose v2. The CLI uses the current Docker context or `DOCKER_HOST`.
 
 ## Install
 
@@ -9,6 +9,7 @@ Install the runtime archive attached to the desired [GitHub release](https://git
 ```bash
 npm install -g --ignore-scripts https://github.com/realtydev/omada-mcp/releases/download/vX.Y.Z/realtydev-omada-mcp-X.Y.Z.tgz
 omada-runtime --help
+omada-runtime setup docker --help
 ```
 
 Archives include the compiled server and both `omada-mcp` and `omada-runtime` executables. No npm registry publication is required. You can download the archive and `SHA256SUMS` from the same release to check its checksum before installing. Source checkouts can use `yarn build` then `node dist/runtime.js` instead.
@@ -30,7 +31,7 @@ Setup prints MCP client JSON with your absolute Node path and a stable `~/.omada
 
 `status` starts a fresh subprocess and verifies its `getServerInfo`. It cannot inspect an already-connected client's subprocess. After every update or rollback, reconnect the client and call `getServerInfo` **inside that client** to compare its version and commit. `doctor` additionally calls the read-only `listSites` tool to verify controller access. Neither command changes controller settings.
 
-Versions are installed under `~/.omada-mcp/versions/`. Update verifies the candidate before changing the selection. Rollback switches to the last successful selection and verifies it first. Existing processes keep running their previous build until reconnected. `--package /path/to/release.tgz` lets stdio setup/update install a local archive whose embedded version must match `--version`; dependencies still need to be available from npm/cache.
+Versions are installed under `~/.omada-mcp/versions/`. Update verifies the candidate version and build commit against the installed artifact before changing the selection. Rollback switches to the last successful selection and verifies it first. Existing processes keep running their previous build until reconnected. `--package /path/to/release.tgz` lets stdio setup/update install a local archive whose embedded version must match `--version`; dependencies still need to be available from npm/cache.
 
 ## Persistent local Docker service
 
