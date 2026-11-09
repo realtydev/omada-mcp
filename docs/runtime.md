@@ -1,6 +1,6 @@
 # Runtime CLI
 
-`omada-runtime` uses Commander for command parsing and help, and manages exact releases of the existing MCP server. Node 24+ is required. Docker mode additionally requires Docker Engine and Docker Compose v2. The CLI uses the current Docker context or `DOCKER_HOST`.
+`omada-runtime` uses Commander for command parsing and help, Execa for subprocess execution and cleanup, and manages exact releases of the existing MCP server. Node 24+ is required. Docker mode additionally requires Docker Engine and Docker Compose v2. The CLI uses the current Docker context or `DOCKER_HOST`.
 
 ## Install
 
@@ -19,7 +19,7 @@ Archives include the compiled server and both `omada-mcp` and `omada-runtime` ex
 Create a credential file using the controller variables documented in the README. Restrict its permissions (`chmod 600 /absolute/path/omada.env`). The CLI references the file without editing, copying or printing its contents. It loads this one file; combine `.env` and `.env.local` settings into that file if both are needed. Environment values in the selected file take precedence over inherited values for managed stdio.
 
 ```bash
-omada-runtime setup stdio --env-file /absolute/path/omada.env --version X.Y.Z
+omada-runtime setup stdio --env-file /absolute/path/omada.env --version X.Y.Z --client codex cursor claude-desktop
 omada-runtime doctor stdio
 omada-runtime status stdio
 omada-runtime update stdio --version X.Y.Z
@@ -27,9 +27,9 @@ omada-runtime update stdio --version latest
 omada-runtime rollback stdio
 ```
 
-Setup prints MCP client JSON with your absolute Node path and a stable `~/.omada-mcp/stdio.mjs` launcher. Copy it into your client's MCP settings. Each client launches its own server subprocess. There is no background stdio service. The launcher follows the selected version on the next connection.
+With `--client`, setup configures the selected clients automatically using your absolute Node path and a stable `~/.omada-mcp/stdio.mjs` launcher. Without it, setup prints configuration you can copy manually. Each client launches its own server subprocess. There is no background stdio service. The launcher follows the selected version on the next connection.
 
-`status` starts a fresh subprocess and verifies its `getServerInfo`. It cannot inspect an already-connected client's subprocess. After every update or rollback, reconnect the client and call `getServerInfo` **inside that client** to compare its version and commit. `doctor` additionally calls the read-only `listSites` tool to verify controller access. Neither command changes controller settings.
+`status` starts a fresh subprocess and verifies its `getServerInfo`. It cannot inspect an already-connected client's subprocess. Updates and rollbacks attempt to refresh registered clients and report each result. Call `getServerInfo` **inside that client** to compare its version and commit. `doctor` additionally calls the read-only `listSites` tool to verify controller access. Neither command changes controller settings.
 
 Versions are installed under `~/.omada-mcp/versions/`. Update verifies the candidate version and build commit against the installed artifact before changing the selection. Rollback switches to the last successful selection and verifies it first. Existing processes keep running their previous build until reconnected. `--package /path/to/release.tgz` lets stdio setup/update install a local archive whose embedded version must match `--version`; dependencies still need to be available from npm/cache.
 
@@ -38,7 +38,7 @@ Versions are installed under `~/.omada-mcp/versions/`. Update verifies the candi
 For a new service:
 
 ```bash
-omada-runtime setup docker --env-file /absolute/path/omada.env --version X.Y.Z --port 3000
+omada-runtime setup docker --env-file /absolute/path/omada.env --version X.Y.Z --port 3000 --client codex cursor
 omada-runtime doctor docker
 omada-runtime status docker
 omada-runtime update docker --version X.Y.Z
@@ -70,15 +70,44 @@ docker compose --project-name omada-mcp \
 
 Running the original Compose file alone can select its original image again. The CLI refuses updates if the running container differs from its saved image. To reconcile an externally changed deployment, adopt it using a new `--home` and its actual base Compose configuration.
 
-Updates pull before changing the service, pin the resulting digest, recreate only that service (`--no-deps`), and verify the actual process with `getServerInfo`. Failed updates restore and verify the prior image. Rollback uses the saved prior digest from Docker's local image cache; keep that image until you no longer need rollback. Do not prune rollback images. The brief container replacement disconnects HTTP sessions; reconnect clients afterward.
+Updates pull before changing the service, pin the resulting digest, recreate only that service (`--no-deps`), and verify the actual process with `getServerInfo`. Failed updates restore and verify the prior image. Rollback uses the saved prior digest from Docker's local image cache; keep that image until you no longer need rollback. Do not prune rollback images. The brief container replacement disconnects HTTP sessions; the CLI attempts to refresh registered clients afterward and reports any manual action needed.
 
 If a public image pull fails due to stale registry login, the CLI retries anonymously with a temporary Docker configuration on the same daemon. It never changes your registry credentials or default context.
+
+## Automatic client configuration and reconnecting
+
+Setup supports Codex, Cursor and Claude Desktop. Codex registration uses `codex mcp add`, so the Codex CLI must be installed and available on `PATH`. Cursor and Claude Desktop configuration is edited with a JSON/JSONC parser that preserves unrelated properties and comments.
+
+| Client         | stdio | Docker HTTP                | Refresh                                                                          |
+| -------------- | ----- | -------------------------- | -------------------------------------------------------------------------------- |
+| Codex          | Yes   | Yes                        | Request MCP reload through an existing app-server control socket, when available |
+| Cursor         | Yes   | Yes                        | Reconnect in the client, or opt into a graceful app restart on macOS             |
+| Claude Desktop | Yes   | No local HTTP registration | Reconnect in the client, or opt into a graceful app restart on macOS             |
+
+To add clients to a runtime that is already set up, omit the original runtime setup flags:
+
+```bash
+omada-runtime setup docker --client codex cursor
+omada-runtime setup stdio --client claude-desktop
+omada-runtime reconnect docker
+omada-runtime reconnect stdio
+```
+
+The stdio example requires an existing stdio setup; Docker and stdio selections are independent. Claude Desktop's local configuration accepts stdio servers. The CLI does not add an HTTP-to-stdio bridge or register a Docker URL in that file.
+
+Setup adds only the `omada` server entry. Matching entries are retained, including extra client options. A different existing `omada` entry requires `--replace-client`. Before changing an existing file, setup creates an adjacent `.omada-<id>.bak` copy with private permissions. Invalid files, duplicate JSON properties and incompatible server collections are rejected without overwriting them. JSON configuration symlinks retain their target; Codex configuration symlinks require registration through Codex directly. `CODEX_HOME` selects the Codex profile. Keep backups private: they may contain other clients' secrets.
+
+Selected clients and their configuration paths are saved in the runtime state. Update and rollback refresh them **after** the new runtime has passed verification. If settings have changed outside this CLI, refresh reports that and leaves them alone. Disabled entries stay disabled. A client refresh failure does not roll back a healthy runtime. If initial client registration fails, the runtime remains ready; retry `setup <mode> --client <name>` without installation flags.
+
+`--restart-clients` on setup opts selected Cursor/Claude Desktop registrations into graceful restarts on later updates and rollbacks. On update, rollback or reconnect, the flag applies to that command only. It can close app windows, so save work first. An app that is already closed is left closed, and no process is force-killed. Repeating setup without the flag clears the saved restart preference. Codex is never quit or restarted by this option.
+
+Refresh results distinguish `reload-queued`, `restart-requested`, `not-running` and `action-required`. Codex's reload acknowledgment means its existing app server queued a refresh for loaded chats; it does not prove a particular client's connection has changed. Many app sessions do not expose a control socket, in which case reconnect Omada through that client's MCP settings. After any refresh, call `getServerInfo` inside the client to verify its version and commit. `reconnect <mode>` retries refresh without installing or switching versions.
 
 ## State, errors and recovery
 
 - Stdio and Docker selections coexist independently. `--home /absolute/path` changes the state directory for every command; use the same path consistently. State files use private permissions and contain paths and release identifiers, not credentials.
-- Setup refuses to overwrite an existing selection. A directory lock prevents simultaneous changes. After an interrupted command, first verify no runtime command is still running before removing the reported `.runtime-lock` directory.
+- Setup refuses to overwrite an existing runtime selection; `setup --client` can add client configuration to it. A directory lock prevents simultaneous changes. After an interrupted command, first verify no runtime command is still running before removing the reported `.runtime-lock` directory.
 - Commands return exit code 0 on success and 1 on failure. Invalid options are rejected. Subprocess/controller errors are summarized without dumping private responses. Check the named dependency, local endpoint, credential file and network access, then rerun `doctor`.
 - A failed recovery is reported explicitly. Inspect the saved state and override, restore Docker availability, and run Compose with both files followed by `doctor docker`. No success is reported unless the selected version responds through MCP.
 - Use an exact `--version X.Y.Z` to pin releases. `latest` is resolved once during update; moving image tags and version ranges are never persisted. Releases before runtime archives were introduced can be adopted/rolled back in Docker but cannot be installed for managed stdio from a missing archive.
-- The CLI does not edit MCP client settings, rotate credentials, stop unrelated services, or manage the WAN guard. Keep credential files and runtime state backups private.
+- The CLI does not rotate credentials, stop unrelated services, or manage the WAN guard. Desktop restarts require the explicit client option described above. Keep credential files and runtime state backups private.

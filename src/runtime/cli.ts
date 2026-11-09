@@ -1,9 +1,10 @@
 import { access, mkdir, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
-import { Command, CommanderError } from 'commander';
+import { Command, CommanderError, Option } from 'commander';
 import { PACKAGE_VERSION } from '../generated/buildInfo.js';
 import { loadCaCertificates } from '../omadaClient/httpOptions.js';
+import { CLIENTS, configureClient, type ManagedClient, refreshClients, validateClientMode } from './clients.js';
 import {
     atomicJson,
     composeArgs,
@@ -35,6 +36,9 @@ interface RuntimeOptions {
     url?: string;
     port?: string;
     package?: string;
+    client?: ManagedClient[];
+    replaceClient?: boolean;
+    restartClients?: boolean;
 }
 
 export async function runCli(argv: string[]): Promise<void> {
@@ -62,6 +66,8 @@ Examples:
 Status verifies getServerInfo; doctor also reads listSites. Stdio checks a fresh
 process. Reconnect existing MCP clients after update/rollback and verify their build.
 Docker updates verify readiness and restore the previous image on failure.
+Use setup with --client codex cursor, then reconnect to retry a client refresh.
+Claude Desktop local setup uses stdio; it does not accept a local HTTP URL.
 `
         );
     for (const [command, description] of [
@@ -70,6 +76,7 @@ Docker updates verify readiness and restore the previous image on failure.
         ['doctor', 'Verify the runtime and read-only controller access'],
         ['update', 'Install and verify an exact release, or resolve latest once'],
         ['rollback', 'Restore and verify the previous successful selection'],
+        ['reconnect', 'Refresh registered MCP clients without changing the runtime version'],
     ]) {
         const parent = program
             .command(command)
@@ -84,8 +91,13 @@ Docker updates verify readiness and restore the previous image on failure.
                 else child.option('--version <version>', `exact release X.Y.Z (default ${PACKAGE_VERSION})`);
                 if (mode === 'stdio') child.option('--package <path>', 'local release archive instead of downloading');
             }
+            if (['setup', 'update', 'rollback', 'reconnect'].includes(command))
+                child.option('--restart-clients', 'opt into graceful Cursor/Claude Desktop app restarts on macOS');
             if (command === 'setup') {
-                if (mode === 'stdio') child.requiredOption('--env-file <path>', 'existing credential file, preserved without edits');
+                child
+                    .addOption(new Option('--client <clients...>', 'configure selected MCP clients automatically').choices([...CLIENTS]))
+                    .option('--replace-client', 'replace a conflicting Omada entry after saving a private backup');
+                if (mode === 'stdio') child.option('--env-file <path>', 'existing credential file, preserved without edits');
                 else
                     child
                         .option('--env-file <path>', 'existing credential file for a new service')
@@ -131,15 +143,46 @@ async function executeCommand(command: string, mode: 'stdio' | 'docker', values:
     }
     await withLock(home, async () => {
         if (command === 'setup') {
+            const selected = [...new Set(values.client ?? [])];
+            if (values.replaceClient && !selected.length) throw new Error('--replace-client requires --client.');
+            for (const client of selected) validateClientMode(client, mode);
+            let exists = true;
             try {
                 await access(statePath(home, mode));
             } catch {
-                await setup(home, mode, values);
-                return;
+                exists = false;
             }
-            throw new Error(`${mode} is already set up. Use status, update or a different --home.`);
+            if (exists) {
+                if (!selected.length) throw new Error(`${mode} is already set up. Use status, update or a different --home.`);
+                if (
+                    values.envFile ||
+                    values.composeFile ||
+                    values.project ||
+                    values.service ||
+                    values.url ||
+                    values.port ||
+                    values.version ||
+                    values.package
+                ) {
+                    throw new Error('Runtime is already set up. Configure clients with --client only; use update to change the runtime version.');
+                }
+                const state = await readState(home, mode);
+                const info = await probe(state);
+                const clientSetup = await setupClients(home, state, selected, values);
+                emit({ mode, runningBuild: info, clientSetup });
+            } else {
+                const result = await setup(home, mode, values);
+                const clientSetup = await setupClients(home, result.state, selected, values);
+                emit({ ...result.output, ...(selected.length ? { clientSetup } : {}) });
+            }
+            return;
         }
         const state = await readState(home, mode);
+        if (command === 'reconnect') {
+            if (!state.clients?.length) throw new Error(`No registered clients. Run setup ${mode} --client codex or cursor first.`);
+            emit({ mode, runningBuild: await probe(state), clientRefresh: await refreshClients(home, state, values.restartClients) });
+            return;
+        }
         if (mode === 'docker') await verifyDockerSelection(home, state);
         const selectedVersion = command === 'rollback' ? state.previous?.version : await releaseVersion(values.version ?? '');
         if (!selectedVersion) throw new Error('No previous version is saved for rollback.');
@@ -152,13 +195,23 @@ async function executeCommand(command: string, mode: 'stdio' | 'docker', values:
             if (!target) throw new Error('No previous version is saved for rollback.');
             const info = await probe(state, target);
             await atomicJson(statePath(home, mode), { ...state, current: target, previous: state.current });
-            emit({ mode, runningBuild: info, reconnectClients: true });
+            emit({
+                mode,
+                runningBuild: info,
+                reconnectClients: !state.clients?.length,
+                ...(state.clients?.length ? { clientRefresh: await refreshClients(home, { ...state, current: target }, values.restartClients) } : {}),
+            });
         } else {
             // A pull precedes any Compose mutation, including rollback after a daemon/image-cache reset.
             const target = command === 'rollback' ? state.previous : await pullImage(selectedVersion);
             if (!target?.image) throw new Error('No previous image is saved for rollback.');
             if (command === 'rollback') await run('docker', ['image', 'inspect', target.image]);
-            emit({ mode, runningBuild: await switchDocker(home, state, target) });
+            const info = await switchDocker(home, state, target);
+            emit({
+                mode,
+                runningBuild: info,
+                ...(state.clients?.length ? { clientRefresh: await refreshClients(home, { ...state, current: target }, values.restartClients) } : {}),
+            });
         }
     });
 }
@@ -166,7 +219,11 @@ function emit(value: unknown): void {
     process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
-async function setup(home: string, mode: 'stdio' | 'docker', values: RuntimeOptions): Promise<void> {
+async function setup(
+    home: string,
+    mode: 'stdio' | 'docker',
+    values: RuntimeOptions
+): Promise<{ state: RuntimeState; output: Record<string, unknown> }> {
     const envFile = values.envFile ? resolve(values.envFile) : undefined;
     if (mode === 'stdio') {
         if (!envFile) throw new Error('Stdio setup requires --env-file PATH.');
@@ -177,8 +234,7 @@ async function setup(home: string, mode: 'stdio' | 'docker', values: RuntimeOpti
         const info = await probe(state);
         const launcher = await writeLauncher(home);
         await atomicJson(statePath(home, mode), state);
-        emit({ runningBuild: info, mcpServers: { omada: { command: process.execPath, args: [launcher] } } });
-        return;
+        return { state, output: { runningBuild: info, mcpServers: { omada: { command: process.execPath, args: [launcher] } } } };
     }
     await run('docker', ['compose', 'version']);
     let state: RuntimeState;
@@ -224,8 +280,10 @@ async function setup(home: string, mode: 'stdio' | 'docker', values: RuntimeOpti
         const info = await probe(state);
         await writeOverride(home, state, state.current);
         await atomicJson(statePath(home, mode), state);
-        emit({ adopted: true, runningBuild: info, composeOverride: join(home, 'docker-override.json'), mcpServers: { omada: { url } } });
-        return;
+        return {
+            state,
+            output: { adopted: true, runningBuild: info, composeOverride: join(home, 'docker-override.json'), mcpServers: { omada: { url } } },
+        };
     }
     if (values.project || values.service || values.url) throw new Error('--project, --service and --url require --compose-file adoption.');
     if (!envFile) throw new Error('New Docker setup requires --env-file PATH or adopt an existing --compose-file.');
@@ -288,7 +346,7 @@ async function setup(home: string, mode: 'stdio' | 'docker', values: RuntimeOpti
         // Reuse readiness and recovery logic, with the same pinned image as the initial recovery target.
         const info = await switchDocker(home, state, current);
         await atomicJson(statePath(home, mode), state);
-        emit({ runningBuild: info, mcpServers: { omada: { url: state.url } } });
+        return { state, output: { runningBuild: info, mcpServers: { omada: { url: state.url } } } };
     } catch {
         // Remove only the service this setup just created; never other Compose services or volumes.
         try {
@@ -304,4 +362,18 @@ async function setup(home: string, mode: 'stdio' | 'docker', values: RuntimeOpti
             'Docker setup failed verification. The new service was stopped; credentials were preserved. Check port availability and configuration.'
         );
     }
+}
+
+async function setupClients(home: string, state: RuntimeState, clients: ManagedClient[], values: RuntimeOptions) {
+    const results = [];
+    for (const client of clients) {
+        try {
+            results.push(await configureClient(home, state, client, { replace: values.replaceClient, restart: values.restartClients }));
+        } catch (error) {
+            throw new Error(
+                `Runtime is ready, but ${client} setup failed: ${error instanceof Error ? error.message : 'check client configuration'}. Retry setup ${state.mode} --client ${client} without runtime setup flags.`
+            );
+        }
+    }
+    return results;
 }
