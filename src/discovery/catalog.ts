@@ -59,6 +59,56 @@ const MAX_DOCUMENT_BYTES = 32 * 1024 * 1024;
 const MAX_SCHEMA_DEPTH = 8;
 const MAX_SCHEMA_NODES = 5_000;
 
+const SEARCH_ALIASES = [
+    ['wifi', 'wireless', 'wlan', 'wlans', 'ssid', 'ssids'],
+    ['router', 'routers', 'gateway', 'gateways'],
+    ['restart', 'reboot'],
+    ['ap', 'aps', 'eap', 'eaps'],
+    ['client', 'clients', 'station', 'stations'],
+    ['device', 'devices'],
+    ['switch', 'switches'],
+    ['port', 'ports'],
+    ['network', 'networks'],
+    ['route', 'routes'],
+    ['peer', 'peers'],
+    ['profile', 'profiles'],
+    ['reservation', 'reservations'],
+];
+
+function searchTerms(value: string): string[] {
+    return value
+        .replace(/wi[\s-]+fi/gi, 'wifi')
+        .replace(/access[\s-]+points?/gi, 'ap')
+        .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+        .toLowerCase()
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter(Boolean);
+}
+
+function searchScore(operation: ApiOperation, query: string, terms: string[]): number {
+    if (query && operation.operationId.toLowerCase() === query.toLowerCase()) return 10_000;
+    const fields = [
+        { value: operation.operationId, weight: 12 },
+        { value: operation.summary, weight: 8 },
+        { value: operation.tags.join(' '), weight: 6 },
+        { value: operation.path, weight: 3 },
+        { value: operation.description, weight: 1 },
+    ].map(({ value, weight }) => ({ value: value.toLowerCase(), tokens: searchTerms(value), weight }));
+    let score = operation.deprecated ? 0 : 0.5;
+    for (const term of terms) {
+        const variants = SEARCH_ALIASES.find((group) => group.includes(term)) ?? [term];
+        let best = 0;
+        for (const field of fields) {
+            if (field.value.includes(term)) best = Math.max(best, field.weight * 2);
+            if (variants.some((variant) => field.tokens.includes(variant))) best = Math.max(best, field.weight);
+        }
+        // Every query term must match; a synonym improves discovery, never execution identity.
+        if (best === 0) return -1;
+        score += best;
+    }
+    return score;
+}
+
 function object(value: unknown): ApiDocument | undefined {
     return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as ApiDocument) : undefined;
 }
@@ -332,24 +382,13 @@ export class OperationCatalog {
         const method = options.method?.toUpperCase();
         if (method && !METHODS.includes(method as ApiMethod)) throw new Error('Unsupported search HTTP method');
         if ((options.query?.length ?? 0) > 256 || (options.tag?.length ?? 0) > 128) throw new Error('Search query or tag is too long');
-        const terms =
-            options.query
-                ?.toLowerCase()
-                .trim()
-                .split(/[^\p{L}\p{N}]+/u)
-                .filter(Boolean) ?? [];
+        const query = options.query?.trim() ?? '';
+        const terms = searchTerms(query);
         const tag = options.tag?.toLowerCase().trim();
         const matches = this.operations
             .filter((operation) => (!options.readOnly || operation.method === 'GET') && (!method || operation.method === method))
             .filter((operation) => !tag || operation.tags.some((entry) => entry.toLowerCase().includes(tag)))
-            .map((operation) => {
-                const title = `${operation.operationId} ${operation.summary} ${operation.tags.join(' ')}`.toLowerCase();
-                const haystack = `${title} ${operation.path} ${operation.description}`.toLowerCase();
-                const score = terms.every((term) => haystack.includes(term))
-                    ? terms.reduce((total, term) => total + (title.includes(term) ? 3 : 1), 0) + (operation.deprecated ? 0 : 0.5)
-                    : -1;
-                return { operation, score };
-            })
+            .map((operation) => ({ operation, score: searchScore(operation, query, terms) }))
             .filter((match) => match.score >= 0)
             .sort((a, b) => b.score - a.score || a.operation.operationId.localeCompare(b.operation.operationId));
         return {

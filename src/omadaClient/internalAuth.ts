@@ -1,6 +1,7 @@
 import type { AxiosInstance } from 'axios';
 
 import { logger } from '../utils/logger.js';
+import { CredentialCooldown, loginError } from './transport.js';
 
 /**
  * Authentication state management for the Omada internal (web UI) API.
@@ -12,6 +13,7 @@ export class InternalAuthManager {
     private sessionCookie?: string;
 
     private generation = 0;
+    private readonly credentialCooldown = new CredentialCooldown();
 
     private pendingLogin?: { generation: number; promise: Promise<void> };
 
@@ -60,6 +62,7 @@ export class InternalAuthManager {
                 return;
             }
             const generation = this.generation;
+            this.credentialCooldown.check();
             let operation = this.pendingLogin;
             if (!operation || operation.generation !== generation) {
                 operation = {
@@ -108,7 +111,7 @@ export class InternalAuthManager {
                     errorCode: data.errorCode,
                     message: data.msg,
                 });
-                throw new Error(data.msg ?? 'Internal API login failed');
+                throw loginError(data.msg ?? 'Internal API login failed');
             }
 
             // Extract CSRF token from response body
@@ -138,6 +141,7 @@ export class InternalAuthManager {
 
             logger.info('Internal API login successful');
         } catch (error) {
+            if (generation === this.generation) this.credentialCooldown.record(error);
             logger.error('Internal API login failed', {
                 baseUrl: this.http.defaults.baseURL,
                 error: error instanceof Error ? error.message : String(error),

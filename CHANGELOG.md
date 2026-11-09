@@ -6,12 +6,18 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Semantic bundled-API comparison with `yarn api:refresh --source <file-or-https-url>`, including referenced-schema changes, source hashes and explicit atomic adoption.
+- Discovery search recognizes network synonyms and camel-case terms while retaining exact-ID ranking and execution filters.
+- Partial typed SSID configuration with preservation, redacted previews, no-op detection and read-back verification; discovery sends actual basic-config writes to the dedicated workflow.
 - Automatic API discovery with `searchApiOperations`, `describeApiOperation`, and `executeApiOperation`, alongside existing tools. Live controller documentation is preferred; `OMADA_API_SPEC` selects automatic fallback, live-only or bundled mode.
 - Bounded schema descriptions and validated JSON execution, with independent read-only enforcement, default write previews, single-page results and explicit unverified-write status. Radio, DHCP and log-notification mutations retain their dedicated tools' safeguards.
 - Packaged API snapshot and repeatable `yarn smoke:discovery` read-only hardware checks.
 
 ### Fixed
 
+- Bootstrap/configuration errors stay on stderr before transport logging is initialized. Timeout and port settings reject trailing junk, fractions and out-of-range values.
+- Public/internal controller request pacing, bounded transient-read retries, permission-aware authentication renewal and a short rejected-credential cooldown.
+- Request-scoped redaction masks credentials echoed in controller error messages as well as sensitive payload fields.
 - Tool and request logs redact nested credentials, private keys and sensitive query values.
 - GET requests missing the MCP event-stream Accept header return the existing HTTP 406 response with one clear warning, without allocating a transport or emitting duplicate error stacks.
 

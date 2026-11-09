@@ -1,5 +1,7 @@
 import type { OmadaApiResponse, PaginatedResult } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { completeSsidSchema, mergeSsidConfig, ssidRecord, ssidSecurityGroupActive, ssidUpdateSchema } from '../utils/ssid-update-schema.js';
+import { verifyWrite } from '../utils/write-verification.js';
 
 import type { InternalRequestHandler } from './internalRequest.js';
 import type { RequestHandler } from './request.js';
@@ -9,6 +11,38 @@ import type { SiteOperations } from './site.js';
 const IPS_UNSUPPORTED_ERROR_CODE = -35205;
 const EVENT_SCAN_PAGE_SIZE = 1000;
 const EVENT_SCAN_MAX_PAGES = 100;
+
+function ssidRequestedFields(value: Record<string, unknown>, prefix: string[] = []): { path: string[]; value: unknown }[] {
+    return Object.entries(value).flatMap(([key, item]) => {
+        if (item === undefined) return [];
+        const path = [...prefix, key];
+        const nested = ssidRecord(item);
+        return nested ? ssidRequestedFields(nested, path) : [{ path, value: item }];
+    });
+}
+
+function ssidField(value: unknown, path: string[]): unknown {
+    return path.reduce<unknown>((record, key) => ssidRecord(record)?.[key], value);
+}
+
+function ssidFieldMatches(expected: unknown, actual: unknown): boolean {
+    if (typeof expected === 'number' && typeof actual === 'string') return String(expected) === actual;
+    if (Array.isArray(expected) && Array.isArray(actual)) {
+        return JSON.stringify([...expected].sort()) === JSON.stringify([...actual].sort());
+    }
+    return expected === actual;
+}
+
+function ssidSecretField(path: string[]): boolean {
+    return path.some((key) => /psk|password|secret|key|credential/i.test(key));
+}
+
+function ssidHiddenSecret(path: string[], value: unknown): boolean {
+    return (
+        /securityKey|password|secret/i.test(path.at(-1) ?? '') &&
+        (value === undefined || value === '[redacted]' || (typeof value === 'string' && /^\*+$/.test(value)))
+    );
+}
 
 /**
  * Network-related operations for the Omada API.
@@ -168,7 +202,7 @@ export class NetworkOperations {
      * @param wlanId - WLAN group ID (can be obtained from getWlanGroupList)
      * @param ssidId - SSID ID (can be obtained from getSsidList)
      */
-    public async updateSsid(wlanId: string, ssidId: string, data: Record<string, unknown>, siteId?: string): Promise<unknown> {
+    public async updateSsid(wlanId: string, ssidId: string, data: Record<string, unknown>, siteId?: string, dryRun = false): Promise<unknown> {
         if (!wlanId) {
             throw new Error('A wlanId must be provided. Use getWlanGroupList to get available WLAN group IDs.');
         }
@@ -176,12 +210,119 @@ export class NetworkOperations {
             throw new Error('An ssidId must be provided. Use getSsidList to get available SSID IDs.');
         }
 
+        const parsed = ssidUpdateSchema.safeParse(data);
+        if (!parsed.success) throw new Error('Invalid SSID basic configuration; use supported fields and their documented types.');
+        const requested = ssidRequestedFields(parsed.data);
+        if (requested.length === 0) throw new Error('At least one SSID field must be changed.');
+        const before = ssidRecord(await this.getSsidDetail(wlanId, ssidId, siteId));
+        if (!before) throw new Error('Cannot preserve SSID settings: the controller did not return an SSID object.');
+        for (const group of ['pskSetting', 'entSetting', 'ppskSetting']) {
+            if (
+                parsed.data[group as keyof typeof parsed.data] !== undefined &&
+                !ssidSecurityGroupActive(group, parsed.data.security ?? before.security)
+            ) {
+                throw new Error(`${group} does not apply to the selected SSID security mode. No settings were written.`);
+            }
+        }
+        const merged = mergeSsidConfig(before, parsed.data);
+        const key = ssidRecord(merged.pskSetting)?.securityKey;
+        const suppliedKey = parsed.data.pskSetting?.securityKey;
+        if (merged.security === 3 && (typeof key !== 'string' || (suppliedKey === undefined && (/^\*+$/.test(key) || key === '[redacted]')))) {
+            throw new Error('Cannot preserve a hidden SSID password. Supply the actual pskSetting.securityKey; no settings were written.');
+        }
+        const complete = completeSsidSchema.safeParse(merged);
+        if (!complete.success) {
+            const fields = complete.error.issues.map((issue) => issue.path.join('.')).join(', ');
+            throw new Error(`Cannot preserve a valid SSID basic configuration (${fields}); supply the missing settings. No settings were written.`);
+        }
+        const changes = requested
+            .filter(({ path, value }) => !ssidFieldMatches(value, ssidField(before, path)))
+            .map(({ path, value }) => ({
+                field: path.join('.'),
+                before: ssidSecretField(path) ? '[redacted]' : ssidField(before, path),
+                after: ssidSecretField(path) ? '[redacted]' : value,
+            }));
+        if (dryRun || changes.length === 0) {
+            return { dryRun, written: false, changes, verification: { status: changes.length === 0 ? 'verified' : 'not-run', attempts: 0 } };
+        }
+
+        // The API has no conditional write: refuse detected drift immediately before submitting.
+        let fresh: Record<string, unknown> | undefined;
+        try {
+            fresh = ssidRecord(await this.getSsidDetail(wlanId, ssidId, siteId));
+        } catch {
+            throw new Error('Cannot confirm unchanged SSID settings before writing. No settings were written.');
+        }
+        if (!fresh) throw new Error('Cannot confirm unchanged SSID settings before writing. No settings were written.');
+        const snapshot = mergeSsidConfig(before, {});
+        const latest = mergeSsidConfig(fresh, {});
+        const snapshotFields = [...ssidRequestedFields(snapshot), ...ssidRequestedFields(latest)];
+        if (snapshotFields.some(({ path }) => !ssidFieldMatches(ssidField(snapshot, path), ssidField(latest, path)))) {
+            throw new Error('SSID settings changed while preparing this update. Read the latest SSID and retry; no settings were written.');
+        }
+
         const resolvedSiteId = this.site.resolveSiteId(siteId);
         const path = this.buildPath(
             `/sites/${encodeURIComponent(resolvedSiteId)}/wireless-network/wlans/${encodeURIComponent(wlanId)}/ssids/${encodeURIComponent(ssidId)}/update-basic-config`
         );
-        const response = await this.request.request<OmadaApiResponse<unknown>>({ method: 'PATCH', url: path, data });
-        return this.request.ensureSuccess(response);
+        let response: OmadaApiResponse<unknown> | undefined;
+        try {
+            // A lost acknowledgement must never replay a mutation, including through auth retry.
+            response = await this.request.request<OmadaApiResponse<unknown>>({ method: 'PATCH', url: path, data: complete.data }, false);
+        } catch {
+            // Reconcile state below; request errors may contain the submitted password, so do not echo them.
+        }
+        if (response !== undefined && response.errorCode !== 0) {
+            const code = typeof response.errorCode === 'number' && Number.isFinite(response.errorCode) ? ` (errorCode: ${response.errorCode})` : '';
+            throw new Error(`SSID update rejected by the controller${code}. No automatic retry was made.`);
+        }
+        const requestedNames = new Set(requested.map(({ path }) => JSON.stringify(path)));
+        const preserved = ssidRequestedFields(complete.data).filter(({ path }) => !requestedNames.has(JSON.stringify(path)));
+        let mismatchedFields: string[] = [];
+        let unexpectedChanges: string[] = [];
+        let unverifiedPreservedFields: string[] = [];
+        const verification = await verifyWrite(
+            () => this.getSsidDetail(wlanId, ssidId, siteId),
+            (observed) => {
+                const unreadable = requested.some(
+                    ({ path }) => ssidField(observed, path) === undefined || ssidHiddenSecret(path, ssidField(observed, path))
+                );
+                mismatchedFields = requested
+                    .filter(({ path, value }) => !ssidFieldMatches(value, ssidField(observed, path)))
+                    .map(({ path }) => path.join('.'));
+                unverifiedPreservedFields = preserved
+                    .filter(({ path }) => ssidHiddenSecret(path, ssidField(observed, path)))
+                    .map(({ path }) => path.join('.'));
+                const readablePreserved = preserved.filter(({ path }) => !ssidHiddenSecret(path, ssidField(observed, path)));
+                unexpectedChanges = readablePreserved
+                    .filter(({ path, value }) => ssidField(observed, path) !== undefined && !ssidFieldMatches(value, ssidField(observed, path)))
+                    .map(({ path }) => path.join('.'));
+                const missingPreserved = readablePreserved.some(({ path }) => ssidField(observed, path) === undefined);
+                const readableRequestedMismatch = requested.some(({ path, value }) => {
+                    const actual = ssidField(observed, path);
+                    return actual !== undefined && !ssidHiddenSecret(path, actual) && !ssidFieldMatches(value, actual);
+                });
+                if (unexpectedChanges.length > 0 || readableRequestedMismatch) return false;
+                if (unreadable || missingPreserved) throw new Error('The controller did not expose all fields needed for verification.');
+                return mismatchedFields.length === 0 && unexpectedChanges.length === 0;
+            }
+        );
+        return {
+            dryRun: false,
+            written: response === undefined ? 'unknown' : true,
+            acknowledged: response !== undefined,
+            changes,
+            verification: {
+                status: verification.status,
+                attempts: verification.attempts,
+                mismatchedFields,
+                unexpectedChanges,
+                unverifiedPreservedFields,
+                ...(verification.status === 'unknown'
+                    ? { message: 'Requested settings could not be confirmed. Read the SSID before deciding whether to retry.' }
+                    : {}),
+            },
+        };
     }
 
     /**

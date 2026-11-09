@@ -224,7 +224,7 @@ The AP diagnostics use the bundled `docs/openapi/03-device.json` operations `get
 | `createFirewallAcl`     | Create a firewall ACL rule                                                                                               |
 | `updateFirewallAcl`     | Update a firewall ACL rule                                                                                               |
 | `deleteFirewallAcl`     | Delete a firewall ACL rule                                                                                               |
-| `updateSsid`            | Update an SSID's basic config (name, band, security, VLAN, PSK, etc.)                                                    |
+| `updateSsid`            | Preserve SSID settings with typed partial updates, redacted previews and read-back verification                          |
 | `setSsidEnable`         | Enable or disable an SSID network-wide                                                                                   |
 | `updateSwitchPort`      | Update switch port config (profile, PoE, speed, STP)                                                                     |
 | `updateClient`          | Update name, fixed IPv4 or rate limits through setting-specific endpoints; supports dry-run previews                     |
@@ -294,6 +294,12 @@ Automatic discovery keeps the existing tools and adds searchable API coverage. S
 ## Reliability and tool exposure
 
 Concurrent requests share OAuth renewal and web/internal logins. Responses from an invalidated login cannot overwrite newer credentials, and a late authentication error cannot clear a newer token. Authentication retries are bounded and retain controller error details.
+
+Controller requests share pacing across the public and internal APIs. GET/HEAD requests can retry transient failures twice within the request timeout, respecting bounded `Retry-After` delays; mutations are not retried for transient failures. Forbidden operations preserve the valid session, while explicit expiry still renews it. Rejected credentials enter a short cooldown to reduce repeated failed logins.
+
+`updateSsid` accepts partial basic-configuration fields and preserves required settings and nested security fields from the current SSID. Use `dryRun:true` to preview redacted changes. The default remains to apply. Inspect `verification.status`, `unexpectedChanges` and `unverifiedPreservedFields`; masked preserved values are identified explicitly. `written:"unknown"` means the write response was lost and the outcome was reconciled with reads without replaying the write. If the controller masks an existing WPA-Personal key, provide its actual value before applying a preserving update. Detected configuration drift stops the write; concurrent edits after the final read remain possible because conditional writes are not established.
+
+Some controller detail responses omit required update fields such as `mloEnable`. Supply those fields explicitly; the tool does not infer a disabled setting from missing data. If readback also omits a requested field, verification reports `unknown`. Guarded live validation confirmed preview behavior with an explicit MLO value; no SSID changes were applied.
 
 Set `MCP_TOOL_PROFILE=read-only` to expose read tools and diagnostics while excluding writes and `genericApiCall`. The default `full` profile preserves the full tool catalogue. The profile controls exposed operations; controller credentials and permissions still determine API access.
 

@@ -14,11 +14,14 @@ const createBooleanStringSchema = (defaultValue: boolean) =>
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
-const numericStringSchema = z
-    .string()
-    .optional()
-    .transform((value: string | undefined) => (value ? Number.parseInt(value, 10) : undefined))
-    .pipe(z.number().positive().optional());
+const numericStringSchema = (maximum: number) =>
+    z
+        .string()
+        .trim()
+        .regex(/^\d+$/, 'Expected a positive decimal integer')
+        .transform(Number)
+        .pipe(z.number().int().positive().max(maximum))
+        .optional();
 
 const listStringSchema = z
     .string()
@@ -53,7 +56,7 @@ const envSchema = z
         strictSsl: createBooleanStringSchema(true),
         caFile: z.string().trim().min(1, 'OMADA_CA_FILE must be a non-empty path').optional(),
         apiSpec: z.enum(['auto', 'live', 'bundled']).optional().default('auto'),
-        requestTimeout: numericStringSchema,
+        requestTimeout: numericStringSchema(2_147_483_647),
 
         // MCP Generic Server Configuration
         logLevel: z.enum(['debug', 'info', 'warn', 'error']).optional().default('info'),
@@ -63,7 +66,7 @@ const envSchema = z
         toolProfile: z.enum(['full', 'read-only']).optional().default('full'),
 
         // MCP Server HTTP/SSE Configuration
-        httpPort: numericStringSchema,
+        httpPort: numericStringSchema(65_535),
         httpTransport: z.enum(['stream', 'sse']).optional().default('stream'),
         httpBindAddr: z.string().optional(),
         httpPath: z.string().optional(),

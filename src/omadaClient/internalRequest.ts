@@ -1,9 +1,11 @@
-import axios, { type AxiosError, type AxiosInstance, type AxiosRequestConfig, type AxiosRequestHeaders } from 'axios';
+import axios, { type AxiosError, type AxiosInstance, type AxiosRequestConfig } from 'axios';
 
 import type { OmadaApiResponse } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { createRequestRedactor, redactedRequestError } from '../utils/redact.js';
 
 import type { InternalAuthManager } from './internalAuth.js';
+import { controllerRequest, remainingTimeout, requestDeadline, waitFor } from './transport.js';
 
 /**
  * HTTP request handler for Omada internal (web UI) API calls.
@@ -73,8 +75,9 @@ export class InternalRequestHandler {
     /**
      * Make an authenticated request to the internal API with retry on session expiry.
      */
-    private async request<T>(config: AxiosRequestConfig, retry = true): Promise<T> {
-        const authHeaders = await this.auth.getAuthHeaders();
+    private async request<T>(config: AxiosRequestConfig, retry = true, deadline: number | null = requestDeadline(this.http, config)): Promise<T> {
+        remainingTimeout(config, deadline);
+        const authHeaders = await waitFor(this.auth.getAuthHeaders(), config, deadline);
         const csrfToken = authHeaders['Csrf-Token'];
 
         const requestConfig: AxiosRequestConfig = {
@@ -86,35 +89,36 @@ export class InternalRequestHandler {
             withCredentials: true,
         };
 
+        const redact = createRequestRedactor(requestConfig.data, requestConfig.params, requestConfig.headers);
         const method = (requestConfig.method ?? 'GET').toUpperCase();
         const url = requestConfig.url ?? 'unknown-url';
         logger.info('Internal API request', {
             method,
-            url,
-            params: requestConfig.params,
+            url: redact(url),
+            params: redact(requestConfig.params),
         });
 
         logger.debug('Internal API request details', {
             method,
-            url,
-            headers: this.sanitizeHeaders(requestConfig.headers as AxiosRequestHeaders | undefined),
-            params: requestConfig.params ?? null,
-            data: this.sanitizePayload(requestConfig.data),
+            url: redact(url),
+            headers: redact(requestConfig.headers),
+            params: redact(requestConfig.params ?? null),
+            data: redact(requestConfig.data),
         });
 
         try {
-            const response = await this.http.request<T>(requestConfig);
+            const response = await controllerRequest<T>(this.http, requestConfig, retry, deadline);
             logger.info('Internal API response', {
                 method,
-                url,
+                url: redact(url),
                 status: response.status,
             });
 
             logger.debug('Internal API response payload', {
                 method,
-                url,
+                url: redact(url),
                 status: response.status,
-                data: this.sanitizePayload(response.data),
+                data: redact(response.data),
             });
 
             // Check for session expiry in response
@@ -122,31 +126,32 @@ export class InternalRequestHandler {
             const errorMsg = (response.data as { msg?: string } | undefined)?.msg;
 
             if (retry && this.isSessionExpired(errorCode, errorMsg)) {
-                logger.warn('Internal API session expired, re-logging in', { method, url, errorCode });
+                logger.warn('Internal API session expired, re-logging in', { method, url: redact(url), errorCode });
                 this.auth.clearSession(csrfToken);
-                return this.request<T>(config, false);
+                return this.request<T>(config, false, deadline);
             }
 
-            return response.data;
+            return typeof errorCode === 'number' && errorCode !== 0 ? (redact(response.data) as T) : response.data;
         } catch (error) {
             const status = axios.isAxiosError(error) ? error.response?.status : undefined;
             logger.error('Internal API request failed', {
                 method,
-                url,
+                url: redact(url),
                 status,
-                message: error instanceof Error ? error.message : String(error),
+                message: redact(error instanceof Error ? error.message : String(error)),
             });
 
             if (!axios.isAxiosError(error)) {
-                throw error;
+                throw redactedRequestError(error, redact);
             }
 
-            if (retry && (status === 401 || status === 403)) {
+            const body = error.response?.data as { errorCode?: number; msg?: string } | undefined;
+            if (retry && (status === 401 || this.isSessionExpired(body?.errorCode, body?.msg))) {
                 this.auth.clearSession(csrfToken);
-                return this.request<T>(config, false);
+                return this.request<T>(config, false, deadline);
             }
 
-            throw this.toDetailedError(method, url, error);
+            throw this.toDetailedError(method, url, error, redact);
         }
     }
 
@@ -155,13 +160,13 @@ export class InternalRequestHandler {
      * for an internal API request that failed at the HTTP level, instead of losing that
      * detail behind axios's generic "Request failed with status code N" message.
      */
-    private toDetailedError(method: string, url: string, error: AxiosError): Error {
+    private toDetailedError(method: string, url: string, error: AxiosError, redact: (value: unknown) => unknown): Error {
         const status = error.response?.status;
         const body = error.response?.data as { msg?: string; errorCode?: number } | undefined;
-        const detail = body?.msg ?? error.message;
+        const detail = redact(body?.msg ?? error.message);
         const statusPart = status ? ` (HTTP ${status})` : '';
         const errorCodePart = body?.errorCode !== undefined ? ` (errorCode: ${body.errorCode})` : '';
-        return new Error(`Internal API request failed: ${method} ${url}${statusPart}${errorCodePart} - ${detail}`);
+        return redactedRequestError(error, redact, `Internal API request failed: ${method} ${url}${statusPart}${errorCodePart} - ${detail}`, status);
     }
 
     /**
@@ -177,55 +182,5 @@ export class InternalRequestHandler {
             return lower.includes('token expired') || lower.includes('session expired') || lower.includes('not logged in');
         }
         return false;
-    }
-
-    /**
-     * Sanitize HTTP headers for logging, masking sensitive values.
-     */
-    private sanitizeHeaders(headers: AxiosRequestHeaders | undefined): Record<string, unknown> | undefined {
-        if (!headers) {
-            return undefined;
-        }
-
-        const sanitized: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(headers)) {
-            sanitized[key] = this.isSensitiveKey(key) ? '********' : value;
-        }
-
-        return sanitized;
-    }
-
-    /**
-     * Sanitize a payload for logging, masking sensitive values.
-     */
-    private sanitizePayload(payload: unknown): unknown {
-        if (!payload || typeof payload !== 'object') {
-            return payload;
-        }
-
-        if (Array.isArray(payload)) {
-            return payload.map((item) => this.sanitizePayload(item));
-        }
-
-        const sanitized: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(payload)) {
-            sanitized[key] = this.isSensitiveKey(key) ? '********' : this.sanitizePayload(value);
-        }
-
-        return sanitized;
-    }
-
-    /**
-     * Check if a key name indicates sensitive data.
-     */
-    private isSensitiveKey(key: string): boolean {
-        const normalized = key.toLowerCase();
-        return (
-            normalized.includes('cookie') ||
-            normalized.includes('csrf') ||
-            normalized.includes('token') ||
-            normalized.includes('password') ||
-            normalized.includes('secret')
-        );
     }
 }

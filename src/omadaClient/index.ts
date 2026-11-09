@@ -276,8 +276,8 @@ export class OmadaClient {
     }
 
     // Network write operations
-    public async updateSsid(wlanId: string, ssidId: string, data: Record<string, unknown>, siteId?: string): Promise<unknown> {
-        return await this.networkOps.updateSsid(wlanId, ssidId, data, siteId);
+    public async updateSsid(wlanId: string, ssidId: string, data: Record<string, unknown>, siteId?: string, dryRun = false): Promise<unknown> {
+        return await this.networkOps.updateSsid(wlanId, ssidId, data, siteId, dryRun);
     }
 
     public async setSsidEnable(ssidId: string, enable: boolean, siteId?: string): Promise<unknown> {

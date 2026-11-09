@@ -2,6 +2,7 @@ import type { AxiosInstance } from 'axios';
 
 import type { OmadaApiResponse, TokenResult } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { CredentialCooldown, loginError } from './transport.js';
 
 const TOKEN_EXPIRY_BUFFER_SECONDS = 30;
 
@@ -20,6 +21,7 @@ export class AuthManager implements RequestAuthManager {
     public readonly mode = 'oauth' as const;
 
     private generation = 0;
+    private readonly credentialCooldown = new CredentialCooldown();
 
     private pendingAuthentication?: { generation: number; promise: Promise<void> };
     private accessToken?: string;
@@ -68,6 +70,7 @@ export class AuthManager implements RequestAuthManager {
                 return this.accessToken;
             }
             const generation = this.generation;
+            this.credentialCooldown.check();
             let operation = this.pendingAuthentication;
             if (!operation || operation.generation !== generation) {
                 operation = {
@@ -106,13 +109,22 @@ export class AuthManager implements RequestAuthManager {
                 this.accessToken = undefined;
                 this.refreshToken = undefined;
                 this.tokenExpiresAt = undefined;
-                token = await this.authenticate('client_credentials');
+                token = await this.acquireCredentials(generation);
             }
         } else {
-            token = await this.authenticate('client_credentials');
+            token = await this.acquireCredentials(generation);
         }
         if (generation === this.generation) {
             this.setToken(token);
+        }
+    }
+
+    private async acquireCredentials(generation: number): Promise<TokenResult> {
+        try {
+            return await this.authenticate('client_credentials');
+        } catch (error) {
+            if (generation === this.generation) this.credentialCooldown.record(error);
+            throw error;
         }
     }
 
@@ -144,7 +156,7 @@ export class AuthManager implements RequestAuthManager {
                     errorCode: data.errorCode,
                     message: data.msg,
                 });
-                throw new Error(data.msg ?? 'Omada authentication failed');
+                throw loginError(data.msg ?? 'Omada authentication failed');
             }
 
             const token = data.result;
@@ -182,6 +194,7 @@ export class WebAuthManager implements RequestAuthManager {
     public readonly mode = 'web' as const;
 
     private generation = 0;
+    private readonly credentialCooldown = new CredentialCooldown();
     private csrfToken?: string;
 
     private sessionCookie?: string;
@@ -222,6 +235,7 @@ export class WebAuthManager implements RequestAuthManager {
     private async ensureSession(): Promise<void> {
         while (!this.csrfToken) {
             const generation = this.generation;
+            this.credentialCooldown.check();
             let operation = this.pendingLogin;
             if (!operation || operation.generation !== generation) {
                 operation = {
@@ -256,7 +270,7 @@ export class WebAuthManager implements RequestAuthManager {
                     errorCode: data.errorCode,
                     message: data.msg,
                 });
-                throw new Error(data.msg ?? 'Omada web authentication failed');
+                throw loginError(data.msg ?? 'Omada web authentication failed');
             }
 
             const token = data.result?.token;
@@ -272,6 +286,7 @@ export class WebAuthManager implements RequestAuthManager {
 
             logger.info('Omada web authentication successful');
         } catch (error) {
+            if (generation === this.generation) this.credentialCooldown.record(error);
             logger.error('Omada web authentication failed', {
                 baseUrl: this.http.defaults.baseURL,
                 error: error instanceof Error ? error.message : String(error),

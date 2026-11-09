@@ -5,6 +5,7 @@ vi.mock('axios');
 
 describe('RequestHandler', () => {
     let mockAxiosInstance: {
+        defaults: Record<string, unknown>;
         request: ReturnType<typeof vi.fn>;
     };
     let mockAuthManager: {
@@ -17,6 +18,7 @@ describe('RequestHandler', () => {
 
     beforeEach(() => {
         mockAxiosInstance = {
+            defaults: {},
             request: vi.fn(),
         };
 
@@ -448,12 +450,19 @@ describe('RequestHandler', () => {
 
         it('fails explicitly at the finite page ceiling without returning partial records', async () => {
             const { RequestHandler } = await import('../../src/omadaClient/request.js');
-            mockAxiosInstance.request.mockImplementation(async (config) => ({
-                data: { errorCode: 0, result: { data: [{ id: config.params.page }] } },
-            }));
-            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
-            await expect(handler.fetchPaginated('/api/items')).rejects.toThrow('1000-page safety limit');
-            expect(mockAxiosInstance.request).toHaveBeenCalledTimes(1000);
+            vi.useFakeTimers();
+            try {
+                mockAxiosInstance.request.mockImplementation(async (config) => ({
+                    data: { errorCode: 0, result: { data: [{ id: config.params.page }] } },
+                }));
+                const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+                const result = expect(handler.fetchPaginated('/api/items')).rejects.toThrow('1000-page safety limit');
+                await vi.runAllTimersAsync();
+                await result;
+                expect(mockAxiosInstance.request).toHaveBeenCalledTimes(1000);
+            } finally {
+                vi.useRealTimers();
+            }
         });
 
         it('supports a smaller endpoint-specific page size without changing the default call shape', async () => {
@@ -548,6 +557,58 @@ describe('RequestHandler', () => {
     });
 
     describe('debug logging', () => {
+        it.each(['negative-envelope', 'http-error', 'transport-error', 'string-body', 'object-body', 'auth-warning'])(
+            'redacts submitted security keys echoed in %s logs and errors',
+            async (kind) => {
+                const { RequestHandler } = await import('../../src/omadaClient/request.js');
+                const { logger } = await import('../../src/utils/logger.js');
+                const logs = [vi.spyOn(logger, 'info'), vi.spyOn(logger, 'debug'), vi.spyOn(logger, 'warn'), vi.spyOn(logger, 'error')];
+                for (const log of logs) log.mockImplementation(() => undefined);
+                const secret = 'vendor-echoed-security-key';
+                const message = `Rejected ${secret}`;
+                const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+                vi.mocked(axios.isAxiosError).mockReturnValue(true);
+                if (kind === 'negative-envelope' || kind === 'auth-warning') {
+                    mockAxiosInstance.request.mockResolvedValue({
+                        status: 200,
+                        data: { errorCode: kind === 'auth-warning' ? -44106 : -1, msg: message },
+                    });
+                    const result = await handler.post('/api/ssid', { pskSetting: { securityKey: secret } });
+                    expect(JSON.stringify(result)).not.toContain(secret);
+                    expect(() => handler.ensureSuccess(result as never)).toThrow('Rejected [redacted]');
+                } else {
+                    const error = Object.assign(new Error(message), {
+                        isAxiosError: true,
+                        ...(kind === 'transport-error'
+                            ? {}
+                            : {
+                                  response: {
+                                      status: 400,
+                                      data: kind === 'string-body' ? message : kind === 'object-body' ? { reason: message } : { msg: message },
+                                  },
+                              }),
+                    });
+                    mockAxiosInstance.request.mockRejectedValue(error);
+                    await expect(handler.post('/api/ssid', { pskSetting: { securityKey: secret } })).rejects.not.toThrow(secret);
+                }
+                expect(JSON.stringify(logs.flatMap((log) => log.mock.calls))).not.toContain(secret);
+                for (const log of logs) log.mockRestore();
+            }
+        );
+
+        it('returns successful API data unchanged while redacting its log copy', async () => {
+            const { RequestHandler } = await import('../../src/omadaClient/request.js');
+            const { logger } = await import('../../src/utils/logger.js');
+            const debug = vi.spyOn(logger, 'debug').mockImplementation(() => undefined);
+            const data = { errorCode: 0, result: { securityKey: 'preserved-config', note: 'preserved-config', channel: 36 } };
+            mockAxiosInstance.request.mockResolvedValue({ status: 200, data });
+            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+            expect(await handler.post('/api/ssid', { securityKey: 'preserved-config' })).toBe(data);
+            expect(JSON.stringify(debug.mock.calls)).not.toContain('preserved-config');
+            expect(JSON.stringify(debug.mock.calls)).toContain('"channel":36');
+            debug.mockRestore();
+        });
+
         it('redacts discovered query credentials and JSON request/response secrets', async () => {
             const { RequestHandler } = await import('../../src/omadaClient/request.js');
             const { logger } = await import('../../src/utils/logger.js');

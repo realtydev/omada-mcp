@@ -484,14 +484,21 @@ describe('WebAuthManager', () => {
         expect(mockHttp.post).toHaveBeenCalledTimes(1);
     });
 
-    it('should retry login on the next request after a failed login', async () => {
-        (mockHttp.post as ReturnType<typeof vi.fn>)
-            .mockResolvedValueOnce({ data: { errorCode: -30109, msg: 'Login failed' }, headers: {} })
-            .mockResolvedValueOnce({ data: { errorCode: 0, result: { token: 'csrf-token' } }, headers: {} });
+    it('permits another login after the credential rejection cooldown', async () => {
+        vi.useFakeTimers();
+        try {
+            (mockHttp.post as ReturnType<typeof vi.fn>)
+                .mockResolvedValueOnce({ data: { errorCode: -30109, msg: 'Login failed' }, headers: {} })
+                .mockResolvedValueOnce({ data: { errorCode: 0, result: { token: 'csrf-token' } }, headers: {} });
 
-        const authManager = new WebAuthManager(mockHttp, 'admin', 'password', 'omadac-id');
-
-        await expect(authManager.getAuthHeaders()).rejects.toThrow('Login failed');
-        await expect(authManager.getAuthHeaders()).resolves.toMatchObject({ 'Csrf-Token': 'csrf-token' });
+            const authManager = new WebAuthManager(mockHttp, 'admin', 'password', 'omadac-id');
+            await expect(authManager.getAuthHeaders()).rejects.toThrow('Login failed');
+            await expect(authManager.getAuthHeaders()).rejects.toThrow('cooling down');
+            expect(mockHttp.post).toHaveBeenCalledTimes(1);
+            await vi.advanceTimersByTimeAsync(3000);
+            await expect(authManager.getAuthHeaders()).resolves.toMatchObject({ 'Csrf-Token': 'csrf-token' });
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });

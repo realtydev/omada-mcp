@@ -130,7 +130,10 @@ describe('OperationCatalog', () => {
     it('searches IDs, summaries, tags and descriptions while enforcing method/profile filters', () => {
         const catalog = new OperationCatalog(standard(), 'live');
         expect(catalog.search({ query: 'wireless clients' })).toMatchObject({ total: 1, operations: [{ operationId: 'listClients' }] });
-        expect(catalog.search({ query: 'stations' }).total).toBe(1);
+        expect(catalog.search({ query: 'stations' }).operations.map((operation) => operation.operationId)).toEqual([
+            'listClients',
+            'updateClientName',
+        ]);
         expect(catalog.search({ query: 'updateClientName' }).operations[0].operationId).toBe('updateClientName');
         expect(catalog.search({ tag: 'CLI', method: 'patch' }).operations.map((operation) => operation.operationId)).toEqual(['updateClientName']);
         expect(catalog.search({ readOnly: true }).operations.map((operation) => operation.operationId)).toEqual(['listClients']);
@@ -145,6 +148,35 @@ describe('OperationCatalog', () => {
         expect(result.total).toBe(2);
         expect(result.operations).toHaveLength(1);
         expect(result.operations[0]).not.toHaveProperty('parameters');
+    });
+
+    it('matches common network vocabulary and camel-case keywords while preserving filters', () => {
+        const catalog = new OperationCatalog(
+            fixture({
+                [`${PREFIX}/gateways/status`]: { get: { operationId: 'getGatewayWanStatus', summary: 'Gateway connection state' } },
+                [`${PREFIX}/aps/reboot`]: { post: { operationId: 'rebootAp', summary: 'Reboot an AP' } },
+                [`${PREFIX}/aps/health`]: { get: { operationId: 'getApHealth', summary: 'AP health' } },
+            }),
+            'live'
+        );
+        expect(catalog.search({ query: 'router status' }).operations.map((operation) => operation.operationId)).toEqual(['getGatewayWanStatus']);
+        expect(catalog.search({ query: 'gatewayWanStatus' }).operations[0].operationId).toBe('getGatewayWanStatus');
+        expect(catalog.search({ query: 'restart access point' }).operations.map((operation) => operation.operationId)).toEqual(['rebootAp']);
+        expect(catalog.search({ query: 'restart access point', readOnly: true }).total).toBe(0);
+        expect(catalog.search({ query: 'router unrecognizedword' }).total).toBe(0);
+        expect(catalog.get('restart access point')).toBeUndefined();
+        expect(new OperationCatalog(standard(), 'live').search({ query: 'wi-fi client' }).operations[0].operationId).toBe('listClients');
+    });
+
+    it('ranks exact operation identities above related descriptions', () => {
+        const catalog = new OperationCatalog(
+            fixture({
+                [`${PREFIX}/one`]: { get: { operationId: 'getClientStatus', deprecated: true } },
+                [`${PREFIX}/two`]: { get: { operationId: 'alternative', summary: 'getClientStatus', tags: ['getClientStatus'] } },
+            }),
+            'live'
+        );
+        expect(catalog.search({ query: 'getClientStatus' }).operations[0].operationId).toBe('getClientStatus');
     });
 
     it.each([0, 51, 1.5, Number.NaN])('rejects invalid search limit %s', (limit) => {

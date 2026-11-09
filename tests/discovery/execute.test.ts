@@ -294,6 +294,24 @@ describe('discovered operation execution', () => {
         expect(request.request).toHaveBeenCalledTimes(1);
     });
 
+    it('directs SSID writes to the preserving workflow while allowing discovery previews', async () => {
+        const { request, run } = writeSetup(undefined, `${BASE}/wireless-network/wlans/{wlanId}/ssids/{ssidId}/update-basic-config`);
+        const params = { wlanId: 'wlan-1', ssidId: 'ssid-1' };
+        expect(await run({ params })).toMatchObject({ dryRun: true, written: false, warning: expect.stringContaining('updateSsid') });
+        await expect(run({ params, dryRun: false })).rejects.toThrow('Use updateSsid');
+        expect(request.request).not.toHaveBeenCalled();
+    });
+
+    it('keeps site-template SSID writes available because the site tool cannot update templates', async () => {
+        const { request, run } = writeSetup(
+            undefined,
+            '/openapi/v1/{omadacId}/sitetemplates/{siteTemplateId}/wireless-network/wlans/{wlanId}/ssids/{ssidId}/update-basic-config'
+        );
+        const params = { siteTemplateId: 'template-1', wlanId: 'wlan-1', ssidId: 'ssid-1' };
+        expect(await run({ params, dryRun: false })).toMatchObject({ written: true, verified: false });
+        expect(request.request).toHaveBeenCalledTimes(1);
+    });
+
     it('does not accept malformed successful response envelopes', async () => {
         const { request, run } = setup();
         request.request.mockResolvedValue({ result: [] });

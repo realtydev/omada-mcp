@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 describe('InternalRequestHandler', () => {
     let mockAxiosInstance: {
+        defaults: Record<string, unknown>;
         request: ReturnType<typeof vi.fn>;
     };
     let mockAuthManager: {
@@ -11,6 +12,7 @@ describe('InternalRequestHandler', () => {
 
     beforeEach(() => {
         mockAxiosInstance = {
+            defaults: {},
             request: vi.fn(),
         };
 
@@ -160,6 +162,43 @@ describe('InternalRequestHandler', () => {
     });
 
     describe('HTTP-level failures', () => {
+        it('redacts internal secret echoes in HTTP errors and preserves safe status/code only', async () => {
+            const { InternalRequestHandler } = await import('../../src/omadaClient/internalRequest.js');
+            const { logger } = await import('../../src/utils/logger.js');
+            const logs = [vi.spyOn(logger, 'info'), vi.spyOn(logger, 'debug'), vi.spyOn(logger, 'error')];
+            for (const log of logs) log.mockImplementation(() => undefined);
+            const secret = 'internal-radius-secret';
+            mockAxiosInstance.request.mockRejectedValue(
+                Object.assign(new Error(`Rejected ${secret}`), {
+                    isAxiosError: true,
+                    code: 'ERR_BAD_REQUEST',
+                    cause: new Error(secret),
+                    config: { data: { password: secret } },
+                    response: { status: 400, data: { msg: `Invalid ${secret}` } },
+                })
+            );
+            const handler = new InternalRequestHandler(mockAxiosInstance as never, mockAuthManager as never, 'controller');
+            const result = handler.post('/settings', { radius: { secretkey: secret } });
+            await expect(result).rejects.toMatchObject({ code: 'ERR_BAD_REQUEST', status: 400 });
+            await result.catch((error: Error) => {
+                expect(`${error.message}\n${error.stack}\n${JSON.stringify(error)}`).not.toContain(secret);
+                expect(error).not.toHaveProperty('cause');
+                expect(error).not.toHaveProperty('config');
+            });
+            expect(JSON.stringify(logs.flatMap((log) => log.mock.calls))).not.toContain(secret);
+            for (const log of logs) log.mockRestore();
+        });
+
+        it('redacts negative internal envelopes before ensureSuccess sees an echoed secret', async () => {
+            const { InternalRequestHandler } = await import('../../src/omadaClient/internalRequest.js');
+            const secret = 'internal-wireless-secret';
+            mockAxiosInstance.request.mockResolvedValue({ status: 200, data: { errorCode: -1, msg: `Rejected ${secret}` } });
+            const handler = new InternalRequestHandler(mockAxiosInstance as never, mockAuthManager as never, 'controller');
+            const result = await handler.put('/settings', { securityKey: secret });
+            expect(JSON.stringify(result)).not.toContain(secret);
+            expect(() => handler.ensureSuccess(result as never)).toThrow('Rejected [redacted]');
+        });
+
         it('keeps final authentication failure details after the one permitted retry', async () => {
             const { InternalRequestHandler } = await import('../../src/omadaClient/internalRequest.js');
             const unauthorized = Object.assign(new Error('Unauthorized'), {
