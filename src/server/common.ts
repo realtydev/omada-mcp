@@ -2,11 +2,12 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import type { CallToolResult, ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
+import type { EnvironmentConfig } from '../config.js';
 import { PACKAGE_VERSION } from '../generated/buildInfo.js';
-
 import type { OmadaClient } from '../omadaClient/index.js';
 import { registerAllTools } from '../tools/index.js';
 import { logger } from '../utils/logger.js';
+import { toolRegistrationServer } from './toolProfile.js';
 
 export const siteInputSchema = z.object({
     siteId: z.string().min(1).optional(),
@@ -180,14 +181,14 @@ function setupServerLogging(server: McpServer): void {
     };
 }
 
-export function createServer(client: OmadaClient): McpServer {
+export function createServer(client: OmadaClient, options: Pick<EnvironmentConfig, 'toolProfile'> = {}): McpServer {
     const server = new McpServer({
         name: 'omada-mcp',
         version: PACKAGE_VERSION,
     });
 
     setupServerLogging(server);
-    registerAllTools(server, client);
+    registerAllTools(toolRegistrationServer(server, options.toolProfile ?? 'full'), client);
 
     return server;
 }

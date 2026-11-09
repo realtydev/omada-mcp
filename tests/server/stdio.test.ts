@@ -34,9 +34,14 @@ describe('server/stdio', () => {
         it('should create server and connect transport', async () => {
             await startStdioServer(mockClient);
 
-            expect(commonModule.createServer).toHaveBeenCalledWith(mockClient);
+            expect(commonModule.createServer).toHaveBeenCalledWith(mockClient, {});
             expect(StdioServerTransport).toHaveBeenCalled();
             expect(mockServer.connect).toHaveBeenCalled();
+        });
+
+        it('passes the read-only exposure profile into registration', async () => {
+            await startStdioServer(mockClient, { toolProfile: 'read-only' });
+            expect(commonModule.createServer).toHaveBeenCalledWith(mockClient, { toolProfile: 'read-only' });
         });
 
         it('should log startup messages', async () => {

@@ -19,7 +19,7 @@ export type { StreamTransportState };
  * This implements the MCP protocol version 2025-03-26
  */
 export function createStreamTransport(client: OmadaClient, config: EnvironmentConfig): StreamTransportState {
-    const mcpServer = createServer(client);
+    const mcpServer = createServer(client, config);
 
     const enableStatefulSessions = config.stateful;
     const sessionIdGenerator = enableStatefulSessions ? () => randomUUID() : undefined;

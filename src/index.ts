@@ -27,7 +27,7 @@ async function main(): Promise<void> {
     if (config.useHttp) {
         await startHttpServer(client, config);
     } else {
-        await startStdioServer(client);
+        await startStdioServer(client, config);
     }
 }
 main().catch((error) => {

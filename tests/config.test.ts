@@ -55,6 +55,13 @@ describe('config', () => {
             expect(() => loadConfigFromEnv({ ...mockEnv, MCP_HTTP_MAX_SESSIONS: '100001' })).toThrow();
         });
 
+        it('defaults to the complete tool profile and accepts the read-only profile', () => {
+            expect(loadConfigFromEnv(mockEnv).toolProfile).toBe('full');
+            expect(loadConfigFromEnv({ ...mockEnv, MCP_TOOL_PROFILE: 'read-only' }).toolProfile).toBe('read-only');
+            expect(() => loadConfigFromEnv({ ...mockEnv, MCP_TOOL_PROFILE: 'admin' })).toThrow('Invalid environment configuration');
+            expect(() => loadConfigFromEnv({ ...mockEnv, MCP_TOOL_PROFILE: '' })).toThrow('Invalid environment configuration');
+        });
+
         it('should strip trailing slash from baseUrl', () => {
             mockEnv.OMADA_BASE_URL = 'https://omada.example.com/';
             const config = loadConfigFromEnv(mockEnv);
@@ -394,6 +401,7 @@ describe('config', () => {
                 logFormat: 'json',
                 useHttp: true,
                 stateful: true,
+                toolProfile: 'full',
                 httpPort: 9000,
                 httpTransport: 'sse',
                 httpBindAddr: '0.0.0.0',

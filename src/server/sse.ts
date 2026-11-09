@@ -17,7 +17,7 @@ interface SSETransportState {
  * This implements the legacy MCP protocol version 2024-11-05
  */
 export function createSseTransport(client: OmadaClient, config: EnvironmentConfig, endpoint: string, res: ServerResponse): SSETransportState {
-    const mcpServer = createServer(client);
+    const mcpServer = createServer(client, config);
 
     const transport = new SSEServerTransport(endpoint, res, {
         allowedOrigins: config.httpAllowedOrigins,

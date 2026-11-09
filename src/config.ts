@@ -58,6 +58,7 @@ const envSchema = z
         logFormat: z.enum(['plain', 'json', 'gcp-json']).optional().default('plain'),
         useHttp: createBooleanStringSchema(false),
         stateful: createBooleanStringSchema(false),
+        toolProfile: z.enum(['full', 'read-only']).optional().default('full'),
 
         // MCP Server HTTP/SSE Configuration
         httpPort: numericStringSchema,
@@ -121,6 +122,8 @@ const envSchema = z
         }
     });
 
+export type ToolProfile = 'full' | 'read-only';
+
 export interface EnvironmentConfig {
     // Omada Client Configuration
     baseUrl: string;
@@ -139,6 +142,7 @@ export interface EnvironmentConfig {
     logFormat: 'plain' | 'json' | 'gcp-json';
     useHttp: boolean;
     stateful: boolean;
+    toolProfile?: ToolProfile;
 
     // MCP Server HTTP/SSE Configuration
     httpPort?: number;
@@ -174,6 +178,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Environ
         logFormat: env.MCP_SERVER_LOG_FORMAT,
         useHttp: env.MCP_SERVER_USE_HTTP,
         stateful: env.MCP_SERVER_STATEFUL,
+        toolProfile: env.MCP_TOOL_PROFILE,
 
         // MCP Server HTTP/SSE Configuration
         httpPort: env.MCP_HTTP_PORT,
@@ -228,6 +233,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Environ
         logFormat: parsed.data.logFormat,
         useHttp: parsed.data.useHttp,
         stateful: parsed.data.stateful,
+        toolProfile: parsed.data.toolProfile,
 
         // MCP Server HTTP/SSE Configuration
         httpPort: parsed.data.httpPort,
