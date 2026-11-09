@@ -75,6 +75,13 @@ export class SessionRegistry<T extends SessionState> {
             entry.lastActivity = Date.now();
             if ('method' in message && 'id' in message) {
                 entry.activeRequests.add(JSON.stringify(message.id));
+            } else if ('method' in message && message.method === 'notifications/cancelled') {
+                // The SDK suppresses responses for cancelled requests, so no send() will release
+                // this marker. HTTP handlers remain protected until their own promises settle.
+                const requestId = message.params?.requestId;
+                if (typeof requestId === 'string' || typeof requestId === 'number') {
+                    entry.activeRequests.delete(JSON.stringify(requestId));
+                }
             }
             onmessage?.(message, extra);
         };

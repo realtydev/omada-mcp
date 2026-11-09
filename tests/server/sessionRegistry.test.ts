@@ -98,6 +98,40 @@ describe('bounded HTTP sessions', () => {
         expect(session.server.close).toHaveBeenCalledTimes(1);
     });
 
+    it('expires a cancelled tool request when the SDK suppresses its response', async () => {
+        const sessions = registry();
+        const session = state();
+        sessions.add('s1', session);
+        session.transport.onmessage({ jsonrpc: '2.0', method: 'tools/call', id: 'cancel-me' } as JSONRPCMessage);
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(session.server.close).not.toHaveBeenCalled();
+        session.transport.onmessage({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 'cancel-me' } } as JSONRPCMessage);
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(session.server.close).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps an active HTTP handler protected even after its JSON-RPC request is cancelled', async () => {
+        const sessions = registry();
+        const session = state();
+        sessions.add('s1', session);
+        let finish: (() => void) | undefined;
+        const pending = sessions.handle(
+            's1',
+            () =>
+                new Promise<void>((resolve) => {
+                    finish = resolve;
+                })
+        );
+        session.transport.onmessage({ jsonrpc: '2.0', method: 'tools/call', id: 1 } as JSONRPCMessage);
+        session.transport.onmessage({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 1 } } as JSONRPCMessage);
+        await vi.advanceTimersByTimeAsync(3000);
+        expect(session.server.close).not.toHaveBeenCalled();
+        finish?.();
+        await pending;
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(session.server.close).toHaveBeenCalledTimes(1);
+    });
+
     it('closes all sessions, clears the timer and rejects pending admissions after shutdown', async () => {
         const sessions = registry();
         const session = state();
