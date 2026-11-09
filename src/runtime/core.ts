@@ -1,12 +1,12 @@
-import { execFile } from 'node:child_process';
 import { access, chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { promisify } from 'node:util';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { parse } from 'dotenv';
+import { execa } from 'execa';
+import type { ClientRegistration } from './clients.js';
 
 export const IMAGE = 'ghcr.io/realtydev/omada-mcp';
 export const PACKAGE = '@realtydev/omada-mcp';
@@ -23,6 +23,7 @@ export interface Selection {
 }
 export interface RuntimeState {
     mode: 'stdio' | 'docker';
+    clients?: ClientRegistration[];
     current: Selection;
     previous?: Selection;
     envFile?: string;
@@ -32,16 +33,20 @@ export interface RuntimeState {
     url?: string;
 }
 export type Runner = (command: string, args: string[], cwd?: string, environment?: Record<string, string>) => Promise<string>;
-const executeFile = promisify(execFile);
 export const run: Runner = async (command, args, cwd, environment) => {
     try {
-        const { stdout } = await executeFile(command, args, {
+        const { stdout } = await execa(command, args, {
             cwd,
             env: {
                 ...process.env,
                 ...environment,
                 PATH: `${dirname(process.execPath)}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}`,
             },
+            stdin: 'ignore',
+            shell: false,
+            verbose: 'none',
+            cleanup: true,
+            killDescendants: true,
             timeout: 300_000,
             maxBuffer: 1_048_576,
             windowsHide: true,
@@ -49,7 +54,8 @@ export const run: Runner = async (command, args, cwd, environment) => {
         return stdout.trim();
     } catch (error) {
         // Subprocess errors can contain complete private output; expose only the exit code.
-        const code = (error as { code?: string | number }).code;
+        const failure = error as { code?: string; exitCode?: number };
+        const code = failure.exitCode ?? failure.code;
         if (code === 'ENOENT' || code === 'EACCES') throw new Error(`Cannot run ${command}. Check that it is installed and available.`);
         throw new Error(
             `${command} failed (${typeof code === 'number' ? `exit ${code}` : 'timeout or execution error'}). Check its installation, configuration and network access.`
@@ -71,9 +77,12 @@ export async function releaseVersion(value: string): Promise<string> {
     return version(data.tag_name?.replace(/^v/, '') ?? '');
 }
 export async function atomicJson(path: string, data: unknown): Promise<void> {
+    await atomicText(path, `${JSON.stringify(data, null, 2)}\n`);
+}
+export async function atomicText(path: string, content: string): Promise<void> {
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
     const temporary = `${path}.${process.pid}.tmp`;
-    await writeFile(temporary, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
+    await writeFile(temporary, content, { mode: 0o600 });
     await rename(temporary, path);
 }
 export function statePath(home: string, mode: string): string {
@@ -90,9 +99,9 @@ export async function readState(home: string, mode: string): Promise<RuntimeStat
         throw new Error(`No valid ${mode} setup found. Run setup ${mode} with this --home first.`);
     }
 }
-export async function withLock<T>(home: string, action: () => Promise<T>): Promise<T> {
+export async function withLock<T>(home: string, action: () => Promise<T>, name = '.runtime-lock'): Promise<T> {
     await mkdir(home, { recursive: true, mode: 0o700 });
-    const lock = join(home, '.runtime-lock');
+    const lock = join(home, name);
     try {
         await mkdir(lock);
     } catch {

@@ -4,11 +4,16 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-08
+
 ### Added
 
 - Semantic bundled-API comparison with `yarn api:refresh --source <file-or-https-url>`, including referenced-schema changes, source hashes and explicit atomic adoption.
 - Discovery search recognizes network synonyms and camel-case terms while retaining exact-ID ranking and execution filters.
 - Partial typed SSID configuration with preservation, redacted previews, no-op detection and read-back verification; discovery sends actual basic-config writes to the dedicated workflow.
+- Execa-backed runtime commands with bounded output, process cleanup and redacted errors.
+- Automatic runtime setup for Codex, Cursor and Claude Desktop, with native client configuration mappings, private backups and explicit replacement of conflicting Omada entries.
+- Registered-client refresh after verified updates and rollbacks, a reconnect command, supported Codex reload requests and optional graceful desktop restarts on macOS. Refresh results identify remaining manual actions separately from runtime readiness.
 - Automatic API discovery with `searchApiOperations`, `describeApiOperation`, and `executeApiOperation`, alongside existing tools. Live controller documentation is preferred; `OMADA_API_SPEC` selects automatic fallback, live-only or bundled mode.
 - Bounded schema descriptions and validated JSON execution, with independent read-only enforcement, default write previews, single-page results and explicit unverified-write status. Radio, DHCP and log-notification mutations retain their dedicated tools' safeguards.
 - Packaged API snapshot and repeatable `yarn smoke:discovery` read-only hardware checks.
@@ -115,7 +120,8 @@ First release as **realtydev/omada-mcp**: 78 tools, published to `ghcr.io/realty
 
 Released as [MiguelTVMS/tplink-omada-mcp](https://github.com/MiguelTVMS/tplink-omada-mcp).
 
-[Unreleased]: https://github.com/realtydev/omada-mcp/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/realtydev/omada-mcp/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/realtydev/omada-mcp/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/realtydev/omada-mcp/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/realtydev/omada-mcp/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/realtydev/omada-mcp/compare/v0.6.0...v0.6.1

@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runCli } from '../../src/runtime/cli.js';
+import * as clients from '../../src/runtime/clients.js';
 import * as core from '../../src/runtime/core.js';
+
+vi.mock('../../src/runtime/clients.js', async (importOriginal) => {
+    const original = await importOriginal<typeof clients>();
+    return { ...original, configureClient: vi.fn(), refreshClients: vi.fn() };
+});
 
 vi.mock('../../src/runtime/core.js', async (importOriginal) => {
     const original = await importOriginal<typeof core>();
@@ -48,6 +54,13 @@ beforeEach(async () => {
     vi.mocked(core.pullImage).mockResolvedValue(current);
     vi.mocked(core.switchDocker).mockResolvedValue(info);
     vi.mocked(core.run).mockResolvedValue('');
+    vi.mocked(clients.configureClient).mockResolvedValue({
+        client: 'cursor',
+        configPath: '/tmp/client.json',
+        changed: true,
+        refresh: { client: 'cursor', status: 'action-required', message: 'Reconnect' },
+    });
+    vi.mocked(clients.refreshClients).mockResolvedValue([{ client: 'cursor', status: 'action-required', message: 'Reconnect' }]);
 });
 afterEach(async () => {
     vi.restoreAllMocks();
@@ -240,5 +253,92 @@ describe('runtime commands', () => {
         await expect(cli('setup', 'docker', '--env-file', envFile)).rejects.toThrow('setup failed verification');
         expect(core.run).toHaveBeenLastCalledWith('docker', expect.arrayContaining(['rm', '--stop', '--force', 'omada-mcp']));
         await expect(core.readState(home, 'docker')).rejects.toThrow('setup docker');
+    });
+});
+
+describe('automatic client setup and refresh', () => {
+    it('configures selected clients on an existing runtime without installing or restarting it', async () => {
+        const state = await setupState('docker');
+        await cli('setup', 'docker', '--client', 'codex', 'cursor', 'codex', '--restart-clients');
+        expect(clients.configureClient).toHaveBeenCalledTimes(2);
+        expect(clients.configureClient).toHaveBeenCalledWith(home, state, 'cursor', { replace: undefined, restart: true });
+        expect(core.probe).toHaveBeenCalledWith(state);
+        expect(core.pullImage).not.toHaveBeenCalled();
+        expect(core.switchDocker).not.toHaveBeenCalled();
+        await expect(cli('setup', 'docker', '--client', 'codex', '--version', '0.8.0')).rejects.toThrow('--client only');
+    });
+    it('rejects unsupported clients and transport combinations before runtime mutation', async () => {
+        await expect(cli('setup', 'docker', '--client', 'claude-desktop')).rejects.toThrow('requires stdio');
+        await expect(cli('setup', 'stdio', '--client', 'unknown')).rejects.toThrow();
+        await expect(cli('setup', 'stdio', '--replace-client')).rejects.toThrow('requires --client');
+        expect(core.installStdio).not.toHaveBeenCalled();
+        expect(core.run).not.toHaveBeenCalled();
+    });
+    it('emits one complete setup result and configures clients after runtime activation', async () => {
+        vi.mocked(clients.configureClient).mockImplementationOnce(async (_home, state, client) => {
+            expect(await core.readState(home, 'stdio')).toEqual(state);
+            return { client, configPath: '/tmp/client.json', changed: true, refresh: { client, status: 'action-required', message: 'Reconnect' } };
+        });
+        await cli('setup', 'stdio', '--env-file', envFile, '--client', 'claude-desktop');
+        expect(process.stdout.write).toHaveBeenCalledTimes(1);
+        const output = JSON.parse(vi.mocked(process.stdout.write).mock.calls[0][0] as string);
+        expect(output.clientSetup[0].client).toBe('claude-desktop');
+        expect(output.runningBuild).toEqual(info);
+    });
+    it('preserves a healthy setup when client configuration fails and supports a client-only retry', async () => {
+        vi.mocked(clients.configureClient).mockRejectedValueOnce(new Error('conflicting entry'));
+        await expect(cli('setup', 'stdio', '--env-file', envFile, '--client', 'cursor')).rejects.toThrow('Runtime is ready');
+        expect(await core.readState(home, 'stdio')).toMatchObject({ current, envFile });
+        await cli('setup', 'stdio', '--client', 'cursor', '--replace-client');
+        expect(core.installStdio).toHaveBeenCalledTimes(1);
+        expect(clients.configureClient).toHaveBeenLastCalledWith(home, expect.anything(), 'cursor', { replace: true, restart: undefined });
+    });
+    it('refreshes saved clients after stdio update and rollback activation', async () => {
+        const state = await setupState('stdio');
+        state.clients = [{ client: 'cursor', configPath: '/tmp/client.json', restartOnUpdate: false }];
+        await core.atomicJson(core.statePath(home, 'stdio'), state);
+        const next = { version: '0.8.0', entry: '/tmp/versions/0.8.0/dist/index.js' };
+        vi.mocked(core.installStdio).mockResolvedValueOnce(next);
+        vi.mocked(clients.refreshClients).mockImplementation(async (_home, updated) => {
+            expect((await core.readState(home, 'stdio')).current).toEqual(updated.current);
+            return [{ client: 'cursor', status: 'action-required', message: 'Reconnect' }];
+        });
+        await cli('update', 'stdio', '--version', '0.8.0', '--restart-clients');
+        expect(clients.refreshClients).toHaveBeenLastCalledWith(home, expect.objectContaining({ current: next, clients: state.clients }), true);
+        expect((await core.readState(home, 'stdio')).clients).toEqual(state.clients);
+        await cli('rollback', 'stdio');
+        expect(clients.refreshClients).toHaveBeenLastCalledWith(home, expect.objectContaining({ current }), undefined);
+        expect(process.stdout.write).toHaveBeenLastCalledWith(expect.stringContaining('action-required'));
+    });
+    it('does not attempt client refresh when a candidate build fails verification', async () => {
+        const state = await setupState('stdio');
+        state.clients = [{ client: 'cursor', configPath: '/tmp/client.json', restartOnUpdate: true }];
+        await core.atomicJson(core.statePath(home, 'stdio'), state);
+        vi.mocked(core.probe).mockRejectedValueOnce(new Error('wrong build'));
+        await expect(cli('update', 'stdio', '--version', '0.8.0')).rejects.toThrow('wrong build');
+        expect(clients.refreshClients).not.toHaveBeenCalled();
+    });
+    it('retries refresh without changing the runtime and requires registered clients', async () => {
+        const state = await setupState('docker');
+        await expect(cli('reconnect', 'docker')).rejects.toThrow('No registered clients');
+        state.clients = [{ client: 'codex', configPath: '/tmp/config.toml', restartOnUpdate: false }];
+        await core.atomicJson(core.statePath(home, 'docker'), state);
+        await cli('reconnect', 'docker');
+        expect(core.probe).toHaveBeenCalledWith(state);
+        expect(clients.refreshClients).toHaveBeenCalledWith(home, state, undefined);
+        expect(core.switchDocker).not.toHaveBeenCalled();
+        expect(core.pullImage).not.toHaveBeenCalled();
+    });
+    it('refreshes registered Docker clients only after the service switch succeeds', async () => {
+        const state = await setupState('docker');
+        state.clients = [{ client: 'cursor', configPath: '/tmp/client.json', restartOnUpdate: false }];
+        await core.atomicJson(core.statePath(home, 'docker'), state);
+        await cli('update', 'docker', '--version', '0.8.0');
+        expect(clients.refreshClients).toHaveBeenCalledWith(home, state, undefined);
+        expect(vi.mocked(core.switchDocker).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(clients.refreshClients).mock.invocationCallOrder[0]);
+        vi.mocked(clients.refreshClients).mockClear();
+        vi.mocked(core.switchDocker).mockRejectedValueOnce(new Error('switch failed; restored'));
+        await expect(cli('rollback', 'docker')).rejects.toThrow('switch failed');
+        expect(clients.refreshClients).not.toHaveBeenCalled();
     });
 });
