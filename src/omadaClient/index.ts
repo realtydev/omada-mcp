@@ -152,7 +152,7 @@ export class OmadaClient {
         this.monitoringOps = new MonitoringOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.monitorOps = new MonitorOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.logNotificationOps = new LogNotificationOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
-        this.apSsidOverrideOps = new ApSsidOverrideOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.apSsidOverrideOps = new ApSsidOverrideOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this), this.networkOps);
         this.rfPlanningOps = new RfPlanningOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.apRadioOps = new ApRadioOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this), options.omadacId);
         this.networkChangeOps = new NetworkChangeOperations(

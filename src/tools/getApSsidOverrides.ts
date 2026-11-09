@@ -9,7 +9,7 @@ export function registerGetApSsidOverridesTool(server: McpServer, client: OmadaC
         'getApSsidOverrides',
         {
             description:
-                'Read one AP’s effective SSIDs and configured override flags. Passwords are always redacted. Internal web credentials are needed for configuration evidence omitted by the public API; effective reads remain available without them.',
+                'Read AP SSIDs, configured override flags and resolved inherited VLAN tagging. Legacy VLAN fields describe AP overrides; use vlan.effective for the resolved WLAN/AP configuration. Missing flags or parent evidence remain unknown. Passwords are always redacted. Internal web credentials establish configuration omitted by the public API; public reads remain available without them.',
             inputSchema: z.object({ apMac: apMacSchema, siteId: z.string().min(1).optional() }).strict(),
             annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
         },

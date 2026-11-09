@@ -105,6 +105,42 @@ describe('AP SSID override preservation', () => {
         expect(request.request).not.toHaveBeenCalled();
         expect(JSON.stringify(result)).not.toContain('secret-42');
     });
+    it('adds inheritance by ID from the evidenced WLAN without changing legacy native fields or write calls', async () => {
+        const parent = {
+            getSsidList: vi.fn().mockResolvedValue([
+                { id: 'ssid-1', vlanEnable: true, vlanId: 20, password: 'Parent-secret-42' },
+                { id: 'ssid-2', vlanEnable: true, vlanId: 30 },
+            ]),
+        };
+        const reader = new ApSsidOverrideOperations(request as never, { resolveSiteId: () => 'site' } as never, (p) => p, parent as never);
+        reader.setInternalRequest(internal as never);
+        const r = await reader.getApSsidOverrides(mac);
+        expect(r).toMatchObject({
+            vlanFieldsScope: 'ap_override',
+            inheritedVlanSource: { status: 'ok', wlanId: 'wlan' },
+            ssidOverrides: [
+                { vlan: { override: { enabled: false }, effective: { source: 'wlan_ssid', vlanId: 20 } } },
+                { vlan: { override: { enabled: true }, inherited: { vlanId: 30 }, effective: { source: 'ap_override', vlanId: 42 } } },
+            ],
+        });
+        expect(parent.getSsidList).toHaveBeenCalledExactlyOnceWith('wlan', 'site', { maxRecords: 256 });
+        expect(JSON.stringify(r)).not.toContain('Parent-secret');
+        expect(request.request).not.toHaveBeenCalled();
+        parent.getSsidList.mockClear();
+        await reader.updateApSsidOverride(mac, 1, { ssidEnable: false });
+        expect(parent.getSsidList).not.toHaveBeenCalled();
+    });
+    it('preserves useful reads and active AP resolution when parent reads fail', async () => {
+        const parent = { getSsidList: vi.fn().mockRejectedValue(new Error('private auth error')) };
+        const reader = new ApSsidOverrideOperations(request as never, { resolveSiteId: () => 'site' } as never, (p) => p, parent as never);
+        reader.setInternalRequest(internal as never);
+        const r = await reader.getApSsidOverrides(mac);
+        expect(r).toMatchObject({
+            inheritedVlanSource: { status: 'unavailable' },
+            ssidOverrides: [{ vlan: { effective: { status: 'unknown' } } }, { vlan: { effective: { status: 'resolved', vlanId: 42 } } }],
+        });
+        expect(JSON.stringify(r)).not.toContain('private auth error');
+    });
     it('writes the complete documented v2 body once, preserving an active sibling password and VLAN', async () => {
         const other = structuredClone(config[1]);
         const result = await ops.updateApSsidOverride('aabbccddeeff', 1, { ssidEnable: false }, 'site', false);

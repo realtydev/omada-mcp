@@ -1,6 +1,26 @@
 # Per-AP SSID overrides
 
-`getApSsidOverrides` reads one AP's effective SSIDs and, when internal web credentials are configured, its configured override state. Password values are always redacted. Select the returned numeric `ssidEntryId`; it is distinct from the site-wide SSID ID and the displayed SSID name.
+`getApSsidOverrides` reads one AP's SSIDs and, when internal web credentials are configured, its configured override state and inherited VLAN configuration. Password values are always redacted. Select the returned numeric `ssidEntryId`; it is distinct from the site-wide SSID ID and the displayed SSID name.
+
+## Inherited VLANs
+
+Legacy `vlanEnable`, `vlanId` and `vlanPoolIds` fields describe the controller's AP override surface, identified by `vlanFieldsScope:"ap_override"`. A false override flag does not establish an untagged SSID. Each entry now has `vlan.override`, `vlan.inherited` and `vlan.effective`:
+
+```json
+{
+    "vlanEnable": false,
+    "vlan": {
+        "scope": "configured_ssid_tagging",
+        "override": { "status": "known", "enabled": false },
+        "inherited": { "status": "resolved", "mode": "explicit_vlan", "vlanId": 20 },
+        "effective": { "status": "resolved", "mode": "explicit_vlan", "vlanId": 20, "source": "wlan_ssid" }
+    }
+}
+```
+
+The resolver reads at most 256 global SSIDs from the WLAN identified by internal AP configuration and joins by stable SSID ID, never by displayed name. An active AP VLAN override takes precedence. `inheritedVlanSource` identifies whether parent collection succeeded. Missing parent settings, unknown AP flags, ambiguous IDs, invalid values and unqualified advanced VLAN contracts remain `unknown`; a parent-read failure does not erase usable AP evidence.
+
+When the parent explicitly disables custom VLAN tagging, `mode:"default_network"` is reported without guessing VLAN 1 or another numeric ID. A controller-native pool string is retained; an exact duplicate of the scalar VLAN ID is omitted. This resolves configured SSID tagging, not dynamic per-client/RADIUS VLAN assignment, packet delivery or firewall isolation. Reads are not atomic. Legacy field values and update behavior remain unchanged, and update previews/writes do not perform parent collection.
 
 `updateApSsidOverride` applies a partial patch to exactly one entry. It defaults to a preview:
 

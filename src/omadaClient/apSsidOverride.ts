@@ -4,8 +4,10 @@ import { z } from 'zod';
 import type { OmadaApiResponse } from '../types/index.js';
 import { verifyWrite } from '../utils/write-verification.js';
 import type { InternalRequestHandler } from './internalRequest.js';
+import type { NetworkOperations } from './network.js';
 import type { RequestHandler } from './request.js';
 import type { SiteOperations } from './site.js';
+import { inheritedSsidVlans, resolveSsidVlan, type SsidVlanSetting } from './ssidVlan.js';
 
 export const apMacSchema = z.string().regex(/^(?:[\da-f]{12}|(?:[\da-f]{2}[:-]){5}[\da-f]{2})$/i);
 export const ssidEntryIdSchema = z.number().int().min(0).max(2_147_483_647);
@@ -135,7 +137,8 @@ export class ApSsidOverrideOperations {
     constructor(
         private readonly request: RequestHandler,
         private readonly site: SiteOperations,
-        private readonly buildPath: (path: string, version?: string) => string
+        private readonly buildPath: (path: string, version?: string) => string,
+        private readonly wlan?: Pick<NetworkOperations, 'getSsidList'>
     ) {}
     public setInternalRequest(request: InternalRequestHandler): void {
         this.internal = request;
@@ -188,6 +191,7 @@ export class ApSsidOverrideOperations {
         return { effective: current.entries, entries, writable, group: { apGroupId: current.group, wlanId: config.wlanId } };
     }
     public async getApSsidOverrides(apMac: string, siteId?: string): Promise<unknown> {
+        const capturedAt = Date.now();
         const target = this.path(apMac, siteId);
         const effective = await this.effective(target.path);
         let state: Snapshot | undefined;
@@ -196,11 +200,25 @@ export class ApSsidOverrideOperations {
         } catch {
             /* Effective reads remain useful without complete preservation evidence. */
         }
+        const wlanId = state && row(state.group).wlanId;
+        let parentVlans: Map<string, SsidVlanSetting> | undefined;
+        if (this.wlan && typeof wlanId === 'string' && wlanId.length > 0 && wlanId.length <= 256) {
+            try {
+                parentVlans = inheritedSsidVlans(await this.wlan.getSsidList(wlanId, target.siteId, { maxRecords: 256 }));
+            } catch {
+                /* Keep AP evidence and leave unresolved inheritance explicit. */
+            }
+        }
         return {
             apMac: target.mac,
             siteId: target.siteId,
-            capturedAt: Date.now(),
+            capturedAt,
+            completedAt: Date.now(),
             configurationSource: state ? 'internal-web-api' : 'unavailable',
+            vlanFieldsScope: 'ap_override',
+            inheritedVlanSource: parentVlans
+                ? { status: 'ok', source: 'wlan_ssid_list', wlanId }
+                : { status: 'unavailable', source: 'wlan_ssid_list' },
             ssidOverrides: effective.entries.map((e, i) => {
                 const safe = Object.fromEntries(
                     ['ssidEntryId', 'ssidId', 'ssidName', 'band', 'security', 'vlanEnable', 'vlanId', 'vlanPoolIds', 'ssidEnable']
@@ -209,11 +227,14 @@ export class ApSsidOverrideOperations {
                 );
                 return {
                     ...safe,
+                    vlan: resolveSsidVlan(state?.entries[i], parentVlans?.get(String(e.ssidId))),
                     ...(state ? { configured: redact(state.entries[i]), configurable: state.writable.get(Number(e.ssidEntryId)) } : {}),
                     password: 'redacted',
                 };
             }),
             limitations: [
+                'Legacy vlanEnable/vlanId/vlanPoolIds are AP override fields. Use vlan.effective for resolved configured SSID tagging; default_network has no guessed numeric VLAN ID.',
+                'Inheritance is joined by SSID ID within the AP’s evidenced WLAN. Reads are not atomic; dynamic client VLAN assignment, packet delivery and firewall isolation are outside this resolution.',
                 state
                     ? 'Override state is configured-state evidence, not a guarantee of live AP broadcast or connectivity.'
                     : 'Public effective settings do not establish override flags. Writes require matching internal configuration evidence.',
