@@ -5,7 +5,7 @@ import { completeSsidSchema, mergeSsidConfig, ssidRecord, ssidSecurityGroupActiv
 import { verifyWrite } from '../utils/write-verification.js';
 import type { InternalRequestHandler } from './internalRequest.js';
 import { type SsidChangeReceipt, safeSsidChangeConfig, sameShape, ssidChangeReceiptSchema } from './networkChange.js';
-import type { RequestHandler } from './request.js';
+import type { PaginationReadOptions, RequestHandler } from './request.js';
 import type { SiteOperations } from './site.js';
 
 /** errorCode returned by getIpsConfig on gateway models that don't support IDS/IPS at all. */
@@ -160,14 +160,16 @@ export class NetworkOperations {
      *
      * @param wlanId - WLAN group ID (can be obtained from getWlanGroupList)
      */
-    public async getSsidList(wlanId: string, siteId?: string): Promise<unknown[]> {
+    public async getSsidList(wlanId: string, siteId?: string, readOptions?: PaginationReadOptions): Promise<unknown[]> {
         if (!wlanId) {
             throw new Error('A wlanId must be provided. Use getWlanGroupList to get available WLAN group IDs.');
         }
 
         const resolvedSiteId = this.site.resolveSiteId(siteId);
         const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/wireless-network/wlans/${encodeURIComponent(wlanId)}/ssids`);
-        return await this.request.fetchPaginated<unknown>(path);
+        return readOptions === undefined
+            ? await this.request.fetchPaginated<unknown>(path)
+            : await this.request.fetchPaginated<unknown>(path, {}, undefined, readOptions);
     }
 
     /**
