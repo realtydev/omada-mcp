@@ -3,7 +3,7 @@ import { lstat, readFile, realpath, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { applyEdits, findNodeAtLocation, getNodeValue, type Node as JsonNode, modify, type ParseError, parseTree } from 'jsonc-parser';
-import { type RefreshResult, refreshClient } from './clientRefresh.js';
+import { type ClientRefreshOptions, type RefreshResult, refreshClient } from './clientRefresh.js';
 import { atomicJson, atomicText, localUrl, type Runner, type RuntimeState, run, statePath, withLock, writeLauncher } from './core.js';
 
 export const CLIENTS = ['codex', 'cursor', 'claude-desktop'] as const;
@@ -13,9 +13,8 @@ export interface ClientRegistration {
     configPath: string;
     restartOnUpdate: boolean;
 }
-export interface ClientSetupOptions {
+export interface ClientSetupOptions extends ClientRefreshOptions {
     replace?: boolean;
-    restart?: boolean;
     // Tests and callers with a known client profile may supply its native configuration path.
     configPath?: string;
 }
@@ -187,10 +186,20 @@ export async function configureClient(
     await atomicJson(statePath(home, state.mode), { ...state, clients });
     state.clients = clients;
     const { disabled: isDisabled, ...change } = result;
-    return { client, configPath: path, ...change, refresh: isDisabled ? disabledResult(client) : await refreshClient(registration, execute) };
+    return {
+        client,
+        configPath: path,
+        ...change,
+        refresh: isDisabled ? disabledResult(client) : await refreshClient(registration, execute, options.codexSocketPath),
+    };
 }
 
-export async function refreshClients(home: string, state: RuntimeState, restart = false, execute: Runner = run): Promise<RefreshResult[]> {
+export async function refreshClients(
+    home: string,
+    state: RuntimeState,
+    options: ClientRefreshOptions = {},
+    execute: Runner = run
+): Promise<RefreshResult[]> {
     const results: RefreshResult[] = [];
     for (const registration of state.clients ?? []) {
         try {
@@ -213,7 +222,11 @@ export async function refreshClients(home: string, state: RuntimeState, restart 
             results.push(
                 disabled(existing)
                     ? disabledResult(registration.client)
-                    : await refreshClient({ ...registration, restartOnUpdate: restart || registration.restartOnUpdate }, execute)
+                    : await refreshClient(
+                          { ...registration, restartOnUpdate: options.restart || registration.restartOnUpdate },
+                          execute,
+                          options.codexSocketPath
+                      )
             );
         } catch {
             results.push({

@@ -93,6 +93,20 @@ omada-runtime reconnect docker
 omada-runtime reconnect stdio
 ```
 
+Codex refresh connects to the existing app-server control socket using a WebSocket HTTP Upgrade and framed JSON-RPC. It initializes that connection before calling `config/mcpServer/reload`. The default socket is `app-server-control/app-server-control.sock` under the registered Codex configuration directory. It does not launch another app-server or attach to an unrelated desktop IPC socket.
+
+To select a known existing control socket explicitly:
+
+```bash
+omada-runtime reconnect docker --codex-socket /absolute/path/to/app-server-control.sock
+```
+
+`--codex-socket` also works on setup, update and rollback. It applies to that invocation only and is not saved in runtime or client configuration. Paths must be absolute filesystem paths; network URLs are rejected. A successful acknowledgment reports `reload-queued`, not verified tool availability. Check both the tool list and `getServerInfo` from the affected chat on a subsequent turn.
+
+Failed Codex refresh results include `socketPath` and a bounded `reason`, such as `socket_missing`, `socket_unavailable`, `socket_forbidden`, `reload_rejected`, `protocol_error` or `timeout`. Some Desktop instances expose no public control socket; selecting another path cannot create one or transfer their loaded chats to another app-server. The runtime leaves those sessions running and reports `action-required`.
+
+The runtime test suite includes real Unix WebSocket fixtures for initialization, acknowledgment, rejection, limits and cleanup. To additionally test an installed Codex binary in an isolated temporary profile, run `OMADA_TEST_CODEX_BINARY=/absolute/path/to/codex yarn test tests/runtime`. That acceptance test creates no chats and does not connect to the production Desktop app-server.
+
 The stdio example requires an existing stdio setup; Docker and stdio selections are independent. Claude Desktop's local configuration accepts stdio servers. The CLI does not add an HTTP-to-stdio bridge or register a Docker URL in that file.
 
 Setup adds only the `omada` server entry. Matching entries are retained, including extra client options. A different existing `omada` entry requires `--replace-client`. Before changing an existing file, setup creates an adjacent `.omada-<id>.bak` copy with private permissions. Invalid files, duplicate JSON properties and incompatible server collections are rejected without overwriting them. JSON configuration symlinks retain their target; Codex configuration symlinks require registration through Codex directly. `CODEX_HOME` selects the Codex profile. Keep backups private: they may contain other clients' secrets.

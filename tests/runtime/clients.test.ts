@@ -76,7 +76,7 @@ describe('client configuration', () => {
         const result = await configureClient(home, docker(), 'cursor', { configPath: path, replace: true, restart: true });
         expect(await readFile(result.backupPath ?? '', 'utf8')).toBe(original);
         expect((await readState(home, 'docker')).clients?.[0].restartOnUpdate).toBe(true);
-        expect(refreshClient).toHaveBeenLastCalledWith(expect.objectContaining({ restartOnUpdate: true }), expect.any(Function));
+        expect(refreshClient).toHaveBeenLastCalledWith(expect.objectContaining({ restartOnUpdate: true }), expect.any(Function), undefined);
     });
     it('rejects invalid, duplicated and incompatible config structures without writing', async () => {
         for (const original of [
@@ -167,19 +167,29 @@ describe('registered client refresh', () => {
         const state = docker();
         await configureClient(home, state, 'cursor', { configPath: path });
         vi.mocked(refreshClient).mockClear();
-        const results = await refreshClients(home, state, true);
+        const results = await refreshClients(home, state, { restart: true });
         expect(results).toHaveLength(1);
-        expect(refreshClient).toHaveBeenCalledWith(expect.objectContaining({ restartOnUpdate: true }), expect.any(Function));
+        expect(refreshClient).toHaveBeenCalledWith(expect.objectContaining({ restartOnUpdate: true }), expect.any(Function), undefined);
     });
     it('does not restart a client whose config was changed outside the runtime', async () => {
         const state = docker();
         await configureClient(home, state, 'cursor', { configPath: path });
         await writeFile(path, '{"mcpServers":{"omada":{"url":"http://127.0.0.1:3999/mcp"}}}');
         vi.mocked(refreshClient).mockClear();
-        expect(await refreshClients(home, state, true)).toEqual([
+        expect(await refreshClients(home, state, { restart: true })).toEqual([
             expect.objectContaining({ status: 'action-required', message: expect.stringContaining('changed outside') }),
         ]);
         expect(refreshClient).not.toHaveBeenCalled();
+    });
+    it('passes an explicit socket only to refresh, preserving the saved registration', async () => {
+        const state = docker();
+        await configureClient(home, state, 'cursor', { configPath: path });
+        const before = structuredClone(state);
+        const socket = join(home, 'control.sock');
+        vi.mocked(refreshClient).mockClear();
+        await refreshClients(home, state, { codexSocketPath: socket });
+        expect(refreshClient).toHaveBeenCalledWith(state.clients?.[0], expect.any(Function), socket);
+        expect(state).toEqual(before);
     });
     it('reports missing or corrupt client files without failing the runtime update', async () => {
         const state = docker();

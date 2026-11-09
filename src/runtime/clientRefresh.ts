@@ -1,103 +1,154 @@
-import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
-import { dirname } from 'node:path';
-import { createInterface } from 'node:readline';
+import { connect } from 'node:net';
+import { homedir } from 'node:os';
+import { dirname, isAbsolute, join } from 'node:path';
+import WebSocket from 'ws';
 import { PACKAGE_VERSION } from '../generated/buildInfo.js';
 import type { ClientRegistration, ManagedClient } from './clients.js';
 import { type Runner, run } from './core.js';
 
+export type ReloadFailure =
+    | 'invalid_socket_path'
+    | 'socket_missing'
+    | 'socket_unavailable'
+    | 'socket_forbidden'
+    | 'connection_failed'
+    | 'protocol_error'
+    | 'response_limit'
+    | 'reload_rejected'
+    | 'connection_closed'
+    | 'timeout';
+export interface CodexReloadResult {
+    reloaded: boolean;
+    socketPath: string;
+    reason?: ReloadFailure;
+}
 export interface RefreshResult {
     client: ManagedClient;
     status: 'reload-queued' | 'restart-requested' | 'not-running' | 'action-required';
     message: string;
+    socketPath?: string;
+    reason?: ReloadFailure;
+}
+export interface ClientRefreshOptions {
+    restart?: boolean;
+    codexSocketPath?: string;
 }
 
-// The proxy connects to an existing control socket. Never start a second app server:
-// refreshing a new process would not refresh the user's already-open client.
-export function reloadCodex(
-    createProxy: () => ChildProcessWithoutNullStreams = () => spawn('codex', ['app-server', 'proxy'], { stdio: 'pipe', windowsHide: true }),
-    timeoutMs = 5_000
-): Promise<boolean> {
+export function isCodexSocketPath(path: string): boolean {
+    return isAbsolute(path) && !Array.from(path).some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127);
+}
+
+// Connect only to an existing app-server. A new process cannot refresh Desktop's loaded chats.
+export function reloadCodex(options: { socketPath?: string; codexHome?: string; timeoutMs?: number } = {}): Promise<CodexReloadResult> {
+    const socketPath =
+        options.socketPath ??
+        join(options.codexHome ?? process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'app-server-control', 'app-server-control.sock');
+    if (!isCodexSocketPath(socketPath)) return Promise.resolve({ reloaded: false, socketPath, reason: 'invalid_socket_path' });
+    const timeoutMs = options.timeoutMs ?? 5_000;
     return new Promise((resolve) => {
-        let child: ChildProcessWithoutNullStreams;
-        try {
-            child = createProxy();
-        } catch {
-            resolve(false);
-            return;
-        }
+        let socket: WebSocket | undefined;
         let settled = false;
         let bytes = 0;
-        let reloadSent = false;
-        const lines = createInterface({ input: child.stdout });
-        const finish = (success: boolean) => {
+        let expectedId = 1;
+        const finish = (reason?: ReloadFailure) => {
             if (settled) return;
             settled = true;
             clearTimeout(timer);
-            lines.close();
-            child.stdin.end();
-            child.kill('SIGTERM');
-            resolve(success);
+            socket?.terminate();
+            resolve({ reloaded: reason === undefined, socketPath, ...(reason ? { reason } : {}) });
         };
-        const timer = setTimeout(() => finish(false), timeoutMs);
-        child.stderr.resume();
-        child.on('error', () => finish(false));
-        child.on('close', () => finish(false));
-        child.stdin.on('error', () => finish(false));
-        child.stdout.on('data', (chunk: Buffer) => {
-            bytes += chunk.length;
-            if (bytes > 1_048_576) finish(false);
+        const timer = setTimeout(() => finish('timeout'), timeoutMs);
+        try {
+            // The custom connection prevents DNS/TCP fallback and preserves literal socket paths.
+            socket = new WebSocket('ws://localhost/', {
+                createConnection: () => connect({ path: socketPath }),
+                handshakeTimeout: timeoutMs,
+                maxPayload: 1_048_576,
+                perMessageDeflate: false,
+                followRedirects: false,
+            });
+        } catch {
+            finish('connection_failed');
+            return;
+        }
+        const send = (message: unknown) =>
+            socket?.send(JSON.stringify(message), (error) => {
+                if (error) finish('connection_failed');
+            });
+        socket.on('error', (error: NodeJS.ErrnoException) => {
+            const reason =
+                error.code === 'ENOENT'
+                    ? 'socket_missing'
+                    : error.code === 'ECONNREFUSED'
+                      ? 'socket_unavailable'
+                      : error.code === 'EACCES' || error.code === 'EPERM'
+                        ? 'socket_forbidden'
+                        : error.code === 'WS_ERR_UNSUPPORTED_MESSAGE_LENGTH'
+                          ? 'response_limit'
+                          : 'connection_failed';
+            finish(reason);
         });
-        const send = (message: unknown) => child.stdin.write(`${JSON.stringify(message)}\n`);
-        lines.on('line', (line) => {
+        socket.on('close', () => finish('connection_closed'));
+        socket.on('open', () =>
+            send({ id: 1, method: 'initialize', params: { clientInfo: { name: 'omada-runtime', version: PACKAGE_VERSION }, capabilities: null } })
+        );
+        socket.on('message', (data, isBinary) => {
+            if (settled) return;
+            const frame = Buffer.isBuffer(data) ? data : Array.isArray(data) ? Buffer.concat(data) : Buffer.from(data);
+            bytes += frame.length;
+            if (bytes > 1_048_576) {
+                finish('response_limit');
+                return;
+            }
+            if (isBinary) {
+                finish('protocol_error');
+                return;
+            }
             try {
-                const response = JSON.parse(line) as { id?: number; result?: unknown; error?: unknown };
-                if (response.id !== 1 && response.id !== 2) return;
-                if (response.error !== undefined) {
-                    finish(false);
+                const response: unknown = JSON.parse(frame.toString());
+                if (response === null || typeof response !== 'object' || Array.isArray(response)) {
+                    finish('protocol_error');
                     return;
                 }
-                if (!Object.hasOwn(response, 'result')) return;
-                if (response.id === 1 && !reloadSent) {
-                    reloadSent = true;
-                    send({ method: 'initialized' });
+                if (!('id' in response) || response.id !== expectedId) return;
+                if ('error' in response) {
+                    finish('reload_rejected');
+                    return;
+                }
+                if (!('result' in response) || response.result === null || typeof response.result !== 'object' || Array.isArray(response.result)) {
+                    finish('protocol_error');
+                    return;
+                }
+                if (expectedId === 1) {
+                    expectedId = 2;
+                    send({ method: 'initialized', params: {} });
                     send({ id: 2, method: 'config/mcpServer/reload' });
-                } else if (response.id === 2) finish(reloadSent);
+                } else finish();
             } catch {
-                finish(false);
+                finish('protocol_error');
             }
         });
-        send({ id: 1, method: 'initialize', params: { clientInfo: { name: 'omada-runtime', version: PACKAGE_VERSION }, capabilities: null } });
     });
 }
 
-export async function refreshClient(
-    registration: ClientRegistration,
-    execute: Runner = run,
-    reload?: () => Promise<boolean>
-): Promise<RefreshResult> {
+export async function refreshClient(registration: ClientRegistration, execute: Runner = run, codexSocketPath?: string): Promise<RefreshResult> {
     const { client } = registration;
     if (client === 'codex') {
-        const reloaded = await (reload
-            ? reload()
-            : reloadCodex(() =>
-                  spawn('codex', ['app-server', 'proxy'], {
-                      stdio: 'pipe',
-                      windowsHide: true,
-                      env: { ...process.env, CODEX_HOME: dirname(registration.configPath) },
-                  })
-              ));
+        const { reloaded, ...detail } = await reloadCodex({ socketPath: codexSocketPath, codexHome: dirname(registration.configPath) });
         if (reloaded)
             return {
                 client,
                 status: 'reload-queued',
+                ...detail,
                 message:
-                    'The running Codex app server acknowledged the MCP reload. Refresh is queued for loaded chats; verify getServerInfo inside the client.',
+                    'The existing Codex app server acknowledged the MCP reload. Refresh is queued for its loaded chats; verify the tool list and getServerInfo inside each client.',
             };
         return {
             client,
             status: 'action-required',
+            ...detail,
             message:
-                'The existing Codex control socket is unavailable. Restart Omada from MCP settings in the app, or reconnect the running CLI session. No app or session was stopped.',
+                'Could not reload the existing Codex app server. Check the socketPath and reason; use --codex-socket for a known existing control socket. Desktop may expose no public control socket. No app or session was stopped.',
         };
     }
     const name = client === 'cursor' ? 'Cursor' : 'Claude Desktop';
