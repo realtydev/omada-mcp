@@ -4,6 +4,7 @@ import { isAbsolute, join, resolve } from 'node:path';
 import { Command, CommanderError, Option } from 'commander';
 import { PACKAGE_VERSION } from '../generated/buildInfo.js';
 import { loadCaCertificates } from '../omadaClient/httpOptions.js';
+import { isCodexSocketPath } from './clientRefresh.js';
 import { CLIENTS, configureClient, type ManagedClient, refreshClients, validateClientMode } from './clients.js';
 import {
     atomicJson,
@@ -39,6 +40,7 @@ interface RuntimeOptions {
     client?: ManagedClient[];
     replaceClient?: boolean;
     restartClients?: boolean;
+    codexSocket?: string;
 }
 
 export async function runCli(argv: string[]): Promise<void> {
@@ -92,7 +94,9 @@ Claude Desktop local setup uses stdio; it does not accept a local HTTP URL.
                 if (mode === 'stdio') child.option('--package <path>', 'local release archive instead of downloading');
             }
             if (['setup', 'update', 'rollback', 'reconnect'].includes(command))
-                child.option('--restart-clients', 'opt into graceful Cursor/Claude Desktop app restarts on macOS');
+                child
+                    .option('--restart-clients', 'opt into graceful Cursor/Claude Desktop app restarts on macOS')
+                    .option('--codex-socket <path>', 'absolute path to the existing Codex app-server control socket (this invocation only)');
             if (command === 'setup') {
                 child
                     .addOption(new Option('--client <clients...>', 'configure selected MCP clients automatically').choices([...CLIENTS]))
@@ -127,6 +131,8 @@ Claude Desktop local setup uses stdio; it does not accept a local HTTP URL.
 
 async function executeCommand(command: string, mode: 'stdio' | 'docker', values: RuntimeOptions): Promise<void> {
     if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('Node 24 or newer is required.');
+    if (values.codexSocket !== undefined && !isCodexSocketPath(values.codexSocket))
+        throw new Error('--codex-socket must be an absolute filesystem path without control characters.');
     const home = resolve(values.home ?? join(homedir(), '.omada-mcp'));
     if (command === 'status' || command === 'doctor') {
         const state = await readState(home, mode);
@@ -180,7 +186,11 @@ async function executeCommand(command: string, mode: 'stdio' | 'docker', values:
         const state = await readState(home, mode);
         if (command === 'reconnect') {
             if (!state.clients?.length) throw new Error(`No registered clients. Run setup ${mode} --client codex or cursor first.`);
-            emit({ mode, runningBuild: await probe(state), clientRefresh: await refreshClients(home, state, values.restartClients) });
+            emit({
+                mode,
+                runningBuild: await probe(state),
+                clientRefresh: await refreshClients(home, state, { restart: values.restartClients, codexSocketPath: values.codexSocket }),
+            });
             return;
         }
         if (mode === 'docker') await verifyDockerSelection(home, state);
@@ -199,7 +209,15 @@ async function executeCommand(command: string, mode: 'stdio' | 'docker', values:
                 mode,
                 runningBuild: info,
                 reconnectClients: !state.clients?.length,
-                ...(state.clients?.length ? { clientRefresh: await refreshClients(home, { ...state, current: target }, values.restartClients) } : {}),
+                ...(state.clients?.length
+                    ? {
+                          clientRefresh: await refreshClients(
+                              home,
+                              { ...state, current: target },
+                              { restart: values.restartClients, codexSocketPath: values.codexSocket }
+                          ),
+                      }
+                    : {}),
             });
         } else {
             // A pull precedes any Compose mutation, including rollback after a daemon/image-cache reset.
@@ -210,7 +228,15 @@ async function executeCommand(command: string, mode: 'stdio' | 'docker', values:
             emit({
                 mode,
                 runningBuild: info,
-                ...(state.clients?.length ? { clientRefresh: await refreshClients(home, { ...state, current: target }, values.restartClients) } : {}),
+                ...(state.clients?.length
+                    ? {
+                          clientRefresh: await refreshClients(
+                              home,
+                              { ...state, current: target },
+                              { restart: values.restartClients, codexSocketPath: values.codexSocket }
+                          ),
+                      }
+                    : {}),
             });
         }
     });
@@ -376,7 +402,13 @@ async function setupClients(home: string, state: RuntimeState, clients: ManagedC
     const results = [];
     for (const client of clients) {
         try {
-            results.push(await configureClient(home, state, client, { replace: values.replaceClient, restart: values.restartClients }));
+            results.push(
+                await configureClient(home, state, client, {
+                    replace: values.replaceClient,
+                    restart: values.restartClients,
+                    codexSocketPath: values.codexSocket,
+                })
+            );
         } catch (error) {
             throw new Error(
                 `Runtime is ready, but ${client} setup failed: ${error instanceof Error ? error.message : 'check client configuration'}. Retry setup ${state.mode} --client ${client} without runtime setup flags.`

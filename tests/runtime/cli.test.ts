@@ -344,7 +344,11 @@ describe('automatic client setup and refresh', () => {
         expect(await core.readState(home, 'stdio')).toMatchObject({ current, envFile });
         await cli('setup', 'stdio', '--client', 'cursor', '--replace-client');
         expect(core.installStdio).toHaveBeenCalledTimes(1);
-        expect(clients.configureClient).toHaveBeenLastCalledWith(home, expect.anything(), 'cursor', { replace: true, restart: undefined });
+        expect(clients.configureClient).toHaveBeenLastCalledWith(home, expect.anything(), 'cursor', {
+            replace: true,
+            restart: undefined,
+            codexSocketPath: undefined,
+        });
     });
     it('refreshes saved clients after stdio update and rollback activation', async () => {
         const state = await setupState('stdio');
@@ -357,10 +361,16 @@ describe('automatic client setup and refresh', () => {
             return [{ client: 'cursor', status: 'action-required', message: 'Reconnect' }];
         });
         await cli('update', 'stdio', '--version', '0.8.0', '--restart-clients');
-        expect(clients.refreshClients).toHaveBeenLastCalledWith(home, expect.objectContaining({ current: next, clients: state.clients }), true);
+        expect(clients.refreshClients).toHaveBeenLastCalledWith(home, expect.objectContaining({ current: next, clients: state.clients }), {
+            restart: true,
+            codexSocketPath: undefined,
+        });
         expect((await core.readState(home, 'stdio')).clients).toEqual(state.clients);
         await cli('rollback', 'stdio');
-        expect(clients.refreshClients).toHaveBeenLastCalledWith(home, expect.objectContaining({ current }), undefined);
+        expect(clients.refreshClients).toHaveBeenLastCalledWith(home, expect.objectContaining({ current }), {
+            restart: undefined,
+            codexSocketPath: undefined,
+        });
         expect(process.stdout.write).toHaveBeenLastCalledWith(expect.stringContaining('action-required'));
     });
     it('does not attempt client refresh when a candidate build fails verification', async () => {
@@ -378,16 +388,34 @@ describe('automatic client setup and refresh', () => {
         await core.atomicJson(core.statePath(home, 'docker'), state);
         await cli('reconnect', 'docker');
         expect(core.probe).toHaveBeenCalledWith(state);
-        expect(clients.refreshClients).toHaveBeenCalledWith(home, state, undefined);
+        expect(clients.refreshClients).toHaveBeenCalledWith(home, state, { restart: undefined, codexSocketPath: undefined });
         expect(core.switchDocker).not.toHaveBeenCalled();
         expect(core.pullImage).not.toHaveBeenCalled();
+    });
+    it('passes an explicit Codex socket to reconnect without saving it or changing the service', async () => {
+        const state = await setupState('docker');
+        state.clients = [{ client: 'codex', configPath: '/tmp/config.toml', restartOnUpdate: false }];
+        await core.atomicJson(core.statePath(home, 'docker'), state);
+        const socket = join(home, 'custom control.sock');
+        await cli('reconnect', 'docker', '--codex-socket', socket);
+        expect(clients.refreshClients).toHaveBeenLastCalledWith(home, state, { restart: undefined, codexSocketPath: socket });
+        expect(await core.readState(home, 'docker')).toEqual(state);
+        expect(core.switchDocker).not.toHaveBeenCalled();
+        expect(core.pullImage).not.toHaveBeenCalled();
+    });
+    it('rejects invalid Codex socket paths before any runtime work', async () => {
+        for (const socket of ['relative.sock', 'ws://localhost:1234', '/tmp/bad\n.sock']) {
+            await expect(cli('reconnect', 'docker', '--codex-socket', socket)).rejects.toThrow('--codex-socket');
+        }
+        expect(core.probe).not.toHaveBeenCalled();
+        expect(clients.refreshClients).not.toHaveBeenCalled();
     });
     it('refreshes registered Docker clients only after the service switch succeeds', async () => {
         const state = await setupState('docker');
         state.clients = [{ client: 'cursor', configPath: '/tmp/client.json', restartOnUpdate: false }];
         await core.atomicJson(core.statePath(home, 'docker'), state);
         await cli('update', 'docker', '--version', '0.8.0');
-        expect(clients.refreshClients).toHaveBeenCalledWith(home, state, undefined);
+        expect(clients.refreshClients).toHaveBeenCalledWith(home, state, { restart: undefined, codexSocketPath: undefined });
         expect(vi.mocked(core.switchDocker).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(clients.refreshClients).mock.invocationCallOrder[0]);
         vi.mocked(clients.refreshClients).mockClear();
         vi.mocked(core.switchDocker).mockRejectedValueOnce(new Error('switch failed; restored'));
