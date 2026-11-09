@@ -341,6 +341,7 @@ function rejectUnknownBodyFields(schema: Schema, body: unknown, catalog: Operati
 
 function preferredWriteTool(operation: ApiOperation): string | undefined {
     if (operation.method === 'GET') return undefined;
+    if (operation.method === 'PATCH' && /\/aps\/\{[^}]+\}\/override$/.test(operation.path)) return 'updateApSsidOverride';
     if (/\/aps\/\{[^}]+\}\/radio-config$/.test(operation.path)) return 'setApRadio';
     if (/\/site\/log-notification$/.test(operation.path)) return 'setLogNotifications';
     if (operation.method === 'PUT' && /\/rate-limit-profile\/\{[^}]+\}$/.test(operation.path)) return 'updateRateLimitProfile';

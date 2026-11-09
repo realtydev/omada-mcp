@@ -43,6 +43,8 @@ const groups: Record<ToolCategory, readonly string[]> = {
         'reconnectClient',
     ],
     wireless: [
+        'getApSsidOverrides',
+        'updateApSsidOverride',
         'getApRadios',
         'getApRfScanResults',
         'getApAfcStatus',

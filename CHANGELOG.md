@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- Typed per-AP SSID override reads and updates with redacted previews, internal configuration evidence, sibling preservation, preflight drift refusal and bounded read-back verification.
+
 ## [0.11.0] - 2026-11-09
 
 ### Added

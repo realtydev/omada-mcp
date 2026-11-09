@@ -311,6 +311,13 @@ describe('discovered operation execution', () => {
         await expect(run({ params, dryRun: false })).rejects.toThrow('Use updateSsid');
         expect(request.request).not.toHaveBeenCalled();
     });
+    it.each(['v1', 'v2'])('directs %s per-AP override writes to the preserving workflow', async (version) => {
+        const { request, run } = writeSetup(undefined, `/openapi/${version}/{omadacId}/sites/{siteId}/aps/{apMac}/override`);
+        const params = { apMac: 'AA-BB-CC-DD-EE-FF' };
+        expect(await run({ params })).toMatchObject({ dryRun: true, warning: expect.stringContaining('updateApSsidOverride') });
+        await expect(run({ params, dryRun: false })).rejects.toThrow('updateApSsidOverride');
+        expect(request.request).not.toHaveBeenCalled();
+    });
 
     it('keeps site-template SSID writes available because the site tool cannot update templates', async () => {
         const { request, run } = writeSetup(

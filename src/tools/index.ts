@@ -31,6 +31,7 @@ import { registerGetApAfcStatusTool } from './getApAfcStatus.js';
 import { registerGetApAvailableChannelsTool } from './getApAvailableChannels.js';
 import { registerGetApRadiosTool } from './getApRadios.js';
 import { registerGetApRfScanResultsTool } from './getApRfScanResults.js';
+import { registerGetApSsidOverridesTool } from './getApSsidOverrides.js';
 import { registerGetCableTestResultsTool } from './getCableTestResults.js';
 import { registerGetClientTool } from './getClient.js';
 import { registerGetClientHistoryTool } from './getClientHistory.js';
@@ -96,6 +97,7 @@ import { registerSetSwitchPortStatusTool } from './setSwitchPortStatus.js';
 import { registerStartCableTestTool } from './startCableTest.js';
 import { registerStartFirmwareUpgradeTool } from './startFirmwareUpgrade.js';
 import { registerUnblockClientTool } from './unblockClient.js';
+import { registerUpdateApSsidOverrideTool } from './updateApSsidOverride.js';
 import { registerUpdateClientTool } from './updateClient.js';
 import { registerUpdateDhcpReservationTool } from './updateDhcpReservation.js';
 import { registerUpdateFirewallAclTool } from './updateFirewallAcl.js';
@@ -126,6 +128,8 @@ export function registerAllTools(
     registerUpdateRateLimitProfileTool(server, client);
     registerRollbackNetworkChangeTool(server, client);
     // Read tools
+    registerGetApSsidOverridesTool(server, client);
+    registerUpdateApSsidOverrideTool(server, client);
     registerGetControllerCapabilitiesTool(server, client);
     registerDiagnoseClientTool(server, client);
     registerDiagnoseLogsTool(server, client);
