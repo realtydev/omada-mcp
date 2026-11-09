@@ -12,7 +12,7 @@
 
 </div>
 
-> **Release:** [v0.10.0](https://github.com/realtydev/omada-mcp/releases/tag/v0.10.0) includes 104 tools, automatic API discovery, richer diagnostics and verified profile rollback. Use `getServerInfo` to confirm the running build.
+> **Release:** [v0.10.1](https://github.com/realtydev/omada-mcp/releases/tag/v0.10.1) includes 104 tools, automatic API discovery, richer diagnostics and verified profile rollback. Use `getServerInfo` to confirm the running build.
 
 ```text
 You:    Why is the guest SSID slow on the upstairs AP?
