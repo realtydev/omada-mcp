@@ -4,9 +4,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-11-09
+
 ### Fixed
 
 - Codex runtime refresh uses WebSocket framing over the existing control socket instead of sending JSONL through a raw byte relay. Added per-invocation `--codex-socket`, bounded failure reasons, real socket fixtures and optional installed-Codex acceptance coverage.
+
+- Portal upload example includes the required picture type, validated with a live dry run.
 
 ## [0.10.0] - 2026-11-09
 
