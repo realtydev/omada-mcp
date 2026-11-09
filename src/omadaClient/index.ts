@@ -41,6 +41,7 @@ import {
     type DhcpReservationWriteResult,
 } from './dhcpReservation.js';
 import { type DiagnoseClientResult, type DiagnoseLogsResult, DiagnosticsOperations } from './diagnostics.js';
+import { DiscoveryOperations, type DiscoveryPolicy, type ExecuteApiOperationOptions, type SearchApiOperationsOptions } from './discovery.js';
 import { GenericOperations } from './generic.js';
 import { createControllerHttpOptions } from './httpOptions.js';
 import { InternalAuthManager } from './internalAuth.js';
@@ -89,6 +90,8 @@ export class OmadaClient {
 
     private readonly genericOps: GenericOperations;
 
+    private readonly discoveryOps: DiscoveryOperations;
+
     private readonly switchOps: SwitchOperations;
 
     private readonly logNotificationOps: LogNotificationOperations;
@@ -120,6 +123,7 @@ export class OmadaClient {
         this.apRadioOps = new ApRadioOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.actionOps = new ActionOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.genericOps = new GenericOperations(this.request, this.buildOmadaPath.bind(this));
+        this.discoveryOps = new DiscoveryOperations(this.request, this.http, options);
         this.switchOps = new SwitchOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.diagnosticsOps = new DiagnosticsOperations(this);
 
@@ -539,6 +543,18 @@ export class OmadaClient {
     }
 
     // Generic API operations
+    public async searchApiOperations(options: SearchApiOperationsOptions = {}, policy: DiscoveryPolicy = {}): Promise<unknown> {
+        return await this.discoveryOps.searchApiOperations(options, policy);
+    }
+
+    public async describeApiOperation(operationId: string, policy: DiscoveryPolicy = {}): Promise<unknown> {
+        return await this.discoveryOps.describeApiOperation(operationId, policy);
+    }
+
+    public async executeApiOperation(options: ExecuteApiOperationOptions, policy: DiscoveryPolicy = {}): Promise<unknown> {
+        return await this.discoveryOps.executeApiOperation(options, policy);
+    }
+
     public async genericApiCall(
         method: string,
         path: string,

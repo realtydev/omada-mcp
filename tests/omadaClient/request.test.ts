@@ -548,6 +548,20 @@ describe('RequestHandler', () => {
     });
 
     describe('debug logging', () => {
+        it('redacts discovered query credentials and JSON request/response secrets', async () => {
+            const { RequestHandler } = await import('../../src/omadaClient/request.js');
+            const { logger } = await import('../../src/utils/logger.js');
+            const info = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
+            const debug = vi.spyOn(logger, 'debug').mockImplementation(() => undefined);
+            mockAxiosInstance.request.mockResolvedValue({ status: 200, headers: {}, data: { errorCode: 0, result: { apiKey: 'returned-key' } } });
+            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+            await handler.post('/api/test', { psk: 'wireless-password', privateKey: 'private-key-material' }, { password: 'query-secret', page: 1 });
+            const output = JSON.stringify([...info.mock.calls, ...debug.mock.calls]);
+            for (const secret of ['returned-key', 'wireless-password', 'private-key-material', 'query-secret']) expect(output).not.toContain(secret);
+            expect(output).toContain('"page":1');
+            info.mockRestore();
+            debug.mockRestore();
+        });
         it('never logs the web session cookie in request or response headers', async () => {
             const { RequestHandler } = await import('../../src/omadaClient/request.js');
             const { logger } = await import('../../src/utils/logger.js');

@@ -62,6 +62,28 @@ export async function handleStreamRequest(
     parsedBody?: unknown,
     existingTransport?: StreamTransportState
 ): Promise<StreamTransportState | void> {
+    // A browser visit or ordinary HTTP health probe cannot open the MCP event stream.
+    // Reject it before allocating an MCP server so the SDK does not report this
+    // expected protocol mismatch as a transport failure.
+    if (req.method === 'GET' && !req.headers.accept?.includes('text/event-stream')) {
+        let path = '(invalid path)';
+        try {
+            path = new URL(req.url ?? '/', 'http://localhost').pathname;
+        } catch {
+            /* Do not reflect malformed request targets or query values into logs. */
+        }
+        logger.warn('Streamable HTTP request rejected', { reason: 'missing_event_stream_accept', method: 'GET', path });
+        res.writeHead(406, { 'Content-Type': 'application/json' });
+        res.end(
+            JSON.stringify({
+                jsonrpc: '2.0',
+                error: { code: -32000, message: 'Not Acceptable: Client must accept text/event-stream' },
+                id: null,
+            })
+        );
+        return;
+    }
+
     const originHeader = req.headers.origin;
     const hostHeader = req.headers.host;
 
