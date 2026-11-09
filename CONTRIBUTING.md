@@ -43,6 +43,6 @@ Endpoint paths and payloads should match the bundled Open API spec in `docs/open
 
 ## Releasing (maintainers)
 
-1. Move the `Unreleased` notes in `CHANGELOG.md` under a new version heading and bump `version` in `package.json`.
+1. Move the `Unreleased` notes in `CHANGELOG.md` under a new version heading and bump `version` in `package.json`. Update the release-availability notices and tool counts in both READMEs to match the new release.
 2. Merge to `main`, then tag: `git tag v0.7.0 && git push origin v0.7.0`.
 3. The Release workflow publishes `ghcr.io/realtydev/omada-mcp:{version}` and `:latest`, then creates the GitHub release from the changelog.
