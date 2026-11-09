@@ -54,4 +54,6 @@ OC200 / Controller 6.3.0.45 validation used the bundled fallback because the sta
 
 ## MSP scope
 
+When category scopes are configured, MSP operations require `msp:r`/`msp:rw` or the matching `all` fallback; customer-site categories do not implicitly grant cross-customer access.
+
 Set `OMADA_MSP_ID` explicitly for `/openapi/v1/msp/{mspId}/...` operations. It is never inferred from or substituted with the controller ID, and callers cannot override it in tool inputs. `OMADA_OMADAC_ID` remains the controller/customer context used by existing tools. If OAuth credentials were issued for a different principal, `OMADA_AUTH_ID` overrides the identifier in token requests only; it does not change either route context. Use the principal and permissions issued with your integration. MSP access is fixture-tested because the available live controller is not an MSP account.

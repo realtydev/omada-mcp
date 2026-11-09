@@ -47,4 +47,4 @@ Batch tools: `batchSetSwitchPortName`, `batchSetSwitchPortPoe`, `batchSetSwitchP
 
 Discovery previews remain available. Actual discovered writes to these setting endpoints direct callers to the dedicated workflows. The read-only profile excludes mutations, including write previews. Guarded hardware previews use a full-profile server with the transport read-only guard installed.
 
-Controller 6.3.0.45 validation passed a two-port name preview and a PoE no-op preview that correctly remained blocked with override disabled. No switch mutations were applied; apply, lost-acknowledgement and mismatch behavior have controlled fixture coverage.
+Controller 6.3.0.45 validation passed a two-port name preview and a PoE no-op preview that correctly remained blocked with override disabled. A subsequent guarded live test renamed one confirmed unused port, verified the change, restored its original name and verified the original configuration. The guard allowed exactly those two label writes. Power, link status, profile, VLAN and radio settings were not changed. Lost-acknowledgement and mismatch behavior have controlled fixture coverage.

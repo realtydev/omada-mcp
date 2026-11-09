@@ -74,6 +74,7 @@ describe('tool exposure profiles', () => {
             'getSiteDashboard',
             'diagnoseClient',
             'diagnoseLogs',
+            'diagnoseWifi',
         ]) {
             expect(tools.some((tool) => tool.name === name)).toBe(true);
         }

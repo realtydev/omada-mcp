@@ -12,7 +12,7 @@
 
 </div>
 
-> **Release:** [v0.10.0](https://github.com/realtydev/omada-mcp/releases/tag/v0.10.0) includes 103 tools, automatic API discovery, richer diagnostics and verified profile rollback. Use `getServerInfo` to confirm the running build.
+> **Release:** [v0.10.0](https://github.com/realtydev/omada-mcp/releases/tag/v0.10.0) includes 104 tools, automatic API discovery, richer diagnostics and verified profile rollback. Use `getServerInfo` to confirm the running build.
 
 ```text
 You:    Why is the guest SSID slow on the upstairs AP?
@@ -29,10 +29,11 @@ Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned
 ## Highlights
 
 - **Automatic API discovery.** `searchApiOperations` → `describeApiOperation` → `executeApiOperation`. Prefer the controller's live specification, with an explicit bundled fallback containing 1,676 indexed operations. Unsupported operations are identified; a catalogue entry does not prove device support. See [API discovery](docs/api-discovery.md).
-- **103 tools, including 53 in read-only mode.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
+- **104 tools, including 54 in read-only mode before category filtering.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
 - **Traffic, RF and WAN diagnostics.** Bounded history and timestamped evidence distinguish missing metrics, partial results and truncation. See [network workflows](docs/network-workflows.md).
 - **MSP, OpenAPI 3.1 and files.** Explicit MSP scope, JSON Schema 2020 validation and opt-in bounded multipart uploads/binary downloads. See [file transfers](docs/file-transfers.md).
 - **Guarded configuration changes.** Discovered writes default to validated previews. Radio, DHCP, SSID, switch-port, rate-limit profile and log-notification writes retain dedicated safeguards. Rate-limit profile changes include drift-checked rollback receipts. Other discovered writes explicitly report that they have not been verified by reading settings back.
+- **Wi-Fi audit snapshots and scoped tools.** Compare AP radio configuration across matching snapshots with [Wi-Fi audits](docs/wifi-audit.md), and limit dedicated/discovered operations with [category scopes](docs/scoped-tools.md).
 - **Explicit read-only access.** `MCP_TOOL_PROFILE=read-only` blocks writes, including discovered operations. Controller permissions still govern which data is accessible.
 - **Two API surfaces.** The official Omada Open API, plus the controller's internal web UI API for features the Open API doesn't expose (ACLs, routes, port forwarding on OC200).
 - **OAuth and web authentication.** Open API client credentials or Fusion gateway web-session auth, with optional web UI credentials for internal-API tools. Private controller CAs are supported without disabling TLS verification.
@@ -147,18 +148,19 @@ For Fusion gateways that do not expose Platform Integration OAuth credentials, s
 
 ### MCP Server
 
-| Variable                           | Required | Default     | Description                                                        |
-| ---------------------------------- | -------- | ----------- | ------------------------------------------------------------------ |
-| `MCP_SERVER_LOG_LEVEL`             | No       | `info`      | `debug`, `info`, `warn`, `error`, `silent`                         |
-| `MCP_SERVER_LOG_FORMAT`            | No       | `plain`     | `plain`, `json`, `gcp-json`                                        |
-| `MCP_SERVER_USE_HTTP`              | No       | `false`     | Enable HTTP transport                                              |
-| `MCP_TOOL_PROFILE`                 | No       | `full`      | `full` or `read-only`; read-only excludes writes and generic calls |
-| `MCP_HTTP_SESSION_IDLE_TIMEOUT_MS` | No       | `1800000`   | Idle session lifetime; positive integer milliseconds               |
-| `MCP_HTTP_MAX_SESSIONS`            | No       | `100`       | Maximum retained and initializing HTTP/SSE sessions                |
-| `MCP_SERVER_STATEFUL`              | No       | `false`     | Stateful sessions                                                  |
-| `MCP_HTTP_PORT`                    | No       | `3000`      | HTTP port                                                          |
-| `MCP_HTTP_TRANSPORT`               | No       | `stream`    | `stream` or `sse`                                                  |
-| `MCP_HTTP_BIND_ADDR`               | No       | `127.0.0.1` | Bind address                                                       |
+| Variable                           | Required | Default     | Description                                                                  |
+| ---------------------------------- | -------- | ----------- | ---------------------------------------------------------------------------- |
+| `MCP_SERVER_LOG_LEVEL`             | No       | `info`      | `debug`, `info`, `warn`, `error`, `silent`                                   |
+| `MCP_SERVER_LOG_FORMAT`            | No       | `plain`     | `plain`, `json`, `gcp-json`                                                  |
+| `MCP_SERVER_USE_HTTP`              | No       | `false`     | Enable HTTP transport                                                        |
+| `MCP_TOOL_PROFILE`                 | No       | `full`      | `full` or `read-only`; read-only excludes writes and generic calls           |
+| `MCP_TOOL_CATEGORIES`              | No       | —           | Optional category permissions, e.g. `all:r,wireless:rw`; see scoped profiles |
+| `MCP_HTTP_SESSION_IDLE_TIMEOUT_MS` | No       | `1800000`   | Idle session lifetime; positive integer milliseconds                         |
+| `MCP_HTTP_MAX_SESSIONS`            | No       | `100`       | Maximum retained and initializing HTTP/SSE sessions                          |
+| `MCP_SERVER_STATEFUL`              | No       | `false`     | Stateful sessions                                                            |
+| `MCP_HTTP_PORT`                    | No       | `3000`      | HTTP port                                                                    |
+| `MCP_HTTP_TRANSPORT`               | No       | `stream`    | `stream` or `sse`                                                            |
+| `MCP_HTTP_BIND_ADDR`               | No       | `127.0.0.1` | Bind address                                                                 |
 
 ## Tools
 
@@ -178,13 +180,14 @@ For Fusion gateways that do not expose Platform Integration OAuth credentials, s
 | `getSiteTopology`               | Controller-discovered topology, uplinks and link speeds; requires web UI credentials                                                                                |
 | `getSiteDashboard`              | Wi-Fi, traffic, wireless retry/drop averages, switch and PoE summaries with explicit partial results                                                                |
 | `getTrafficHistory`             | Bounded timestamped AP/switch traffic history                                                                                                                       |
-| `getWifiHistory`                  | Channel, interference, retry/drop and optional mesh evidence                                                                                                        |
+| `getWifiHistory`                | Channel, interference, retry/drop and optional mesh evidence                                                                                                        |
 | `diagnoseWan`                   | Gateway WAN status, ISP history and health evidence                                                                                                                 |
 | `listVpnConnections`            | Paginated tunnel/IPsec or protocol-filtered site-to-site, server and client VPN status                                                                              |
 | `getGatewayWanSpeedTestResults` | Read saved gateway WAN speed-test results without starting a test                                                                                                   |
 | `listDhcpReservations`          | Read all DHCP reservation pages, optionally filtered by search text                                                                                                 |
 | `diagnoseClient`                | Combine client attachment, device, topology and history evidence with explicit completeness and staleness                                                           |
 | `diagnoseLogs`                  | Combine bounded alert/event samples for an explicit time window, preserving failures and truncation                                                                 |
+| `diagnoseWifi`                  | Audit bounded Wi-Fi evidence and compare portable radio-configuration snapshots, with explicit missing/stale data                                                   |
 | `getClientHistory`              | A client's association sessions over a time range, optionally with roams between APs                                                                                |
 | `getClient`                     | Get details for a specific client                                                                                                                                   |
 | `getSwitchStackDetail`          | Get switch stack configuration and status                                                                                                                           |
@@ -318,6 +321,10 @@ Some controller detail responses omit required update fields such as `mloEnable`
 Switch-port tools provide previews, preflight checks and per-port configuration readback. PoE requires affirmative support evidence and an enabled override; explicit disruption risks require caller intent. See [switch safety](docs/switch-safety.md) for blockers, unknown evidence and supported settings. [Controller capabilities](docs/controller-capabilities.md) separates metadata, API documentation and one optional SSID sample from verified hardware support.
 
 Set `MCP_TOOL_PROFILE=read-only` to expose read tools and diagnostics while excluding writes and `genericApiCall`. The default `full` profile preserves the full tool catalogue. The profile controls exposed operations; controller credentials and permissions still determine API access.
+
+Use `MCP_TOOL_CATEGORIES=all:r,wireless:rw` to read across known categories and allow wireless writes only. Category-specific permissions, the global read-only profile and per-server restrictions intersect across dedicated tools, discovery and raw API calls. Invalid/empty scopes and unclassified routes fail closed. See [scoped tool profiles](docs/scoped-tools.md).
+
+`diagnoseWifi` collects bounded dashboard, radio and saved-RF evidence without starting scans. Save its `snapshot` and pass it as `baseline` for a scope-matched configuration comparison. Missing data is explicit; unchanged configuration does not establish good performance. See [Wi-Fi audit](docs/wifi-audit.md).
 
 HTTP/SSE sessions default to a 30-minute idle timeout (`MCP_HTTP_SESSION_IDLE_TIMEOUT_MS=1800000`) and a limit of 100 sessions (`MCP_HTTP_MAX_SESSIONS=100`). Capacity includes sessions being initialized. Full capacity returns HTTP 503 with a retry hint. Active tool calls are protected from idle expiry; keeping an event stream open alone does not keep a session alive. SSE accepts the SDK's `sessionId` query parameter as well as the legacy session header.
 

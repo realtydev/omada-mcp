@@ -8,6 +8,7 @@ import type { OmadaClient } from '../omadaClient/index.js';
 import { registerAllTools } from '../tools/index.js';
 import { logger } from '../utils/logger.js';
 import { redactForLogs } from '../utils/redact.js';
+import { ToolAccessPolicy } from './toolPolicy.js';
 import { toolRegistrationServer } from './toolProfile.js';
 
 export const siteInputSchema = z.object({
@@ -182,15 +183,18 @@ function setupServerLogging(server: McpServer): void {
     };
 }
 
-export function createServer(client: OmadaClient, options: Pick<EnvironmentConfig, 'toolProfile'> = {}): McpServer {
+export function createServer(client: OmadaClient, options: Pick<EnvironmentConfig, 'toolProfile' | 'toolCategories'> = {}): McpServer {
     const server = new McpServer({
         name: 'omada-mcp',
         version: PACKAGE_VERSION,
     });
 
     setupServerLogging(server);
-    const profile = options.toolProfile ?? 'full';
-    registerAllTools(toolRegistrationServer(server, profile), client, profile);
+    const policyClient: { getToolAccessPolicy?: () => ToolAccessPolicy } = client;
+    const configured = policyClient.getToolAccessPolicy?.() ?? new ToolAccessPolicy();
+    const access = configured.intersect(new ToolAccessPolicy(options.toolProfile, options.toolCategories));
+    const profile = access.readOnly ? 'read-only' : 'full';
+    registerAllTools(toolRegistrationServer(server, profile, access), client, profile, access);
 
     return server;
 }

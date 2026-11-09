@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server for TP-Link Omada network diagnostics and configuration, with stdio and HTTP transports and a runtime CLI for managed Docker setup, updates and rollback.
 
-> **Release:** The [v0.10.0 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.10.0) includes 103 tools, automatic API discovery, richer diagnostics and verified profile rollback. `getServerInfo` identifies the running build.
+> **Release:** The [v0.10.0 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.10.0) includes 104 tools, automatic API discovery, richer diagnostics and verified profile rollback. `getServerInfo` identifies the running build.
 
 ## Runtime management
 
@@ -78,7 +78,7 @@ The HTTP server will be available at `http://localhost:3000/mcp` (stream transpo
 ## Features
 
 - OAuth client-credentials authentication with automatic token refresh, plus web-session authentication for Fusion gateways
-- 103 tools for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
+- 104 tools for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
 - Automatic API discovery: search, describe and execute documented JSON operations with live/bundled source information and write previews
 - Dedicated dashboard, topology and client/log diagnostics, with guarded DHCP, radio and log-notification workflows
 - Read-only profile enforced for dedicated tools and discovered operations
@@ -125,6 +125,7 @@ For a private CA, mount its certificate bundle read-only (for example, `-v /path
 | `MCP_SERVER_LOG_FORMAT`            | No       | `plain`   | Log output format (`plain`, `json`, or `gcp-json`)                    |
 | `MCP_SERVER_USE_HTTP`              | No       | `false`   | Start HTTP server instead of stdio                                    |
 | `MCP_TOOL_PROFILE`                 | No       | `full`    | `full` or `read-only`; excludes writes and generic calls in read-only |
+| `MCP_TOOL_CATEGORIES`              | No       | —         | Optional category permissions, e.g. `all:r,wireless:rw`               |
 | `MCP_HTTP_SESSION_IDLE_TIMEOUT_MS` | No       | `1800000` | Positive integer idle session lifetime in milliseconds                |
 | `MCP_HTTP_MAX_SESSIONS`            | No       | `100`     | Maximum retained and initializing HTTP/SSE sessions                   |
 | `MCP_SERVER_STATEFUL`              | No       | `false`   | Maintain stateful sessions per client                                 |
@@ -251,13 +252,14 @@ If an intermediary strips the `Mcp-Session-Id` header, set `MCP_SERVER_STATEFUL=
 | `getSiteTopology`               | Controller-discovered topology, uplinks and link speeds; requires web UI credentials                                                                                |
 | `getSiteDashboard`              | Wi-Fi, traffic, wireless retry/drop averages, switch and PoE summaries with explicit partial results                                                                |
 | `getTrafficHistory`             | Bounded timestamped AP/switch traffic history                                                                                                                       |
-| `getWifiHistory`                  | Channel, interference, retry/drop and optional mesh evidence                                                                                                        |
+| `getWifiHistory`                | Channel, interference, retry/drop and optional mesh evidence                                                                                                        |
 | `diagnoseWan`                   | Gateway WAN status, ISP history and health evidence                                                                                                                 |
 | `listVpnConnections`            | Paginated tunnel/IPsec or protocol-filtered site-to-site, server and client VPN status                                                                              |
 | `getGatewayWanSpeedTestResults` | Read saved gateway WAN speed-test results without starting a test                                                                                                   |
 | `listDhcpReservations`          | Read all DHCP reservation pages, optionally filtered by search text                                                                                                 |
 | `diagnoseClient`                | Combine client attachment, device, topology and history evidence with explicit completeness and staleness                                                           |
 | `diagnoseLogs`                  | Combine bounded alert/event samples for an explicit time window, preserving failures and truncation                                                                 |
+| `diagnoseWifi`                  | Audit bounded Wi-Fi evidence and compare portable radio-configuration snapshots, with explicit missing/stale data                                                   |
 | `getClientHistory`              | A client's association sessions over a time range, optionally with roams between APs                                                                                |
 | `getClient`                     | Get details for a specific client                                                                                                                                   |
 | `getSwitchStackDetail`          | Get switch stack configuration and status                                                                                                                           |

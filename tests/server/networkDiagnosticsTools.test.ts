@@ -4,8 +4,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OmadaClient } from '../../src/omadaClient/index.js';
 import { registerDiagnoseWanTool } from '../../src/tools/diagnoseWan.js';
-import { registerGetWifiHistoryTool } from '../../src/tools/getWifiHistory.js';
 import { registerGetTrafficHistoryTool } from '../../src/tools/getTrafficHistory.js';
+import { registerGetWifiHistoryTool } from '../../src/tools/getWifiHistory.js';
 
 const closers: Array<() => Promise<void>> = [];
 afterEach(async () => {

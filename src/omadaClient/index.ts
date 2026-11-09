@@ -1,6 +1,7 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
 
 import type { EnvironmentConfig } from '../config.js';
+import { createClientPolicyProxy, ToolAccessPolicy } from '../server/toolPolicy.js';
 import type {
     ActiveClientInfo,
     ApRadioBand,
@@ -65,10 +66,11 @@ import {
     type RateLimitProfileUpdate,
     type RateLimitProfileWriteResult,
 } from './rateLimitProfile.js';
-import { RequestHandler } from './request.js';
+import { type PaginationReadOptions, RequestHandler } from './request.js';
 import { SecurityOperations } from './security.js';
 import { SiteOperations } from './site.js';
 import { SwitchOperations } from './switch.js';
+import { type GetWifiAuditOptions, WifiAuditOperations, type WifiAuditResult } from './wifiAudit.js';
 
 export type OmadaClientOptions = EnvironmentConfig;
 
@@ -80,6 +82,8 @@ export class OmadaClient {
     private readonly http: AxiosInstance;
 
     private readonly auth: RequestAuthManager;
+
+    private readonly accessPolicy: ToolAccessPolicy;
 
     private readonly request: RequestHandler;
 
@@ -96,6 +100,8 @@ export class OmadaClient {
     private readonly rateLimitProfileOps: RateLimitProfileOperations;
 
     private readonly diagnosticsOps: DiagnosticsOperations;
+
+    private readonly wifiAuditOps: WifiAuditOperations;
 
     private readonly dhcpReservationOps: DhcpReservationOperations;
 
@@ -121,6 +127,7 @@ export class OmadaClient {
 
     constructor(options: OmadaClientOptions) {
         this.omadacId = options.omadacId;
+        this.accessPolicy = new ToolAccessPolicy(options.toolProfile, options.toolCategories);
 
         this.http = axios.create(createControllerHttpOptions(options));
 
@@ -143,11 +150,12 @@ export class OmadaClient {
         this.logNotificationOps = new LogNotificationOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.apRadioOps = new ApRadioOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.actionOps = new ActionOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
-        this.genericOps = new GenericOperations(this.request, this.buildOmadaPath.bind(this));
+        this.genericOps = new GenericOperations(this.request, this.buildOmadaPath.bind(this), this.accessPolicy);
         this.discoveryOps = new DiscoveryOperations(this.request, this.http, options);
         this.capabilityOps = new ControllerCapabilityOperations(this.http, this.discoveryOps, options, this);
         this.switchOps = new SwitchOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.diagnosticsOps = new DiagnosticsOperations(this);
+        this.wifiAuditOps = new WifiAuditOperations(this, { omadacId: options.omadacId, siteId: options.siteId });
 
         // Initialize internal API support if web credentials are configured
         if (options.webUsername && options.webPassword) {
@@ -157,6 +165,11 @@ export class OmadaClient {
             this.monitoringOps.setInternalRequest(internalReq);
             logger.info('Internal web UI API enabled for ACL management');
         }
+        return createClientPolicyProxy(this, this.accessPolicy);
+    }
+
+    public getToolAccessPolicy(): ToolAccessPolicy {
+        return this.accessPolicy;
     }
 
     // Site operations
@@ -168,13 +181,17 @@ export class OmadaClient {
         return await this.capabilityOps.getControllerCapabilities(options);
     }
 
+    public async diagnoseWifi(options: GetWifiAuditOptions = {}): Promise<WifiAuditResult> {
+        return await this.wifiAuditOps.diagnoseWifi(options);
+    }
+
     public async getSiteDashboard(options: SiteDashboardOptions = {}): Promise<SiteDashboardResult> {
         return await this.monitorOps.getSiteDashboard(options);
     }
 
     // Device operations
-    public async listDevices(siteId?: string): Promise<OmadaDeviceInfo[]> {
-        return await this.deviceOps.listDevices(siteId);
+    public async listDevices(siteId?: string, readOptions?: PaginationReadOptions): Promise<OmadaDeviceInfo[]> {
+        return readOptions === undefined ? await this.deviceOps.listDevices(siteId) : await this.deviceOps.listDevices(siteId, readOptions);
     }
 
     public async getDevice(identifier: string, siteId?: string): Promise<OmadaDeviceInfo | undefined> {

@@ -4,6 +4,7 @@ import { Ajv2020 } from 'ajv/dist/2020.js';
 import _addFormats, { type FormatsPlugin } from 'ajv-formats';
 
 import type { RequestHandler } from '../omadaClient/request.js';
+import type { ToolAccessPolicy } from '../server/toolPolicy.js';
 import type { ApiOperation, ApiParameter, OperationCatalog } from './catalog.js';
 import { prepareTransfer } from './transfer.js';
 
@@ -26,6 +27,7 @@ export interface DiscoveryExecutionContext {
     maxTransferBytes?: number;
     siteId?: string;
     readOnly: boolean;
+    accessPolicy?: ToolAccessPolicy;
 }
 
 export interface DiscoveredExecutionResult {
@@ -385,9 +387,11 @@ export async function executeDiscoveredOperation(
     const operation = catalog.get(options.operationId);
     if (!operation) throw new Error('Unknown or ambiguous operationId. Search and describe the operation first.');
     const mutation = operation.method !== 'GET';
-    if (context.readOnly && (options.files !== undefined || options.downloadFile !== undefined))
+    const readOnly = context.readOnly || context.accessPolicy?.readOnly === true;
+    if (readOnly && (options.files !== undefined || options.downloadFile !== undefined))
         throw new Error('Read-only profile blocks file transfers, including local downloads.');
-    if (context.readOnly && mutation) throw new Error('Read-only profile blocks mutating API operations, including previews.');
+    if (readOnly && mutation) throw new Error('Read-only profile blocks mutating API operations, including previews.');
+    context.accessPolicy?.assertOperation(operation.method, operation.path);
     if (typeof catalog.document.openapi !== 'string' || !/^3\.[01](?:\.|$)/.test(catalog.document.openapi))
         throw new Error('Execution supports OpenAPI 3.0 and 3.1 only.');
     if (

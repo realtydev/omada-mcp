@@ -29,6 +29,7 @@ export interface ApiOperation {
 }
 
 export interface ApiSearchOptions {
+    allowsOperation?: (operation: ApiOperation) => boolean;
     query?: string;
     tag?: string;
     method?: string;
@@ -402,6 +403,7 @@ export class OperationCatalog {
         const terms = searchTerms(query);
         const tag = options.tag?.toLowerCase().trim();
         const matches = this.operations
+            .filter((operation) => !options.allowsOperation || options.allowsOperation(operation))
             .filter((operation) => (!options.readOnly || operation.method === 'GET') && (!method || operation.method === method))
             .filter((operation) => !tag || operation.tags.some((entry) => entry.toLowerCase().includes(tag)))
             .map((operation) => ({ operation, score: searchScore(operation, query, terms) }))

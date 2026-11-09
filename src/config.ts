@@ -1,6 +1,6 @@
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
-
+import { parseToolCategories } from './server/toolPolicy.js';
 import { isValidBindAddress, isValidOrigin } from './utils/config-validations.js';
 import { logger } from './utils/logger.js';
 
@@ -69,6 +69,16 @@ const envSchema = z
         useHttp: createBooleanStringSchema(false),
         stateful: createBooleanStringSchema(false),
         toolProfile: z.enum(['full', 'read-only']).optional().default('full'),
+        toolCategories: z
+            .string()
+            .optional()
+            .superRefine((value, context) => {
+                try {
+                    parseToolCategories(value);
+                } catch (error) {
+                    context.addIssue({ code: 'custom', message: error instanceof Error ? error.message : 'Invalid MCP_TOOL_CATEGORIES' });
+                }
+            }),
 
         // MCP Server HTTP/SSE Configuration
         httpPort: numericStringSchema(65_535),
@@ -163,6 +173,7 @@ export interface EnvironmentConfig {
     useHttp: boolean;
     stateful: boolean;
     toolProfile?: ToolProfile;
+    toolCategories?: string;
 
     // MCP Server HTTP/SSE Configuration
     httpPort?: number;
@@ -205,6 +216,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Environ
         useHttp: env.MCP_SERVER_USE_HTTP,
         stateful: env.MCP_SERVER_STATEFUL,
         toolProfile: env.MCP_TOOL_PROFILE,
+        toolCategories: env.MCP_TOOL_CATEGORIES,
 
         // MCP Server HTTP/SSE Configuration
         httpPort: env.MCP_HTTP_PORT,
@@ -266,6 +278,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Environ
         useHttp: parsed.data.useHttp,
         stateful: parsed.data.stateful,
         toolProfile: parsed.data.toolProfile,
+        toolCategories: parsed.data.toolCategories,
 
         // MCP Server HTTP/SSE Configuration
         httpPort: parsed.data.httpPort,

@@ -3,10 +3,11 @@ import type { AnySchema, ZodRawShapeCompat } from '@modelcontextprotocol/sdk/ser
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 
 import type { ToolProfile } from '../config.js';
+import { ToolAccessPolicy } from './toolPolicy.js';
 
 /** Apply exposure policy only while registering tools; the returned MCP server remains untouched. */
-export function toolRegistrationServer(server: McpServer, profile: ToolProfile): McpServer {
-    if (profile === 'full') {
+export function toolRegistrationServer(server: McpServer, profile: ToolProfile, policy = new ToolAccessPolicy(profile)): McpServer {
+    if (policy.unrestricted) {
         return server;
     }
 
@@ -27,13 +28,26 @@ export function toolRegistrationServer(server: McpServer, profile: ToolProfile):
                 ) => {
                     // Unknown naming families fail closed, even when they claim to be read-only.
                     const discoveryRead = ['describeApiOperation', 'executeApiOperation'].includes(name) && config.annotations?.readOnlyHint === true;
-                    if ((!/^(get|list|search|diagnose)[A-Z]/.test(name) && !discoveryRead) || config.annotations?.destructiveHint === true) {
+                    if (
+                        policy.readOnly &&
+                        ((!/^(get|list|search|diagnose)[A-Z]/.test(name) && !discoveryRead) || config.annotations?.destructiveHint === true)
+                    ) {
                         return undefined;
                     }
+                    if (!policy.allowsTool(name, config.annotations?.destructiveHint === true)) return undefined;
                     return target.registerTool<OutputArgs, InputArgs>(
                         name,
-                        { ...config, annotations: { ...config.annotations, readOnlyHint: true, destructiveHint: false } },
-                        handler
+                        policy.readOnly || !policy.permitsWrites
+                            ? { ...config, annotations: { ...config.annotations, readOnlyHint: true, destructiveHint: false } }
+                            : config,
+                        (async (args: unknown, extra: unknown) => {
+                            policy.assertTool(name, args, config.annotations?.destructiveHint === true);
+                            if (name === 'genericApiCall') {
+                                const request = args as { method: string; path: string; version?: string; queryParams?: Record<string, unknown> };
+                                policy.assertGeneric(request.method, request.path, request.version ?? 'v1', request.queryParams);
+                            }
+                            return await Reflect.apply(handler, undefined, [args, extra]);
+                        }) as ToolCallback<InputArgs>
                     );
                 };
             }

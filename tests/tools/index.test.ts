@@ -33,6 +33,7 @@ describe('tools/index', () => {
                 'getControllerCapabilities',
                 'diagnoseClient',
                 'diagnoseLogs',
+                'diagnoseWifi',
                 'listDhcpReservations',
                 'createDhcpReservation',
                 'updateDhcpReservation',

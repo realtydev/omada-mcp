@@ -1,6 +1,6 @@
 import type { GatewayWanStatus, GetDeviceStatsOptions, OmadaApiResponse, OmadaDeviceInfo, OmadaDeviceStats, OswStackDetail } from '../types/index.js';
 
-import type { RequestHandler } from './request.js';
+import type { PaginationReadOptions, RequestHandler } from './request.js';
 import type { SiteOperations } from './site.js';
 
 /**
@@ -16,9 +16,12 @@ export class DeviceOperations {
     /**
      * List all devices in a site.
      */
-    public async listDevices(siteId?: string): Promise<OmadaDeviceInfo[]> {
+    public async listDevices(siteId?: string, readOptions?: PaginationReadOptions): Promise<OmadaDeviceInfo[]> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
-        return await this.request.fetchPaginated<OmadaDeviceInfo>(this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/devices`));
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/devices`);
+        return readOptions === undefined
+            ? await this.request.fetchPaginated<OmadaDeviceInfo>(path)
+            : await this.request.fetchPaginated<OmadaDeviceInfo>(path, {}, undefined, readOptions);
     }
 
     /**
