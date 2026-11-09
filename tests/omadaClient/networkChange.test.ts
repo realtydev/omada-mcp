@@ -293,6 +293,20 @@ describe('AP radio durable receipt rollback', () => {
         await expect(h.ops.rollbackApRadioChange(r, false)).rejects.toThrow('changed after');
         expect(h.request.request).toHaveBeenCalledTimes(1);
     });
+    it.each([true, false])('rejects radio drift introduced during channel preflight (dryRun=%s)', async (dryRun) => {
+        const h = radios();
+        const receipt = (await h.ops.setApRadio(mac, '5g', { txPower: 20 })).rollbackReceipt!;
+        h.request.get.mockImplementation((url) => {
+            if (url.endsWith('/available-channel')) {
+                h.set({ radioSetting5g: { ...h.get().radioSetting5g, channelWidth: '7' } });
+                return Promise.resolve({ errorCode: 0, result: [{ radioId: 1, apChannelDetailList: [{ index: 1, channel: 36, freq: 5180 }] }] });
+            }
+            return Promise.resolve({ errorCode: 0, result: h.get() });
+        });
+        await expect(h.ops.rollbackApRadioChange(receipt, dryRun)).rejects.toThrow('changed while preparing restoration');
+        expect(h.request.request).toHaveBeenCalledTimes(1);
+        expect(h.get().radioSetting5g).toMatchObject({ txPower: 20, channelWidth: '7' });
+    });
     it('reconciles an uncertain radio mutation without replay', async () => {
         const h = radios();
         h.request.request.mockImplementationOnce((input) => {

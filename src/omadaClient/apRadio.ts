@@ -186,6 +186,11 @@ export class ApRadioOperations {
             const freq = await this.resolveFreq(`${base}/available-channel`, parsed.apMac, parsed.band, desired.channel);
             if (freq !== desired.freq) throw new Error('Rollback refused: the original channel/frequency is no longer available.');
         }
+        // Channel validation performs another controller read. Refuse drift introduced during
+        // that preflight before returning a preview or submitting the single restoration write.
+        const fresh = radioChangeConfig(await this.readConfig(path));
+        if (!fresh || !isDeepStrictEqual(fresh, parsed.applied))
+            throw new Error('Rollback refused: AP radio settings changed while preparing restoration.');
         const result = {
             operation: 'rollback',
             resource: parsed.resource,
