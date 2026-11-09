@@ -32,6 +32,13 @@ const listStringSchema = z
             : undefined
     );
 
+const boundedIntegerStringSchema = (defaultValue: number, maximum: number) =>
+    z
+        .string()
+        .optional()
+        .transform((value) => (value === undefined ? defaultValue : Number(value)))
+        .pipe(z.number().int().min(1).max(maximum));
+
 const envSchema = z
     .object({
         // Omada Client Configuration
@@ -63,6 +70,8 @@ const envSchema = z
         httpAllowedOrigins: listStringSchema,
         httpNgrokEnabled: createBooleanStringSchema(false),
         httpNgrokAuthToken: z.string().optional(),
+        httpSessionIdleTimeoutMs: boundedIntegerStringSchema(1_800_000, 2_147_483_647),
+        httpMaxSessions: boundedIntegerStringSchema(100, 100_000),
     })
     .refine(
         (data) => {
@@ -142,6 +151,8 @@ export interface EnvironmentConfig {
     httpAllowedOrigins?: string[];
     httpNgrokEnabled: boolean;
     httpNgrokAuthToken?: string;
+    httpSessionIdleTimeoutMs?: number;
+    httpMaxSessions?: number;
 }
 
 export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): EnvironmentConfig {
@@ -175,6 +186,8 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Environ
         httpAllowedOrigins: env.MCP_HTTP_ALLOWED_ORIGINS,
         httpNgrokEnabled: env.MCP_HTTP_NGROK_ENABLED,
         httpNgrokAuthToken: env.MCP_HTTP_NGROK_AUTH_TOKEN,
+        httpSessionIdleTimeoutMs: env.MCP_HTTP_SESSION_IDLE_TIMEOUT_MS,
+        httpMaxSessions: env.MCP_HTTP_MAX_SESSIONS,
     });
 
     if (!parsed.success) {
@@ -227,5 +240,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Environ
         httpAllowedOrigins,
         httpNgrokEnabled: parsed.data.httpNgrokEnabled,
         httpNgrokAuthToken: parsed.data.httpNgrokAuthToken,
+        httpSessionIdleTimeoutMs: parsed.data.httpSessionIdleTimeoutMs,
+        httpMaxSessions: parsed.data.httpMaxSessions,
     };
 }

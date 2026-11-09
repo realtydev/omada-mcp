@@ -54,11 +54,10 @@ export async function handleSseConnection(
         host: hostHeader ?? '(not set)',
     });
 
+    const { transport, server } = createSseTransport(client, config, endpoint, res);
     try {
-        const { transport, server } = createSseTransport(client, config, endpoint, res);
-
+        // McpServer.connect starts the transport; a second start rejects real SSE clients.
         await server.connect(transport);
-        await transport.start();
 
         logger.info('SSE connection established', {
             sessionId: transport.sessionId,
@@ -66,6 +65,7 @@ export async function handleSseConnection(
 
         return { transport, server };
     } catch (error) {
+        await Promise.allSettled([server.close(), transport.close()]);
         logger.error('Failed to establish SSE connection', {
             error,
             origin: originHeader ?? '(not set)',

@@ -41,6 +41,20 @@ describe('config', () => {
             expect(config.stateful).toBe(false); // Default
         });
 
+        it('defaults and validates bounded HTTP session settings', () => {
+            expect(loadConfigFromEnv(mockEnv)).toMatchObject({ httpSessionIdleTimeoutMs: 1_800_000, httpMaxSessions: 100 });
+            expect(loadConfigFromEnv({ ...mockEnv, MCP_HTTP_SESSION_IDLE_TIMEOUT_MS: '1000', MCP_HTTP_MAX_SESSIONS: '2' })).toMatchObject({
+                httpSessionIdleTimeoutMs: 1000,
+                httpMaxSessions: 2,
+            });
+            for (const value of ['0', '-1', '1.5', 'Infinity', 'NaN', '10ms', '']) {
+                expect(() => loadConfigFromEnv({ ...mockEnv, MCP_HTTP_SESSION_IDLE_TIMEOUT_MS: value })).toThrow('Invalid environment configuration');
+                expect(() => loadConfigFromEnv({ ...mockEnv, MCP_HTTP_MAX_SESSIONS: value })).toThrow('Invalid environment configuration');
+            }
+            expect(() => loadConfigFromEnv({ ...mockEnv, MCP_HTTP_SESSION_IDLE_TIMEOUT_MS: '2147483648' })).toThrow();
+            expect(() => loadConfigFromEnv({ ...mockEnv, MCP_HTTP_MAX_SESSIONS: '100001' })).toThrow();
+        });
+
         it('should strip trailing slash from baseUrl', () => {
             mockEnv.OMADA_BASE_URL = 'https://omada.example.com/';
             const config = loadConfigFromEnv(mockEnv);
@@ -390,6 +404,8 @@ describe('config', () => {
                 httpAllowedOrigins: ['example.com', 'test.com'],
                 httpNgrokEnabled: true,
                 httpNgrokAuthToken: 'ngrok-token-xyz',
+                httpMaxSessions: 100,
+                httpSessionIdleTimeoutMs: 1_800_000,
             });
         });
     });

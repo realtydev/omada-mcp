@@ -19,7 +19,10 @@ vi.mock('../../src/utils/logger.js', () => ({
 
 vi.mock('../../src/server/common.js', () => ({
     createServer: vi.fn(() => ({
-        connect: vi.fn().mockResolvedValue(undefined),
+        connect: vi.fn(async (transport: { start(): Promise<void> }) => {
+            await transport.start();
+        }),
+        close: vi.fn().mockResolvedValue(undefined),
         server: {
             oninitialized: undefined,
             onclose: undefined,
@@ -39,6 +42,7 @@ vi.mock('@modelcontextprotocol/sdk/server/sse.js', () => {
             onerror: unknown;
         }) {
             this.start = vi.fn().mockResolvedValue(undefined);
+            Object.assign(this, { close: vi.fn().mockResolvedValue(undefined) });
             this.handlePostMessage = vi.fn().mockResolvedValue(undefined);
             this.sessionId = 'mock-session-id';
             this.onerror = undefined;
@@ -216,6 +220,7 @@ describe('SSE Server', () => {
 
             vi.mocked(createServer).mockReturnValueOnce({
                 connect: vi.fn().mockRejectedValue(testError),
+                close: vi.fn().mockResolvedValue(undefined),
             } as unknown as ReturnType<typeof createServer>);
 
             await expect(handleSseConnection(mockClient, mockConfig, endpoint, mockReq, mockRes)).rejects.toThrow('Connection failed');
@@ -240,7 +245,7 @@ describe('SSE Server', () => {
             expect(serverMock.connect).toHaveBeenCalled();
         });
 
-        it('should start transport after connection', async () => {
+        it('starts the transport exactly once through server.connect', async () => {
             const endpoint = '/sse';
             const result = await handleSseConnection(mockClient, mockConfig, endpoint, mockReq, mockRes);
 
