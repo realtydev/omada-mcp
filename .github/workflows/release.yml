@@ -69,6 +69,19 @@ jobs:
         steps:
             - uses: actions/checkout@v7
 
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: "24"
+
+            - name: Build runtime archive
+              run: |
+                  corepack enable
+                  yarn install --immutable
+                  yarn build
+                  yarn test:package
+                  npm pack --ignore-scripts
+                  sha256sum realtydev-omada-mcp-*.tgz > SHA256SUMS
+
             - name: Extract changelog section
               run: |
                   version="${GITHUB_REF_NAME#v}"
@@ -89,4 +102,4 @@ jobs:
             - name: Publish release
               env:
                   GH_TOKEN: ${{ github.token }}
-              run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md --verify-tag
+              run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md --verify-tag realtydev-omada-mcp-*.tgz SHA256SUMS

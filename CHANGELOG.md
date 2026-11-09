@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- Focused `omada-runtime` CLI: setup, doctor, status, exact-version updates and rollback for client-managed stdio and persistent local Docker services, including adoption of existing Compose deployments.
+- Release runtime archives with executable package bins and an archive/launcher MCP smoke check in CI.
+
+### Fixed
+
+- Executable shebang for the `omada-mcp` package bin. Managed stdio launches use the selected credential file without working-directory dotenv overrides.
+
 ## [0.7.0] - 2026-11-08
 
 ### Added

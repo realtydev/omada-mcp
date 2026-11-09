@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 async function loadEnvModule() {
     return await import('../src/env.js');
 }
 
 describe('env loader', () => {
+    afterEach(() => vi.unstubAllEnvs());
     beforeEach(() => {
         vi.resetModules();
         vi.clearAllMocks();
@@ -43,6 +44,17 @@ describe('env loader', () => {
 
         expect(configMock).toHaveBeenCalledTimes(1);
         expect(configMock).toHaveBeenCalledWith({ path: '.env', quiet: true });
+    });
+
+    it('uses only the explicitly selected credential file for managed runtimes', async () => {
+        const configMock = vi.fn();
+        const existsMock = vi.fn();
+        vi.stubEnv('OMADA_ENV_FILE', '/tmp/managed-credentials.env');
+        vi.doMock('dotenv', () => ({ config: configMock }));
+        vi.doMock('node:fs', () => ({ existsSync: existsMock }));
+        await loadEnvModule();
+        expect(configMock).toHaveBeenCalledExactlyOnceWith({ path: '/tmp/managed-credentials.env', quiet: true });
+        expect(existsMock).not.toHaveBeenCalled();
     });
 
     it('never writes to stdout, which carries the MCP stdio protocol', async () => {

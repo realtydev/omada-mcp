@@ -595,6 +595,7 @@ __metadata:
     zod: "npm:^4.6.7"
   bin:
     omada-mcp: ./dist/index.js
+    omada-runtime: ./dist/runtime.js
   languageName: unknown
   linkType: soft
 
