@@ -19,9 +19,10 @@ yarn dev               # run from source with tsx
 yarn lint:fix   # Biome format + lint
 yarn check      # lint + tsc --noEmit
 yarn test       # vitest
+yarn audit      # direct and transitive dependency advisories
 ```
 
-CI runs the same checks and enforces coverage thresholds.
+CI runs the same checks and enforces coverage thresholds. Keep Node types on the Node 24 runtime line. Review runtime major upgrades alongside `.nvmrc`, `engines`, Docker, and CI rather than merging a type-only major bump.
 
 ## Adding a tool
 

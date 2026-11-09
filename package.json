@@ -46,6 +46,7 @@
         "test": "yarn generate:build-info && vitest run",
         "test:watch": "yarn generate:build-info && vitest",
         "test:coverage": "yarn generate:build-info && vitest run --coverage",
+        "audit": "yarn npm audit --all --recursive",
         "dev": "yarn generate:build-info && tsx src/index.ts",
         "wan-guard": "node dist/wanGuard.js",
         "start": "node dist/index.js",
@@ -54,22 +55,22 @@
         "docker:push": "docker push ghcr.io/realtydev/omada-mcp:latest"
     },
     "dependencies": {
-        "@modelcontextprotocol/sdk": "^1.30.1",
-        "@ngrok/ngrok": "^1.5.2",
-        "axios": "^1.13.2",
-        "dotenv": "^18.0.2",
-        "pino": "^10.1.0",
-        "zod": "^4.6.5"
+        "@modelcontextprotocol/sdk": "^1.32.2",
+        "@ngrok/ngrok": "^1.7.0",
+        "axios": "^1.21.0",
+        "dotenv": "^18.0.9",
+        "pino": "^10.4.0",
+        "zod": "^4.6.7"
     },
     "devDependencies": {
-        "@biomejs/biome": "2.5.14",
-        "@types/node": "^24.10.0",
-        "@vitest/coverage-v8": "^5.0.1",
-        "@vitest/ui": "^5.0.1",
+        "@biomejs/biome": "2.6.6",
+        "@types/node": "^24.19.2",
+        "@vitest/coverage-v8": "^5.1.0",
+        "@vitest/ui": "^5.1.0",
         "tsx": "^4.23.15",
         "typescript": "^7.0.2",
-        "vite": "^8.3.0",
-        "vitest": "^5.0.1"
+        "vite": "^8.3.6",
+        "vitest": "^5.1.0"
     },
     "packageManager": "yarn@4.18.0+sha512.fcb8716fe7cd0eece141ffc18b92193a9df9204c1ba83189c288835223fc0bbe64af473bab0d5e9927a7daeb5caf2bb07eb2787cc9338ca040ea125f2a1f2f7e"
 }

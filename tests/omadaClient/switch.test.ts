@@ -63,6 +63,50 @@ describe('SwitchOperations', () => {
         });
     });
 
+    describe('listSwitchPorts', () => {
+        it('fetches the paginated site-wide port telemetry endpoint', async () => {
+            const mockPorts = [
+                { switchMac: 'AA-BB-CC-DD-EE-FF', port: 1, portStatus: { linkStatus: 1 } },
+                { switchMac: '11-22-33-44-55-66', port: 1, portStatus: { linkStatus: 0 } },
+            ];
+            vi.mocked(mockRequest.fetchPaginated).mockResolvedValue(mockPorts);
+
+            const result = await switchOps.listSwitchPorts(undefined, 'site-123');
+
+            expect(mockRequest.fetchPaginated).toHaveBeenCalledWith('/openapi/v1/test-omadac/sites/site-123/switches/ports/poe-info');
+            expect(result).toEqual(mockPorts);
+        });
+
+        it('uses the default site and safely ignores rows without a switch MAC when filtering', async () => {
+            vi.mocked(mockRequest.fetchPaginated).mockResolvedValue([{ port: 1 }, { switchMac: 'AA-BB-CC-DD-EE-FF', port: 2 }]);
+            await expect(switchOps.listSwitchPorts('aa-bb-cc-dd-ee-ff')).resolves.toEqual([{ switchMac: 'AA-BB-CC-DD-EE-FF', port: 2 }]);
+            expect(mockRequest.fetchPaginated).toHaveBeenCalledWith('/openapi/v1/test-omadac/sites/default-site/switches/ports/poe-info');
+        });
+
+        it('encodes site IDs and propagates pagination errors', async () => {
+            vi.mocked(mockRequest.fetchPaginated).mockRejectedValue(new Error('Unsupported endpoint'));
+            await expect(switchOps.listSwitchPorts(undefined, 'site/one')).rejects.toThrow('Unsupported endpoint');
+            expect(mockRequest.fetchPaginated).toHaveBeenCalledWith('/openapi/v1/test-omadac/sites/site%2Fone/switches/ports/poe-info');
+        });
+
+        it('returns an empty filter result when the controller omits a non-PoE switch', async () => {
+            vi.mocked(mockRequest.fetchPaginated).mockResolvedValue([{ switchMac: 'AA-BB-CC-DD-EE-FF', port: 1 }]);
+            await expect(switchOps.listSwitchPorts('11-22-33-44-55-66', 'site-123')).resolves.toEqual([]);
+        });
+
+        it('filters port telemetry by switch MAC case-insensitively', async () => {
+            const mockPorts = [
+                { switchMac: 'AA-BB-CC-DD-EE-FF', port: 1 },
+                { switchMac: '11-22-33-44-55-66', port: 1 },
+            ];
+            vi.mocked(mockRequest.fetchPaginated).mockResolvedValue(mockPorts);
+
+            const result = await switchOps.listSwitchPorts('aa-bb-cc-dd-ee-ff', 'site-123');
+
+            expect(result).toEqual([{ switchMac: 'AA-BB-CC-DD-EE-FF', port: 1 }]);
+        });
+    });
+
     describe('setSwitchPortProfile', () => {
         it('sets a LAN profile on a single port', async () => {
             vi.mocked(mockRequest.put).mockResolvedValue({ errorCode: 0, result: {} });

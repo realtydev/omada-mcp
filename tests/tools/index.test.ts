@@ -28,6 +28,9 @@ describe('tools/index', () => {
                 'getDevice',
                 'getGatewayWanStatus',
                 'getApRadios',
+                'getApRfScanResults',
+                'getApAfcStatus',
+                'getApAvailableChannels',
                 'getClientHistory',
                 'getSwitchStackDetail',
                 'getClient',
@@ -54,6 +57,7 @@ describe('tools/index', () => {
                 'listIpGroups',
                 'listRoutes',
                 'getSwitch',
+                'listSwitchPorts',
                 'getCableTestResults',
                 'getSwitchNetworks',
                 // Write tools

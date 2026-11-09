@@ -18,6 +18,9 @@ const siteModule = vi.hoisted(() => {
 const deviceModule = vi.hoisted(() => {
     const instance: FnMap = {
         listDevices: vi.fn().mockResolvedValue([{ id: 'device-1' }]),
+        getApRfScanResults: vi.fn().mockResolvedValue({ diagnostic: 'getApRfScanResults' }),
+        getApAfcStatus: vi.fn().mockResolvedValue({ diagnostic: 'getApAfcStatus' }),
+        getApAvailableChannels: vi.fn().mockResolvedValue({ diagnostic: 'getApAvailableChannels' }),
         getDevice: vi.fn().mockResolvedValue({ id: 'device-1' }),
         getSwitchStackDetail: vi.fn().mockResolvedValue({ id: 'stack' }),
         searchDevices: vi.fn().mockResolvedValue([{ id: 'device-2' }]),
@@ -140,6 +143,10 @@ describe('OmadaClient aggregator', () => {
         await expect(client.listSites()).resolves.toEqual([{ id: 'site-1' }]);
         await expect(client.listDevices('s1')).resolves.toEqual([{ id: 'device-1' }]);
         await expect(client.getDevice('dev', 's1')).resolves.toEqual({ id: 'device-1' });
+        for (const method of ['getApRfScanResults', 'getApAfcStatus', 'getApAvailableChannels'] as const) {
+            await expect(client[method]('AA-BB-CC-DD-EE-FF', 's1')).resolves.toEqual({ diagnostic: method });
+            expect(deviceModule.instance[method]).toHaveBeenCalledWith('AA-BB-CC-DD-EE-FF', 's1');
+        }
         await expect(client.getSwitchStackDetail('stack', 's1')).resolves.toEqual({ id: 'stack' });
         await expect(client.searchDevices('switch')).resolves.toEqual([{ id: 'device-2' }]);
         await expect(client.listDevicesStats({ page: 1, pageSize: 10 })).resolves.toEqual({ totalRows: 0 });

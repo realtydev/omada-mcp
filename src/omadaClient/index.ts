@@ -291,6 +291,18 @@ export class OmadaClient {
         return await this.deviceOps.getApRadios(apMac, siteId);
     }
 
+    public async getApRfScanResults(apMac: string, siteId?: string): Promise<unknown> {
+        return await this.deviceOps.getApRfScanResults(apMac, siteId);
+    }
+
+    public async getApAfcStatus(apMac: string, siteId?: string): Promise<unknown> {
+        return await this.deviceOps.getApAfcStatus(apMac, siteId);
+    }
+
+    public async getApAvailableChannels(apMac: string, siteId?: string): Promise<unknown> {
+        return await this.deviceOps.getApAvailableChannels(apMac, siteId);
+    }
+
     public async getClientHistory(options: GetClientHistoryOptions): Promise<ClientHistory> {
         return await this.clientOps.getClientHistory(options);
     }
@@ -406,6 +418,10 @@ export class OmadaClient {
     // Switch operations
     public async getSwitch(switchMac: string, siteId?: string): Promise<unknown> {
         return await this.switchOps.getSwitch(switchMac, siteId);
+    }
+
+    public async listSwitchPorts(switchMac?: string, siteId?: string): Promise<Record<string, unknown>[]> {
+        return await this.switchOps.listSwitchPorts(switchMac, siteId);
     }
 
     public async setSwitchPortProfile(switchMac: string, port: number, profileId: string, siteId?: string): Promise<unknown> {

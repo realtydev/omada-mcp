@@ -18,7 +18,10 @@ import { registerDeleteLanNetworkTool } from './deleteLanNetwork.js';
 import { registerDeletePortForwardTool } from './deletePortForward.js';
 import { registerDeleteRouteTool } from './deleteRoute.js';
 import { registerGenericApiCallTool } from './genericApiCall.js';
+import { registerGetApAfcStatusTool } from './getApAfcStatus.js';
+import { registerGetApAvailableChannelsTool } from './getApAvailableChannels.js';
 import { registerGetApRadiosTool } from './getApRadios.js';
+import { registerGetApRfScanResultsTool } from './getApRfScanResults.js';
 import { registerGetCableTestResultsTool } from './getCableTestResults.js';
 import { registerGetClientTool } from './getClient.js';
 import { registerGetClientHistoryTool } from './getClientHistory.js';
@@ -52,6 +55,7 @@ import { registerListLogsTool } from './listLogs.js';
 import { registerListMostActiveClientsTool } from './listMostActiveClients.js';
 import { registerListRoutesTool } from './listRoutes.js';
 import { registerListSitesTool } from './listSites.js';
+import { registerListSwitchPortsTool } from './listSwitchPorts.js';
 import { registerRebootDeviceTool } from './rebootDevice.js';
 import { registerReconnectClientTool } from './reconnectClient.js';
 import { registerSearchDevicesTool } from './searchDevices.js';
@@ -88,6 +92,9 @@ export function registerAllTools(server: McpServer, client: OmadaClient): void {
     registerListClientsTool(server, client);
     registerGetDeviceTool(server, client);
     registerGetApRadiosTool(server, client);
+    registerGetApRfScanResultsTool(server, client);
+    registerGetApAfcStatusTool(server, client);
+    registerGetApAvailableChannelsTool(server, client);
     registerGetClientHistoryTool(server, client);
     registerGetSwitchStackDetailTool(server, client);
     registerGetClientTool(server, client);
@@ -115,6 +122,7 @@ export function registerAllTools(server: McpServer, client: OmadaClient): void {
     registerListIpGroupsTool(server, client);
     registerListRoutesTool(server, client);
     registerGetSwitchTool(server, client);
+    registerListSwitchPortsTool(server, client);
     registerGetCableTestResultsTool(server, client);
     registerGetSwitchNetworksTool(server, client);
 

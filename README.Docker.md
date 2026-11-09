@@ -71,8 +71,8 @@ The HTTP server will be available at `http://localhost:3000/mcp` (stream transpo
 
 ## Features
 
-- OAuth client-credentials authentication with automatic token refresh
-- Tools for retrieving sites, network devices, and connected clients
+- OAuth client-credentials authentication with automatic token refresh, plus web-session authentication for Fusion gateways
+- 82 tools for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
 - Generic Omada API invoker for advanced automation scenarios
 - Environment-driven configuration
 - Support for both stdio and HTTP transports
@@ -82,43 +82,48 @@ The HTTP server will be available at `http://localhost:3000/mcp` (stream transpo
 
 The MCP server reads its configuration from environment variables.
 
-### Omada Client Configuration
+### Omada Controller
 
-| Variable              | Required | Default | Description                                                                 |
-| --------------------- | -------- | ------- | --------------------------------------------------------------------------- |
-| `OMADA_BASE_URL`      | Yes      | -       | Base URL of the Omada controller (e.g., `https://omada-controller.local`)   |
-| `OMADA_CLIENT_ID`     | Yes      | -       | OAuth client ID generated under Omada Platform Integration                  |
-| `OMADA_CLIENT_SECRET` | Yes      | -       | OAuth client secret associated with the client ID                           |
-| `OMADA_OMADAC_ID`     | Yes      | -       | Omada controller ID (omadacId) to target                                    |
-| `OMADA_SITE_ID`       | No       | -       | Optional default site ID; if omitted, each MCP call must pass a siteId      |
-| `OMADA_STRICT_SSL`    | No       | `true`  | Enforce strict SSL certificate validation (set to `false` for self-signed)  |
-| `OMADA_TIMEOUT`       | No       | `30000` | HTTP request timeout in milliseconds                                        |
+| Variable              | Required   | Default | Description                                                                |
+| --------------------- | ---------- | ------- | -------------------------------------------------------------------------- |
+| `OMADA_BASE_URL`      | Yes        | -       | Omada controller URL                                                       |
+| `OMADA_AUTH_MODE`     | No         | `oauth` | `oauth` for classic OpenAPI credentials, `web` for Fusion web-session auth |
+| `OMADA_CLIENT_ID`     | OAuth mode | -       | OAuth client ID                                                            |
+| `OMADA_CLIENT_SECRET` | OAuth mode | -       | OAuth client secret                                                        |
+| `OMADA_OMADAC_ID`     | Yes        | -       | Controller ID (omadacId)                                                   |
+| `OMADA_SITE_ID`       | No         | -       | Default site ID                                                            |
+| `OMADA_WEB_USERNAME`  | Web mode   | -       | Omada web UI username                                                      |
+| `OMADA_WEB_PASSWORD`  | Web mode   | -       | Omada web UI password                                                      |
+| `OMADA_STRICT_SSL`    | No         | `true`  | SSL verification (`false` for self-signed)                                 |
+| `OMADA_TIMEOUT`       | No         | `30000` | Request timeout (ms)                                                       |
+
+For Fusion gateways that do not expose Platform Integration OAuth credentials, set `OMADA_AUTH_MODE=web` and provide `OMADA_WEB_USERNAME` / `OMADA_WEB_PASSWORD`. The server logs in through `/{omadacId}/api/v2/login` and uses that web session for OpenAPI requests.
 
 ### MCP Generic Server Configuration
 
-| Variable                 | Required | Default | Description                                                                 |
-| ------------------------ | -------- | ------- | --------------------------------------------------------------------------- |
-| `MCP_SERVER_LOG_LEVEL`   | No       | `info`  | Logging verbosity (`debug`, `info`, `warn`, `error`, `silent`)              |
-| `MCP_SERVER_LOG_FORMAT`  | No       | `plain` | Log output format (`plain`, `json`, or `gcp-json`)                          |
-| `MCP_SERVER_USE_HTTP`    | No       | `false` | Start HTTP server instead of stdio                                          |
-| `MCP_SERVER_STATEFUL`    | No       | `false` | Maintain stateful sessions per client                                       |
+| Variable                | Required | Default | Description                                                    |
+| ----------------------- | -------- | ------- | -------------------------------------------------------------- |
+| `MCP_SERVER_LOG_LEVEL`  | No       | `info`  | Logging verbosity (`debug`, `info`, `warn`, `error`, `silent`) |
+| `MCP_SERVER_LOG_FORMAT` | No       | `plain` | Log output format (`plain`, `json`, or `gcp-json`)             |
+| `MCP_SERVER_USE_HTTP`   | No       | `false` | Start HTTP server instead of stdio                             |
+| `MCP_SERVER_STATEFUL`   | No       | `false` | Maintain stateful sessions per client                          |
 
 ### MCP Server HTTP Configuration
 
 These variables are only used when `MCP_SERVER_USE_HTTP=true`:
 
-| Variable                       | Required | Default                         | Description                                                                 |
-| ------------------------------ | -------- | ------------------------------- | --------------------------------------------------------------------------- |
-| `MCP_HTTP_PORT`                | No       | `3000`                          | Port for the HTTP server                                                    |
-| `MCP_HTTP_TRANSPORT`           | No       | `stream`                        | Transport protocol (`stream` or `sse`). See [Transport Protocols](#transport-protocols) |
-| `MCP_HTTP_BIND_ADDR`           | No       | `127.0.0.1`                     | Bind address (IPv4/IPv6). Use adapter IP address to expose to the network.  |
-| `MCP_HTTP_PATH`                | No       | `/mcp` or `/sse`*               | Base path for MCP endpoints (*depends on transport)                         |
-| `MCP_HTTP_ENABLE_HEALTHCHECK`  | No       | `true`                          | Enable a healthcheck endpoint                                               |
-| `MCP_HTTP_HEALTHCHECK_PATH`    | No       | `/healthz`                      | Path for the healthcheck endpoint                                           |
-| `MCP_HTTP_ALLOW_CORS`          | No       | `true`                          | Enable CORS for the HTTP server                                             |
-| `MCP_HTTP_ALLOWED_ORIGINS`     | No       | `127.0.0.1, localhost`          | Comma-separated list of allowed origins. Use `*` to allow all (dev only)    |
-| `MCP_HTTP_NGROK_ENABLED`       | No       | `false`                         | Use ngrok to expose the HTTP server publicly                                |
-| `MCP_HTTP_NGROK_AUTH_TOKEN`    | No       | -                               | Ngrok auth token (required if `MCP_HTTP_NGROK_ENABLED=true`)                |
+| Variable                      | Required | Default                | Description                                                                             |
+| ----------------------------- | -------- | ---------------------- | --------------------------------------------------------------------------------------- |
+| `MCP_HTTP_PORT`               | No       | `3000`                 | Port for the HTTP server                                                                |
+| `MCP_HTTP_TRANSPORT`          | No       | `stream`               | Transport protocol (`stream` or `sse`). See [Transport Protocols](#transport-protocols) |
+| `MCP_HTTP_BIND_ADDR`          | No       | `127.0.0.1`            | Bind address (IPv4/IPv6). Use adapter IP address to expose to the network.              |
+| `MCP_HTTP_PATH`               | No       | `/mcp` or `/sse`*      | Base path for MCP endpoints (*depends on transport)                                     |
+| `MCP_HTTP_ENABLE_HEALTHCHECK` | No       | `true`                 | Enable a healthcheck endpoint                                                           |
+| `MCP_HTTP_HEALTHCHECK_PATH`   | No       | `/healthz`             | Path for the healthcheck endpoint                                                       |
+| `MCP_HTTP_ALLOW_CORS`         | No       | `true`                 | Enable CORS for the HTTP server                                                         |
+| `MCP_HTTP_ALLOWED_ORIGINS`    | No       | `127.0.0.1, localhost` | Comma-separated list of allowed origins. Use `*` to allow all (dev only)                |
+| `MCP_HTTP_NGROK_ENABLED`      | No       | `false`                | Use ngrok to expose the HTTP server publicly                                            |
+| `MCP_HTTP_NGROK_AUTH_TOKEN`   | No       | -                      | Ngrok auth token (required if `MCP_HTTP_NGROK_ENABLED=true`)                            |
 
 Create a `.env` file or export the variables before launching the container.
 
@@ -209,47 +214,121 @@ If an intermediary strips the `Mcp-Session-Id` header, set `MCP_SERVER_STATEFUL=
 
 ## Tools
 
-| Tool                            | Description                                                                       |
-| ------------------------------- | --------------------------------------------------------------------------------- |
-| `listSites`                     | Lists all sites configured on the controller.                                     |
-| `listDevices`                   | Lists provisioned devices for a given site.                                       |
-| `listClients`                   | Lists active client devices for a site.                                           |
-| `getDevice`                     | Fetches details for a specific Omada device.                                      |
-| `getSwitchStackDetail`          | Retrieves detailed configuration and status for a switch stack.                   |
-| `getClient`                     | Fetches details for a specific client device.                                     |
-| `searchDevices`                 | Searches for devices globally across all sites the user has access to.            |
-| `listDevicesStats`              | Queries statistics for global adopted devices with pagination and filtering.      |
-| `getInternetInfo`               | Gets internet configuration information for a site.                               |
-| `getPortForwardingStatus`       | Gets port forwarding status and rules (User or UPnP types).                       |
-| `getLanNetworkList`             | Gets the list of LAN networks configured in a site.                               |
-| `getLanProfileList`             | Gets the list of LAN profiles configured in a site.                               |
-| `getWlanGroupList`              | Gets the list of WLAN groups configured in a site.                                |
-| `getSsidList`                   | Gets the list of SSIDs in a WLAN group.                                           |
-| `getSsidDetail`                 | Gets detailed information for a specific SSID.                                    |
-| `getFirewallSetting`            | Gets firewall configuration and rules for a site.                                 |
+### Read Tools
 
-## Supported Omada API Operations
+| Tool                         | Description                                                                                                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `listSites`                  | List all sites on the controller                                                                                                                                    |
+| `listDevices`                | List devices for a site                                                                                                                                             |
+| `listClients`                | List active clients for a site                                                                                                                                      |
+| `getDevice`                  | Get details for a specific device                                                                                                                                   |
+| `getGatewayWanStatus`        | Live per-port WAN status: link/internet state, IPv4 lease, DNS, latency and loss                                                                                    |
+| `getApRadios`                | AP radio configuration (channel, width, tx power per band) and radio statistics (retries, drops)                                                                    |
+| `getApRfScanResults`         | Latest AP RF scan results through Open API v2; reads existing results without starting a scan                                                                       |
+| `getApAfcStatus`             | AFC status for supported 6 GHz APs; requires compatible controller and AP firmware                                                                                  |
+| `getApAvailableChannels`     | Allowed radio channels and controller channel indices for use with `setApRadio`                                                                                     |
+| `getClientHistory`           | A client's association sessions over a time range, optionally with roams between APs                                                                                |
+| `getClient`                  | Get details for a specific client                                                                                                                                   |
+| `getSwitchStackDetail`       | Get switch stack configuration and status                                                                                                                           |
+| `searchDevices`              | Search devices globally across all sites                                                                                                                            |
+| `listDevicesStats`           | Device statistics with pagination and filtering                                                                                                                     |
+| `listMostActiveClients`      | Top clients sorted by traffic                                                                                                                                       |
+| `listClientsActivity`        | Client activity time-series data                                                                                                                                    |
+| `listClientsPastConnections` | Historical client connections                                                                                                                                       |
+| `getThreatList`              | Security threat list with filtering                                                                                                                                 |
+| `getInternetInfo`            | Internet / WAN configuration                                                                                                                                        |
+| `getPortForwardingStatus`    | Port forwarding rules (User uses the internal web UI API when `OMADA_WEB_USERNAME`/`OMADA_WEB_PASSWORD` are set; UPnP uses the public Open API)                     |
+| `getLanNetworkList`          | LAN networks and VLAN settings                                                                                                                                      |
+| `getLanProfileList`          | LAN profiles for switch ports                                                                                                                                       |
+| `getWlanGroupList`           | WLAN groups                                                                                                                                                         |
+| `getSsidList`                | SSIDs in a WLAN group                                                                                                                                               |
+| `getSsidDetail`              | Detailed SSID configuration                                                                                                                                         |
+| `getFirewallSetting`         | Firewall rules and policies                                                                                                                                         |
+| `getIpsSetting`              | IDS/IPS (threat protection) status for a site's gateway — enabled/disabled, mode, and detection level; reports `supported: false` on gateway models without IDS/IPS |
+| `getFirmwareDetails`         | Firmware info for a device                                                                                                                                          |
+| `listAlerts`                 | Paginated site alerts, optionally filtered by module and resolved state                                                                                             |
+| `listEvents`                 | Paginated site events, optionally filtered by module and event key prefix                                                                                           |
+| `listLogs`                   | Paginated site logs                                                                                                                                                 |
+| `listFirewallAcls`           | Firewall ACL rules                                                                                                                                                  |
+| `listIpGroups`               | IP groups used by firewall ACLs (internal web UI API, requires `OMADA_WEB_USERNAME`/`OMADA_WEB_PASSWORD`)                                                           |
+| `listRoutes`                 | Static routes (internal web UI API only, requires `OMADA_WEB_USERNAME`/`OMADA_WEB_PASSWORD`)                                                                        |
+| `getSwitch`                  | Full switch info including portList array (per-port status, profile, PoE)                                                                                           |
+| `listSwitchPorts`            | Site-wide switch port telemetry (link, speed, traffic, STP, LLDP and PoE), optionally filtered by switch MAC; supports Agile Series switches                        |
+| `getCableTestResults`        | Cable test results for a switch                                                                                                                                     |
+| `getSwitchNetworks`          | Switch VLAN trunking configuration                                                                                                                                  |
 
-| Operation ID                        | Description                                               | Notes                                                                                                |
-| ----------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `getSiteList`                       | List controller sites.                                    | Backed by `listSites`; automatic pagination is handled client-side.                                  |
-| `getDeviceList`                     | List devices assigned to a site.                          | Used by `listDevices` and `getDevice` (single device lookup is resolved from this list).             |
-| `searchGlobalDevice`                | Search for devices across all accessible sites.           | Used by `searchDevices`; returns devices matching the search key globally.                           |
-| `getGridAdoptedDevicesStatByGlobal` | Query statistics for global adopted devices with filters. | Used by `listDevicesStats`; supports pagination and fuzzy search by MAC, name, model, or SN.         |
-| `getGridActiveClients`              | List active clients connected to a site.                  | Used by `listClients` and `getClient` (single client lookup is resolved from this list).             |
-| `getMostActiveClients`              | Get most active clients sorted by traffic.                | Used by `listMostActiveClients`; dashboard endpoint returning top clients by traffic usage.          |
-| `getClientActivity`                 | Get client activity statistics over time.                 | Used by `listClientsActivity`; returns time-series data of new, active, and disconnected clients.    |
-| `getGridPastConnections`            | Get client past connection list.                          | Used by `listClientsPastConnections`; supports pagination, filtering, sorting, and fuzzy search.     |
-| `getOswStackDetail`                 | Retrieve details for a switch stack.                      | Used by `getSwitchStackDetail`.                                                                      |
-| `getGlobalThreatList`               | Get global view threat management list.                   | Used by `getThreatList`; returns paginated security threats with filtering by time, severity, sites. |
-| `getInternet`                       | Get internet configuration info for a site.               | Used by `getInternetInfo`; returns WAN settings and connectivity details.                            |
-| `getPortForwardStatus`              | Get port forwarding status by type.                       | Used by `getPortForwardingStatus`; retrieves User or UPnP port forwarding rules.                     |
-| `getLanNetworkListV2`               | Get LAN network list (v2 API).                            | Used by `getLanNetworkList`; returns VLAN settings, IP ranges, DHCP configuration.                   |
-| `getLanProfileList`                 | Get LAN profile list.                                     | Used by `getLanProfileList`; returns network settings for switch ports.                              |
-| `getWlanGroupList`                  | Get WLAN group list.                                      | Used by `getWlanGroupList`; returns wireless network groups. Use wlanId for `getSsidList`.           |
-| `getSsidList`                       | Get SSID list for a WLAN group.                           | Used by `getSsidList`; requires wlanId from `getWlanGroupList`. Use ssidId for `getSsidDetail`.      |
-| `getSsidDetail`                     | Get detailed SSID configuration.                          | Used by `getSsidDetail`; requires wlanId and ssidId. Returns security, rate limits, scheduling.      |
-| `getFirewallSetting`                | Get firewall configuration for a site.                    | Used by `getFirewallSetting`; returns ACL rules, IP groups, security policies.                       |
+`listSwitchPorts` was verified by the contributor on Software Controller 6.2.14.11 with an ES206GP v1.20. The endpoint is absent from the bundled API snapshot; older controllers may not support it. Gateway-integrated switch ports (such as ER7212PC) may return an empty list, as [reported in TP-Link's community](https://community.tp-link.com/en/business/forum/topic/860490). It is not a universal gateway PoE reader. Live validation on OC200 / Controller 6.3.0.45 returned 28 ports from SG2210XMP-M2 and SG2218P switches; the non-PoE SG3210X-M2 was absent from this endpoint. An empty filtered result therefore does not prove that the switch has no ports.
+
+The AP diagnostics use the bundled `docs/openapi/03-device.json` operations `getRFScanResultV2`, `getAfcInfo`, and `getAvailableChannelOfAp`. Results and availability depend on controller and AP firmware. Unsupported-device errors are returned to the caller. RF results may be empty or stale until a scan has been run through the controller; these tools do not start scans or change radio settings. All three AP diagnostic tools were validated through MCP on two EAP773(US) v2.0 APs and an EAP772-Outdoor(US) v1.0, running firmware 1.5.5 with Controller 6.3.0.45. RF status 1 correctly reported no saved scan; the outdoor AP returned AFC working status and a future expiry, while indoor APs without AFC support returned status false.
+
+### Write Tools
+
+| Tool                    | Description                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `createLanNetwork`      | Create a LAN network (VLAN, subnet, DHCP range, DNS servers, custom DHCP options)                                        |
+| `updateLanNetwork`      | Update a LAN network                                                                                                     |
+| `deleteLanNetwork`      | Delete a LAN network                                                                                                     |
+| `createLanProfile`      | Create a LAN profile                                                                                                     |
+| `updateLanProfile`      | Update a LAN profile                                                                                                     |
+| `updateFirewallSetting` | Update firewall settings                                                                                                 |
+| `setIpsSetting`         | Enable/disable and configure IDS/IPS (mode, detection level) on a site's gateway; can reduce max throughput when enabled |
+| `createFirewallAcl`     | Create a firewall ACL rule                                                                                               |
+| `updateFirewallAcl`     | Update a firewall ACL rule                                                                                               |
+| `deleteFirewallAcl`     | Delete a firewall ACL rule                                                                                               |
+| `updateSsid`            | Update an SSID's basic config (name, band, security, VLAN, PSK, etc.)                                                    |
+| `setSsidEnable`         | Enable or disable an SSID network-wide                                                                                   |
+| `updateSwitchPort`      | Update switch port config (profile, PoE, speed, STP)                                                                     |
+| `updateClient`          | Update client settings                                                                                                   |
+| `setSwitchNetworks`     | Set switch VLAN trunking configuration                                                                                   |
+| `createRoute`           | Create a static route (internal web UI API only)                                                                         |
+| `updateRoute`           | Update a static route by ID (internal web UI API only)                                                                   |
+| `deleteRoute`           | Delete a static route by ID (internal web UI API only)                                                                   |
+| `createPortForward`     | Create a port forwarding rule (internal web UI API only)                                                                 |
+| `updatePortForward`     | Update a port forwarding rule by ID (internal web UI API only)                                                           |
+| `deletePortForward`     | Delete a port forwarding rule by ID (internal web UI API only)                                                           |
+| `updateWanPortSetting`  | Update a gateway WAN port's IPv4/IPv6/MAC connection settings (e.g. DHCP client `unicastDhcp`)                           |
+
+### Switch Port Tools
+
+| Tool                           | Description                                      |
+| ------------------------------ | ------------------------------------------------ |
+| `setSwitchPortProfile`         | Assign a LAN profile to a single port            |
+| `setSwitchPortPoe`             | Enable/disable PoE on a single port              |
+| `setSwitchPortName`            | Set name on a single port                        |
+| `setSwitchPortStatus`          | Enable/disable a single port                     |
+| `setSwitchPortProfileOverride` | Enable/disable profile override on a single port |
+| `batchSetSwitchPortProfile`    | Batch profile override on multiple ports         |
+| `batchSetSwitchPortPoe`        | Batch PoE on multiple ports                      |
+| `batchSetSwitchPortStatus`     | Batch enable/disable multiple ports              |
+| `batchSetSwitchPortName`       | Batch set names on multiple ports                |
+| `startCableTest`               | Start cable test on a switch                     |
+
+### Action Tools
+
+| Tool                   | Description                                                                                                                                                                                                |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rebootDevice`         | Reboot a device                                                                                                                                                                                            |
+| `adoptDevice`          | Adopt a device                                                                                                                                                                                             |
+| `blockClient`          | Block a client                                                                                                                                                                                             |
+| `unblockClient`        | Unblock a client                                                                                                                                                                                           |
+| `reconnectClient`      | Reconnect a client                                                                                                                                                                                         |
+| `setDeviceLed`         | Set device LED setting                                                                                                                                                                                     |
+| `setLogNotifications`  | Turn alert/event log notification types on or off for a site; dry run supported, returns a before/after diff (live config write)                                                                           |
+| `setApRadio`           | Change one AP radio band: enable, channel index, width, tx power. Reads back and verifies, fails if the controller does not apply it; dry run supported (live config write, can drop clients on that band) |
+| `startFirmwareUpgrade` | Start firmware upgrade                                                                                                                                                                                     |
+| `setGatewayWanConnect` | Software-connect or disconnect a gateway WAN port                                                                                                                                                          |
+
+### Generic
+
+| Tool             | Description                                |
+| ---------------- | ------------------------------------------ |
+| `genericApiCall` | Invoke any Omada OpenAPI endpoint directly |
+
+### Meta
+
+| Tool            | Description                                                                                        |
+| --------------- | -------------------------------------------------------------------------------------------------- |
+| `getServerInfo` | Report the package version, git commit, and build time this server process was actually built from |
 
 ## Contributing
 

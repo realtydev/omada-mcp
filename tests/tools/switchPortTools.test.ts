@@ -1,6 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 
 describe('Switch Port Tools', () => {
+    describe('registerListSwitchPortsTool', () => {
+        it('should register the tool and pass optional filters through to the client', async () => {
+            const { registerListSwitchPortsTool } = await import('../../src/tools/listSwitchPorts.js');
+
+            const mockClient = { listSwitchPorts: vi.fn().mockResolvedValue([]) };
+            const mockServer = {
+                registerTool: vi.fn((_, _schema, handler) => handler({ switchMac: 'AA-BB-CC-DD-EE-FF', siteId: 'test-site' }, {})),
+            };
+
+            registerListSwitchPortsTool(mockServer as never, mockClient as never);
+
+            expect(mockServer.registerTool).toHaveBeenCalledWith(
+                'listSwitchPorts',
+                expect.objectContaining({ description: expect.stringContaining('Agile Series') }),
+                expect.any(Function)
+            );
+            expect(mockClient.listSwitchPorts).toHaveBeenCalledWith('AA-BB-CC-DD-EE-FF', 'test-site');
+        });
+    });
+
     describe('registerSetSwitchPortNameTool', () => {
         it('should register the tool and pass port args through to the client', async () => {
             const { registerSetSwitchPortNameTool } = await import('../../src/tools/setSwitchPortName.js');
