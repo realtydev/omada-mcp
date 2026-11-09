@@ -86,11 +86,14 @@ describe('DHCP reservation operations', () => {
             .mockResolvedValueOnce([])
             .mockResolvedValueOnce([reservation({ id: 'server-id', netName: 'LAN' })]);
         const result = await ops.createDhcpReservation(reservation(), 'site/one');
-        expect(request.request).toHaveBeenCalledExactlyOnceWith({
-            method: 'POST',
-            url: '/openapi/v1/controller/sites/site%2Fone/setting/service/dhcp',
-            data: reservation(),
-        });
+        expect(request.request).toHaveBeenCalledExactlyOnceWith(
+            {
+                method: 'POST',
+                url: '/openapi/v1/controller/sites/site%2Fone/setting/service/dhcp',
+                data: reservation(),
+            },
+            false
+        );
         expect(result).toMatchObject({ written: true, verification: { status: 'verified', attempts: 1 } });
     });
 
@@ -100,11 +103,14 @@ describe('DHCP reservation operations', () => {
             .mockResolvedValueOnce([before])
             .mockResolvedValueOnce([reservation({ description: 'Updated' })]);
         const result = await ops.updateDhcpReservation('aa:bb:cc:dd:ee:ff', { description: 'Updated' }, 'site/one');
-        expect(request.request).toHaveBeenCalledExactlyOnceWith({
-            method: 'PATCH',
-            url: '/openapi/v1/controller/sites/site%2Fone/setting/service/dhcp/AA-BB-CC-DD-EE-FF',
-            data: reservation({ description: 'Updated' }),
-        });
+        expect(request.request).toHaveBeenCalledExactlyOnceWith(
+            {
+                method: 'PATCH',
+                url: '/openapi/v1/controller/sites/site%2Fone/setting/service/dhcp/AA-BB-CC-DD-EE-FF',
+                data: reservation({ description: 'Updated' }),
+            },
+            false
+        );
         expect(result.changes).toEqual([{ field: 'description', before: 'Test client', after: 'Updated' }]);
         expect(result.verification?.status).toBe('verified');
     });
@@ -135,10 +141,13 @@ describe('DHCP reservation operations', () => {
     it('deletes by normalized MAC and verifies absence', async () => {
         vi.mocked(request.fetchPaginated).mockResolvedValueOnce([reservation()]).mockResolvedValueOnce([]);
         const result = await ops.deleteDhcpReservation('aa:bb:cc:dd:ee:ff');
-        expect(request.request).toHaveBeenCalledExactlyOnceWith({
-            method: 'DELETE',
-            url: '/openapi/v1/controller/sites/default-site/setting/service/dhcp/AA-BB-CC-DD-EE-FF',
-        });
+        expect(request.request).toHaveBeenCalledExactlyOnceWith(
+            {
+                method: 'DELETE',
+                url: '/openapi/v1/controller/sites/default-site/setting/service/dhcp/AA-BB-CC-DD-EE-FF',
+            },
+            false
+        );
         expect(result).toMatchObject({ written: true, verification: { status: 'verified' } });
     });
 
@@ -195,7 +204,7 @@ describe('DHCP reservation operations', () => {
         vi.mocked(request.fetchPaginated).mockResolvedValueOnce([]).mockResolvedValueOnce([reservation()]);
         vi.mocked(request.request).mockRejectedValue(new AxiosError('socket closed after request', 'ECONNRESET'));
         const result = await ops.createDhcpReservation(reservation());
-        expect(result).toMatchObject({ written: true, writeError: 'socket closed after request', verification: { status: 'verified' } });
+        expect(result).toMatchObject({ written: 'unknown', writeError: 'socket closed after request', verification: { status: 'verified' } });
         expect(request.request).toHaveBeenCalledTimes(1);
     });
 

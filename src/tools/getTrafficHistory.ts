@@ -1,10 +1,16 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { OmadaClient } from '../omadaClient/index.js';
+import { networkDiagnosticSnapshotSchema } from '../omadaClient/networkDiagnosticComparison.js';
 import { toToolResult, wrapToolHandler } from '../server/common.js';
 
 export const networkDiagnosticSchema = z.object({
     siteId: z.string().min(1).optional(),
+    baseline: networkDiagnosticSnapshotSchema
+        .optional()
+        .describe(
+            'A prior snapshot from this same workflow, controller, site and device; compares matching windows/evidence without inferring totals.'
+        ),
     start: z
         .number()
         .int()
@@ -25,7 +31,7 @@ export function registerGetTrafficHistoryTool(server: McpServer, client: OmadaCl
         'getTrafficHistory',
         {
             description:
-                'Read bounded AP and switch traffic time series with original timestamps, MB units, available/returned counts and explicit truncation. Does not extrapolate totals or change settings.',
+                'Read bounded AP and switch traffic time series with original timestamps, MB units, available/returned counts and explicit truncation. Optional baseline compares aligned sample observations without traffic deltas or totals. Does not change settings.',
             inputSchema: networkDiagnosticSchema.strict(),
             annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
         },

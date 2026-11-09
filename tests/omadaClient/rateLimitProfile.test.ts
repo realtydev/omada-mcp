@@ -63,11 +63,14 @@ describe('verified rate-limit profile updates and rollback', () => {
 
     it('writes the documented PUT body once and issues a scoped rollback receipt only after verification', async () => {
         const result = await operations.updateRateLimitProfile('profile-1', { name: 'Changed' }, 'site-1', false);
-        expect(request.request).toHaveBeenCalledExactlyOnceWith({
-            method: 'PUT',
-            url: '/openapi/v1/controller/sites/site-1/rate-limit-profile/profile-1',
-            data: { ...before, name: 'Changed' },
-        });
+        expect(request.request).toHaveBeenCalledExactlyOnceWith(
+            {
+                method: 'PUT',
+                url: '/openapi/v1/controller/sites/site-1/rate-limit-profile/profile-1',
+                data: { ...before, name: 'Changed' },
+            },
+            false
+        );
         expect(result).toMatchObject({
             written: true,
             verified: true,

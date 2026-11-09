@@ -1,5 +1,9 @@
+import { isDeepStrictEqual } from 'node:util';
+import axios from 'axios';
 import type { ApRadioBand, ApRadioChange, ApRadioField, ApRadioSettings, OmadaApiResponse, SetApRadioResult } from '../types/index.js';
 
+import { verifyWrite } from '../utils/write-verification.js';
+import { type ApRadioChangeReceipt, apRadioChangeReceiptSchema, radioChangeConfig, sameShape } from './networkChange.js';
 import type { RequestHandler } from './request.js';
 import type { SiteOperations } from './site.js';
 
@@ -36,7 +40,8 @@ export class ApRadioOperations {
     constructor(
         private readonly request: RequestHandler,
         private readonly site: SiteOperations,
-        private readonly buildPath: (path: string) => string
+        private readonly buildPath: (path: string) => string,
+        private readonly controllerId?: string
     ) {}
 
     /**
@@ -97,8 +102,17 @@ export class ApRadioOperations {
             return { dryRun: true, written: false, band, changes, requestBody: { [bandKey]: merged } };
         }
 
-        const response = await this.request.request<OmadaApiResponse<unknown>>({ method: 'PATCH', url: configPath, data: { [bandKey]: merged } });
-        this.request.ensureSuccess(response);
+        let response: OmadaApiResponse<unknown> | undefined;
+        try {
+            response = await this.request.request<OmadaApiResponse<unknown>>(
+                { method: 'PATCH', url: configPath, data: { [bandKey]: merged } },
+                false
+            );
+        } catch (error) {
+            if (definiteRejection(error)) throw error;
+            // A lost acknowledgement is reconciled with reads; never replay the radio mutation.
+        }
+        if (response !== undefined) this.request.ensureSuccess(response);
 
         let after: RadioConfig = before;
         let notApplied: ApRadioChange[] = changes;
@@ -115,7 +129,7 @@ export class ApRadioOperations {
 
         const result: SetApRadioResult = {
             dryRun: false,
-            written: true,
+            written: response === undefined ? 'unknown' : true,
             band,
             changes: changes.map((change) => ({ ...change, after: after[bandKey]?.[change.field] })),
             verification: { ok: false, unexpectedChanges: ApRadioOperations.unexpectedChanges(before, after, bandKey, changes) },
@@ -126,7 +140,7 @@ export class ApRadioOperations {
                     `${change.field}: requested ${JSON.stringify(change.after)}, controller kept ${JSON.stringify(after[bandKey]?.[change.field])}`
             );
             throw new Error(
-                `The controller accepted the ${band} radio-config PATCH for ${apMac} (errorCode 0) but did not apply: ${detail.join('; ')}. ` +
+                `${response === undefined ? 'The radio write outcome is unknown' : `The controller accepted the ${band} radio-config PATCH for ${apMac} (errorCode 0) but did not apply`}: ${detail.join('; ')}. ` +
                     `The value may be outside what this AP, region or channel allows. Result: ${JSON.stringify(result)}`
             );
         }
@@ -134,7 +148,76 @@ export class ApRadioOperations {
             ok: result.verification?.unexpectedChanges.length === 0,
             unexpectedChanges: result.verification?.unexpectedChanges ?? [],
         };
+        const oldConfig = radioChangeConfig(before);
+        const appliedConfig = radioChangeConfig(after);
+        const receipt =
+            this.controllerId && result.verification.ok && oldConfig && appliedConfig && sameShape(oldConfig, appliedConfig)
+                ? apRadioChangeReceiptSchema.safeParse({
+                      version: 1,
+                      resource: 'ap-radio',
+                      controllerId: this.controllerId,
+                      siteId: resolvedSiteId,
+                      apMac,
+                      band,
+                      before: oldConfig,
+                      applied: appliedConfig,
+                  })
+                : undefined;
+        if (receipt?.success) result.rollbackReceipt = receipt.data;
+        else if (this.controllerId)
+            result.rollbackUnavailable = 'Complete, shape-preserving radio evidence and verified preservation are required for rollback.';
         return result;
+    }
+
+    public async rollbackApRadioChange(receipt: ApRadioChangeReceipt, dryRun = true): Promise<unknown> {
+        const parsed = apRadioChangeReceiptSchema.parse(receipt);
+        if (!this.controllerId || parsed.controllerId !== this.controllerId) throw new Error('Rollback receipt belongs to a different controller');
+        if (typeof dryRun !== 'boolean') throw new Error('dryRun must be a boolean');
+        const base = `/sites/${encodeURIComponent(parsed.siteId)}/aps/${encodeURIComponent(parsed.apMac)}`;
+        const path = this.buildPath(`${base}/radio-config`);
+        const current = radioChangeConfig(await this.readConfig(path));
+        if (isDeepStrictEqual(current, parsed.before))
+            return { operation: 'rollback', resource: parsed.resource, dryRun, written: false, verification: { status: 'verified', attempts: 0 } };
+        if (!current || !isDeepStrictEqual(current, parsed.applied))
+            throw new Error('Rollback refused: AP radio settings changed after this receipt was issued.');
+        const bandKey = BAND_KEYS[parsed.band] as keyof typeof parsed.before;
+        const desired = parsed.before[bandKey]!;
+        if (desired.channel && desired.channel !== '0') {
+            const freq = await this.resolveFreq(`${base}/available-channel`, parsed.apMac, parsed.band, desired.channel);
+            if (freq !== desired.freq) throw new Error('Rollback refused: the original channel/frequency is no longer available.');
+        }
+        const result = {
+            operation: 'rollback',
+            resource: parsed.resource,
+            siteId: parsed.siteId,
+            apMac: parsed.apMac,
+            band: parsed.band,
+            requestBody: { [bandKey]: desired },
+        };
+        if (dryRun) return { ...result, dryRun: true, written: false, verified: false };
+        let response: OmadaApiResponse<unknown> | undefined;
+        try {
+            response = await this.request.request<OmadaApiResponse<unknown>>({ method: 'PATCH', url: path, data: result.requestBody }, false);
+        } catch (error) {
+            if (definiteRejection(error)) throw error;
+        }
+        if (response !== undefined) this.request.ensureSuccess(response);
+        const acknowledged = response !== undefined;
+        const verification = await verifyWrite(
+            () => this.readConfig(path),
+            (value) => isDeepStrictEqual(radioChangeConfig(value), parsed.before)
+        );
+        const verified = verification.status === 'verified';
+        return {
+            ...result,
+            dryRun: false,
+            written: acknowledged ? true : 'unknown',
+            verified,
+            verification: { status: verification.status, attempts: verification.attempts },
+            ...(verified
+                ? { rollbackReceipt: apRadioChangeReceiptSchema.parse({ ...parsed, before: parsed.applied, applied: parsed.before }) }
+                : { warning: 'Restoration could not be verified; no rollback receipt was issued. Do not replay an uncertain write.' }),
+        };
     }
 
     private static buildRequested(settings: ApRadioSettings): Partial<Record<ApRadioField, unknown>> & { channel?: string; channelWidth?: string } {
@@ -206,4 +289,11 @@ export class ApRadioOperations {
         }
         return unexpected;
     }
+}
+
+function definiteRejection(error: unknown): boolean {
+    const status = axios.isAxiosError(error)
+        ? error.response?.status
+        : Number((error instanceof Error ? error.message : '').match(/HTTP\s+(\d{3})/)?.[1]);
+    return status !== undefined && status >= 400 && status < 500 && status !== 408;
 }

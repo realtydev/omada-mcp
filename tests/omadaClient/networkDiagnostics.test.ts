@@ -55,6 +55,22 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe('bounded network diagnostic workflows', () => {
+    it('returns a portable snapshot and accepts it in a fresh operation instance without retaining a journal', async () => {
+        const first = setup();
+        const window = { start: TIME - 60, end: TIME };
+        const baseline = (await first.operations.getTrafficHistory(window)).snapshot;
+        const next = setup();
+        const report = await next.operations.getTrafficHistory({ ...window, baseline: JSON.parse(JSON.stringify(baseline)) });
+        expect(report.comparison).toMatchObject({ status: 'partial', comparedMetrics: 3, changedPoints: 0 });
+        expect(report.comparison?.excludedMetrics).toContainEqual({ metric: 'switchTrafficActivities/txData', reason: 'no_numeric_samples' });
+        expect(next.request.request).toHaveBeenCalledTimes(1);
+        expect(next.request.request.mock.calls.every(([config]) => config.method === 'GET')).toBe(true);
+    });
+    it('validates malformed baselines before requesting controller evidence', async () => {
+        const { operations, request } = setup();
+        await expect(operations.getTrafficHistory({ baseline: { version: 9 } as never })).rejects.toThrow('Invalid diagnostic baseline');
+        expect(request.request).not.toHaveBeenCalled();
+    });
     it('preserves real traffic timestamps, null and zero without inventing totals', async () => {
         const { request, operations } = setup();
         const result = await operations.getTrafficHistory({ siteId: 'site/id' });

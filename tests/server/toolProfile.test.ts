@@ -17,6 +17,7 @@ describe('tool exposure profiles', () => {
 
     async function connect(profile?: ToolProfile) {
         const api = {
+            refreshApiCatalog: vi.fn().mockResolvedValue({ refreshed: true, source: 'bundled' }),
             listSites: vi.fn().mockResolvedValue([{ id: 'test-site' }]),
             getTrafficHistory: vi.fn().mockResolvedValue({ sections: { traffic: { status: 'ok' } } }),
             getWifiHistory: vi.fn().mockResolvedValue({ sections: { channels: { status: 'partial' } } }),
@@ -56,13 +57,16 @@ describe('tool exposure profiles', () => {
         expect(tools.length).toBeGreaterThan(30);
         expect(
             tools.every(
-                (tool) => /^(get|list|search|diagnose)[A-Z]/.test(tool.name) || ['describeApiOperation', 'executeApiOperation'].includes(tool.name)
+                (tool) =>
+                    /^(get|list|search|diagnose)[A-Z]/.test(tool.name) ||
+                    ['describeApiOperation', 'executeApiOperation', 'refreshApiCatalog'].includes(tool.name)
             )
         ).toBe(true);
         expect(tools.every((tool) => tool.annotations?.readOnlyHint === true && tool.annotations?.destructiveHint === false)).toBe(true);
         expect(tools.filter((tool) => MUTATING.test(tool.name))).toEqual([]);
         expect(tools.some((tool) => tool.name === 'genericApiCall')).toBe(false);
         for (const name of [
+            'refreshApiCatalog',
             'getApRfScanResults',
             'getApAfcStatus',
             'getControllerCapabilities',

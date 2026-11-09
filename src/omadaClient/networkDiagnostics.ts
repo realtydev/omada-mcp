@@ -1,4 +1,11 @@
 import type { OmadaApiResponse } from '../types/index.js';
+import {
+    compareDiagnosticSnapshots,
+    diagnosticSnapshot,
+    type NetworkDiagnosticComparison,
+    type NetworkDiagnosticSnapshot,
+    validateDiagnosticBaseline,
+} from './networkDiagnosticComparison.js';
 import type { RequestHandler } from './request.js';
 import type { SiteOperations } from './site.js';
 
@@ -54,6 +61,7 @@ export interface NetworkDiagnosticOptions {
     start?: number;
     end?: number;
     maxSamples?: number;
+    baseline?: NetworkDiagnosticSnapshot;
 }
 export interface WifiHistoryOptions extends NetworkDiagnosticOptions {
     apMac?: string;
@@ -73,6 +81,8 @@ export interface NetworkDiagnosticsResult {
     collectionComplete: boolean;
     sections: Record<string, NetworkDiagnosticSection>;
     notes: string[];
+    snapshot: NetworkDiagnosticSnapshot;
+    comparison?: NetworkDiagnosticComparison;
 }
 interface Projection {
     data: unknown;
@@ -211,7 +221,16 @@ export class NetworkDiagnosticsOperations {
         private readonly buildPath: (path: string) => string
     ) {}
 
-    private window(options: NetworkDiagnosticOptions): { capturedAt: number; start: number; end: number; maxSamples: number; base: string } {
+    private window(options: NetworkDiagnosticOptions): {
+        capturedAt: number;
+        start: number;
+        end: number;
+        maxSamples: number;
+        base: string;
+        site: string;
+        baseline?: NetworkDiagnosticSnapshot;
+    } {
+        const baseline = validateDiagnosticBaseline(options.baseline);
         const capturedAt = Date.now();
         const now = Math.floor(capturedAt / 1000);
         const end = options.end ?? now;
@@ -229,7 +248,7 @@ export class NetworkDiagnosticsOperations {
         }
         if (!Number.isInteger(maxSamples) || maxSamples < 1 || maxSamples > 1000) throw new Error('maxSamples must be an integer from 1 to 1000');
         const site = this.site.resolveSiteId(options.siteId);
-        return { capturedAt, start, end, maxSamples, base: `/sites/${encodeURIComponent(site)}` };
+        return { capturedAt, start, end, maxSamples, base: `/sites/${encodeURIComponent(site)}`, site, ...(baseline ? { baseline } : {}) };
     }
 
     private async read(path: string, params: Row | undefined, project: (data: unknown) => Projection): Promise<NetworkDiagnosticSection> {
@@ -257,17 +276,30 @@ export class NetworkDiagnosticsOperations {
     private result(
         context: ReturnType<NetworkDiagnosticsOperations['window']>,
         sections: Record<string, NetworkDiagnosticSection>,
-        notes: string[]
+        notes: string[],
+        kind: NetworkDiagnosticSnapshot['kind'],
+        device?: string
     ): NetworkDiagnosticsResult {
+        const completedAt = Date.now();
+        const snapshot = diagnosticSnapshot({
+            ...context,
+            completedAt,
+            kind,
+            controller: this.buildPath(''),
+            sections,
+            ...(device ? { device } : {}),
+        });
         return {
             capturedAt: context.capturedAt,
-            completedAt: Date.now(),
+            completedAt,
             source: 'controller-api',
             queryWindow: { start: context.start, end: context.end, unit: 'seconds' },
             maxSamples: context.maxSamples,
             collectionComplete: Object.values(sections).every((section) => section.status === 'ok' && !section.truncated),
             sections,
             notes,
+            snapshot,
+            ...(context.baseline ? { comparison: compareDiagnosticSnapshots(context.baseline, snapshot) } : {}),
         };
     }
 
@@ -281,10 +313,15 @@ export class NetworkDiagnosticsOperations {
                 data[key] = series(source[key], ['txData', 'rxData'], budget, { rxData: 'dxData' });
             return { data, truncated: budget.truncated };
         });
-        return this.result(context, { traffic }, [
-            'Traffic sample txData and downlink rxData/dxData values are reported in MB; controller field names are preserved and sourceAliases identifies known spelling differences. Accumulation and reset semantics are not inferred.',
-            'maxSamples bounds the combined AP and switch series in controller response order; timestamps are preserved and no totals are extrapolated from clipped or missing samples.',
-        ]);
+        return this.result(
+            context,
+            { traffic },
+            [
+                'Traffic sample txData and downlink rxData/dxData values are reported in MB; controller field names are preserved and sourceAliases identifies known spelling differences. Accumulation and reset semantics are not inferred.',
+                'maxSamples bounds the combined AP and switch series in controller response order; timestamps are preserved and no totals are extrapolated from clipped or missing samples.',
+            ],
+            'traffic'
+        );
     }
 
     public async getWifiHistory(options: WifiHistoryOptions = {}): Promise<NetworkDiagnosticsResult> {
@@ -343,14 +380,20 @@ export class NetworkDiagnosticsOperations {
                 })
             );
         const [channels, interference, wirelessRates, mesh] = await Promise.all(reads);
-        return this.result(context, { channels, interference, wirelessRates, ...(mesh ? { mesh } : {}) }, [
-            'Channels and interference are the latest controller snapshots, with unknown sampling freshness; only retry/drop histories use the requested time window.',
-            'Omitted bands are reported as missing evidence, not empty or healthy bands. Rate units remain controller-reported; no health thresholds are invented.',
-            ...(options.apMac
-                ? []
-                : ['Supply apMac for per-device mesh evidence. Radio configuration is intentionally not changed or duplicated here.']),
-            'No RF scan, channel change, speed test or client reconnect is started.',
-        ]);
+        return this.result(
+            context,
+            { channels, interference, wirelessRates, ...(mesh ? { mesh } : {}) },
+            [
+                'Channels and interference are the latest controller snapshots, with unknown sampling freshness; only retry/drop histories use the requested time window.',
+                'Omitted bands are reported as missing evidence, not empty or healthy bands. Rate units remain controller-reported; no health thresholds are invented.',
+                ...(options.apMac
+                    ? []
+                    : ['Supply apMac for per-device mesh evidence. Radio configuration is intentionally not changed or duplicated here.']),
+                'No RF scan, channel change, speed test or client reconnect is started.',
+            ],
+            'wifi',
+            options.apMac
+        );
     }
 
     public async diagnoseWan(options: WanDiagnosticOptions): Promise<NetworkDiagnosticsResult> {
@@ -414,10 +457,16 @@ export class NetworkDiagnosticsOperations {
                 };
             }),
         ]);
-        return this.result(context, { status, ispHistory, health }, [
-            'WAN status and health are current snapshots; ISP history uses the requested site-wide window and may include ports from other gateways.',
-            'WAN status rates are KB/s, latency ms and loss percent. ISP totalRate retains the controller unit because the API does not specify it.',
-            'maxSamples bounds the combined ISP histories. No speed test, WAN reconnect, failover or routing change is started.',
-        ]);
+        return this.result(
+            context,
+            { status, ispHistory, health },
+            [
+                'WAN status and health are current snapshots; ISP history uses the requested site-wide window and may include ports from other gateways.',
+                'WAN status rates are KB/s, latency ms and loss percent. ISP totalRate retains the controller unit because the API does not specify it.',
+                'maxSamples bounds the combined ISP histories. No speed test, WAN reconnect, failover or routing change is started.',
+            ],
+            'wan',
+            options.gatewayMac
+        );
     }
 }

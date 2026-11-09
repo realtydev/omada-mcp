@@ -146,22 +146,25 @@ describe('ApRadioOperations', () => {
 
             const result = await ops.setApRadio(MAC, '5g', { txPower: 23 }, 'site-1');
 
-            expect(mockRequest.request).toHaveBeenCalledWith({
-                method: 'PATCH',
-                url: configPath,
-                data: {
-                    radioSetting5g: {
-                        radioEnable: true,
-                        channelRange: [],
-                        channelWidth: '5',
-                        channel: '1',
-                        txPower: 23,
-                        txPowerLevel: 3,
-                        freq: 5180,
-                        wirelessMode: -2,
+            expect(mockRequest.request).toHaveBeenCalledWith(
+                {
+                    method: 'PATCH',
+                    url: configPath,
+                    data: {
+                        radioSetting5g: {
+                            radioEnable: true,
+                            channelRange: [],
+                            channelWidth: '5',
+                            channel: '1',
+                            txPower: 23,
+                            txPowerLevel: 3,
+                            freq: 5180,
+                            wirelessMode: -2,
+                        },
                     },
                 },
-            });
+                false
+            );
             expect(result).toEqual({
                 dryRun: false,
                 written: true,

@@ -42,7 +42,7 @@ export function registerSetApRadioTool(server: McpServer, client: OmadaClient): 
                 'Change one radio band of an AP: enable/disable, channel index, channel width, tx power. Changes live wireless configuration and ' +
                 'can drop every client on that band while the radio reconfigures. It reads the current band, sends the complete band with your ' +
                 'changes applied, re-reads it, and returns a before/after diff; if the controller answers success but a requested value did not ' +
-                'take (e.g. a tx power outside what the AP or region allows) it fails with the value the controller kept. Use dryRun to preview.',
+                'take (e.g. a tx power outside what the AP or region allows) it fails with the value the controller kept. Verified shape-preserving changes may return a rollbackReceipt. Use dryRun to preview.',
             inputSchema: setApRadioSchema.strict(),
             annotations: {
                 destructiveHint: true,

@@ -50,6 +50,30 @@ describe('network diagnostics MCP adapters', () => {
             expect(api[name]).toHaveBeenCalledWith(args);
         }
     });
+    it('exposes a bounded portable baseline schema and rejects malformed snapshots before the client', async () => {
+        const { client, api } = await setup();
+        const { tools } = await client.listTools();
+        for (const tool of tools) {
+            const baseline = tool.inputSchema.properties?.baseline as { properties: { version: { const: number } } };
+            expect(baseline.properties.version.const).toBe(1);
+        }
+        const result = await client.callTool({ name: 'getTrafficHistory', arguments: { baseline: { version: 999 } } });
+        expect(result.isError).toBe(true);
+        expect(api.getTrafficHistory).not.toHaveBeenCalled();
+    });
+    it('rejects aggregate point and byte budgets in the MCP schema before invoking the client', async () => {
+        const { client, api } = await setup();
+        const excessivePoints = {
+            metrics: Array.from({ length: 11 }, () => ({ points: Array.from({ length: 1000 }, (_, offset) => ({ offset, value: 1 })) })),
+        };
+        const points = await client.callTool({ name: 'getTrafficHistory', arguments: { baseline: excessivePoints } });
+        expect(points.isError).toBe(true);
+        expect(points.content).toEqual([expect.objectContaining({ text: expect.stringContaining('total point budget') })]);
+        const bytes = await client.callTool({ name: 'getTrafficHistory', arguments: { baseline: { extra: 'x'.repeat(512 * 1024) } } });
+        expect(bytes.isError).toBe(true);
+        expect(bytes.content).toEqual([expect.objectContaining({ text: expect.stringContaining('size limit') })]);
+        expect(api.getTrafficHistory).not.toHaveBeenCalled();
+    });
     it.each([
         ['getWifiHistory', { startScan: true }],
         ['diagnoseWan', { gatewayMac: '../gateway' }],

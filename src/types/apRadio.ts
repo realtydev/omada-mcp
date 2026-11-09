@@ -1,3 +1,5 @@
+import type { ApRadioChangeReceipt } from '../omadaClient/networkChange.js';
+
 /**
  * AP radio band. `5g` is the single 5 GHz radio (or 5GHz-1 on tri-band APs), `5g2` the second 5 GHz radio.
  */
@@ -40,7 +42,7 @@ export interface SetApRadioResult {
     dryRun: boolean;
 
     /** True only when a PATCH was actually sent */
-    written: boolean;
+    written: boolean | 'unknown';
 
     band: ApRadioBand;
 
@@ -51,6 +53,9 @@ export interface SetApRadioResult {
     requestBody?: Record<string, unknown>;
 
     /** Present after a write: whether the re-read showed only the requested changes and nothing else */
+    rollbackReceipt?: ApRadioChangeReceipt;
+    rollbackUnavailable?: string;
+
     verification?: {
         ok: boolean;
         /** Band fields (other than the requested ones and the derived `freq`) or other bands that differ after the write */
