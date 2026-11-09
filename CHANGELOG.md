@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- Bounded traffic-history, RF and WAN diagnostic workflows with timestamped evidence, explicit missing metrics and truncation.
+- Partial rate-limit profile updates with read-back verification and controller-scoped rollback receipts; rollback rejects drift and verifies restoration.
+- Explicit MSP route scope and separate optional OAuth principal configuration.
+- OpenAPI 3.1 execution with JSON Schema 2020 validation while preserving OpenAPI 3.0 behavior.
+- Bounded multipart uploads and binary downloads under an operator-controlled transfer directory, with default write previews, exclusive file creation and integrity metadata.
+
+### Fixed
+
+- Controller 6.3 traffic/channel/WAN health shapes and rate-limit profile ID aliases are handled without inventing missing evidence.
+- Binary API authentication errors retain bounded renewal, and logs describe binary/multipart payloads without enumerating file contents.
+
 ## [0.9.0] - 2026-11-08
 
 ### Added

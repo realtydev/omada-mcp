@@ -50,6 +50,19 @@ import { LogNotificationOperations } from './logNotification.js';
 import { MonitorOperations, type SiteDashboardOptions, type SiteDashboardResult } from './monitor.js';
 import { type ListVpnConnectionsOptions, MonitoringOperations } from './monitoring.js';
 import { NetworkOperations } from './network.js';
+import {
+    type NetworkDiagnosticOptions,
+    NetworkDiagnosticsOperations,
+    type NetworkDiagnosticsResult,
+    type WanDiagnosticOptions,
+    type WifiDiagnosticOptions,
+} from './networkDiagnostics.js';
+import {
+    type NetworkChangeReceipt,
+    RateLimitProfileOperations,
+    type RateLimitProfileUpdate,
+    type RateLimitProfileWriteResult,
+} from './rateLimitProfile.js';
 import { RequestHandler } from './request.js';
 import { SecurityOperations } from './security.js';
 import { SiteOperations } from './site.js';
@@ -77,6 +90,8 @@ export class OmadaClient {
     private readonly securityOps: SecurityOperations;
 
     private readonly networkOps: NetworkOperations;
+    private readonly networkDiagnosticsOps: NetworkDiagnosticsOperations;
+    private readonly rateLimitProfileOps: RateLimitProfileOperations;
 
     private readonly diagnosticsOps: DiagnosticsOperations;
 
@@ -109,13 +124,15 @@ export class OmadaClient {
         this.auth =
             options.authMode === 'web'
                 ? new WebAuthManager(this.http, options.webUsername ?? '', options.webPassword ?? '', options.omadacId)
-                : new AuthManager(this.http, options.clientId ?? '', options.clientSecret ?? '', options.omadacId);
+                : new AuthManager(this.http, options.clientId ?? '', options.clientSecret ?? '', options.authId ?? options.omadacId);
         this.request = new RequestHandler(this.http, this.auth);
         this.siteOps = new SiteOperations(this.request, this.buildOmadaPath.bind(this), options.siteId);
         this.deviceOps = new DeviceOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.clientOps = new ClientOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.securityOps = new SecurityOperations(this.request, this.buildOmadaPath.bind(this));
         this.networkOps = new NetworkOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.networkDiagnosticsOps = new NetworkDiagnosticsOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.rateLimitProfileOps = new RateLimitProfileOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this), options.omadacId);
         this.dhcpReservationOps = new DhcpReservationOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.monitoringOps = new MonitoringOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.monitorOps = new MonitorOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
@@ -543,6 +560,26 @@ export class OmadaClient {
     }
 
     // Generic API operations
+    public async getTrafficHistory(options: NetworkDiagnosticOptions = {}): Promise<NetworkDiagnosticsResult> {
+        return await this.networkDiagnosticsOps.getTrafficHistory(options);
+    }
+    public async diagnoseWifi(options: WifiDiagnosticOptions = {}): Promise<NetworkDiagnosticsResult> {
+        return await this.networkDiagnosticsOps.diagnoseWifi(options);
+    }
+    public async diagnoseWan(options: WanDiagnosticOptions): Promise<NetworkDiagnosticsResult> {
+        return await this.networkDiagnosticsOps.diagnoseWan(options);
+    }
+    public async updateRateLimitProfile(
+        profileId: string,
+        settings: RateLimitProfileUpdate,
+        siteId?: string,
+        dryRun = true
+    ): Promise<RateLimitProfileWriteResult> {
+        return await this.rateLimitProfileOps.updateRateLimitProfile(profileId, settings, siteId, dryRun);
+    }
+    public async rollbackNetworkChange(receipt: NetworkChangeReceipt, dryRun = true): Promise<RateLimitProfileWriteResult> {
+        return await this.rateLimitProfileOps.rollbackNetworkChange(receipt, dryRun);
+    }
     public async searchApiOperations(options: SearchApiOperationsOptions = {}, policy: DiscoveryPolicy = {}): Promise<unknown> {
         return await this.discoveryOps.searchApiOperations(options, policy);
     }

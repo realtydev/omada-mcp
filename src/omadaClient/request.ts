@@ -9,6 +9,30 @@ import type { RequestAuthManager } from './auth.js';
 
 const DEFAULT_PAGE_SIZE = 200;
 const MAX_PAGINATION_PAGES = 1000;
+const MAX_BINARY_AUTH_ENVELOPE_BYTES = 1024 * 1024;
+
+function isByteResponse(value: unknown): value is Uint8Array | ArrayBuffer {
+    return value instanceof Uint8Array || value instanceof ArrayBuffer;
+}
+
+/** Inspect small JSON error envelopes without converting or returning the actual file response. */
+function authenticationEnvelope(value: unknown, contentType: unknown): { errorCode?: number; msg?: string } | undefined {
+    if (!isByteResponse(value)) return value as { errorCode?: number; msg?: string } | undefined;
+    const view = value instanceof ArrayBuffer ? new Uint8Array(value) : value;
+    if (view.byteLength === 0 || view.byteLength > MAX_BINARY_AUTH_ENVELOPE_BYTES) return undefined;
+    const bytes = Buffer.from(view.buffer, view.byteOffset, view.byteLength);
+    const jsonMedia = typeof contentType === 'string' && /^(?:application|text)\/(?:[a-z0-9.+-]+\+)?json(?:\s*;|$)/i.test(contentType.trim());
+    if (!jsonMedia && !bytes.subarray(0, 512).toString('utf8').trimStart().startsWith('{')) return undefined;
+    try {
+        const parsed: unknown = JSON.parse(bytes.toString('utf8').trimStart());
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+        const envelope = parsed as { errorCode?: unknown; msg?: unknown };
+        if (!Number.isInteger(envelope.errorCode)) return undefined;
+        return { errorCode: envelope.errorCode as number, ...(typeof envelope.msg === 'string' ? { msg: envelope.msg } : {}) };
+    } catch {
+        return undefined;
+    }
+}
 
 /**
  * HTTP request handler for Omada API calls with authentication and retry logic.
@@ -95,15 +119,19 @@ export class RequestHandler {
             });
 
             // Check if the response data indicates an authentication error
-            const errorCode = (response.data as { errorCode?: number } | undefined)?.errorCode;
-            const errorMsg = (response.data as { msg?: string } | undefined)?.msg;
+            const envelope = authenticationEnvelope(response.data, response.headers?.['content-type'] ?? response.headers?.['Content-Type']);
+            const errorCode = envelope?.errorCode;
+            const errorMsg = envelope?.msg;
+            const binaryResponse = isByteResponse(response.data);
 
-            if (retry && (this.isAuthErrorCode(errorCode) || this.isExpiredAuthMessage(errorMsg))) {
+            // A downloaded JSON file may legitimately contain an expiry-like message. Only recognized
+            // controller auth codes permit binary retries; preserve existing object-response heuristics.
+            if (retry && (this.isAuthErrorCode(errorCode) || (!binaryResponse && this.isExpiredAuthMessage(errorMsg)))) {
                 logger.warn('Omada authentication error in response, retrying with fresh token', {
                     method,
                     url,
                     errorCode,
-                    message: errorMsg,
+                    message: binaryResponse ? 'Controller reported expired authentication during a binary response' : errorMsg,
                 });
                 this.auth.clearToken(authHeaders);
                 return this.request<T>(config, false);
@@ -132,7 +160,10 @@ export class RequestHandler {
             }
 
             const status = error.response?.status;
-            const errorCode = (error.response?.data as { errorCode?: number } | undefined)?.errorCode;
+            const errorCode = authenticationEnvelope(
+                error.response?.data,
+                error.response?.headers?.['content-type'] ?? error.response?.headers?.['Content-Type']
+            )?.errorCode;
 
             if (retry && (status === 401 || status === 403 || this.isAuthErrorCode(errorCode))) {
                 this.auth.clearToken(authHeaders);
@@ -303,6 +334,8 @@ export class RequestHandler {
      * Sanitize a payload for logging, masking sensitive values.
      */
     private sanitizePayload(payload: unknown): unknown {
+        if (payload instanceof ArrayBuffer || ArrayBuffer.isView(payload)) return { binary: true, byteLength: payload.byteLength };
+        if (payload instanceof FormData) return { multipart: true };
         if (!payload || typeof payload !== 'object') {
             return payload;
         }

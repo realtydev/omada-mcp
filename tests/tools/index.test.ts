@@ -22,6 +22,11 @@ describe('tools/index', () => {
             // Verify registerTool was called for each tool
             const expectedTools = [
                 'searchApiOperations',
+                'getTrafficHistory',
+                'diagnoseWifi',
+                'diagnoseWan',
+                'updateRateLimitProfile',
+                'rollbackNetworkChange',
                 'describeApiOperation',
                 'executeApiOperation',
                 // Read tools

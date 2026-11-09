@@ -29,7 +29,7 @@ Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned
 ## Highlights
 
 - **Automatic API discovery.** `searchApiOperations` → `describeApiOperation` → `executeApiOperation`. Prefer the controller's live specification, with an explicit bundled fallback containing 1,676 indexed operations. Unsupported operations are identified; a catalogue entry does not prove device support. See [API discovery](docs/api-discovery.md).
-- **97 tools, including 49 in read-only mode.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
+- **102 tools on main, including 52 in read-only mode.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
 - **Guarded configuration changes.** Discovered writes default to validated previews. Radio, DHCP and log-notification writes retain their dedicated preservation and read-back checks. Other discovered writes explicitly report that they have not been verified by reading settings back.
 - **Explicit read-only access.** `MCP_TOOL_PROFILE=read-only` blocks writes, including discovered operations. Controller permissions still govern which data is accessible.
 - **Two API surfaces.** The official Omada Open API, plus the controller's internal web UI API for features the Open API doesn't expose (ACLs, routes, port forwarding on OC200).
@@ -122,20 +122,24 @@ Endpoints: `http://localhost:3000/mcp` (Streamable HTTP) or `/sse` (SSE), with `
 
 ### Omada Controller
 
-| Variable              | Required   | Default | Description                                                                |
-| --------------------- | ---------- | ------- | -------------------------------------------------------------------------- |
-| `OMADA_BASE_URL`      | Yes        | -       | Omada controller URL                                                       |
-| `OMADA_AUTH_MODE`     | No         | `oauth` | `oauth` for classic OpenAPI credentials, `web` for Fusion web-session auth |
-| `OMADA_CLIENT_ID`     | OAuth mode | -       | OAuth client ID                                                            |
-| `OMADA_CLIENT_SECRET` | OAuth mode | -       | OAuth client secret                                                        |
-| `OMADA_OMADAC_ID`     | Yes        | -       | Controller ID (omadacId)                                                   |
-| `OMADA_SITE_ID`       | No         | -       | Default site ID                                                            |
-| `OMADA_WEB_USERNAME`  | Web mode   | -       | Omada web UI username                                                      |
-| `OMADA_WEB_PASSWORD`  | Web mode   | -       | Omada web UI password                                                      |
-| `OMADA_STRICT_SSL`    | No         | `true`  | SSL certificate and hostname verification                                  |
-| `OMADA_CA_FILE`       | No         | —       | PEM CA file/bundle added to default trust; requires strict SSL             |
-| `OMADA_API_SPEC`      | No         | `auto`  | API discovery source: `auto`, `live`, or `bundled`                         |
-| `OMADA_TIMEOUT`       | No         | `30000` | Request timeout (ms)                                                       |
+| Variable                   | Required   | Default       | Description                                                                |
+| -------------------------- | ---------- | ------------- | -------------------------------------------------------------------------- |
+| `OMADA_BASE_URL`           | Yes        | -             | Omada controller URL                                                       |
+| `OMADA_AUTH_MODE`          | No         | `oauth`       | `oauth` for classic OpenAPI credentials, `web` for Fusion web-session auth |
+| `OMADA_CLIENT_ID`          | OAuth mode | -             | OAuth client ID                                                            |
+| `OMADA_CLIENT_SECRET`      | OAuth mode | -             | OAuth client secret                                                        |
+| `OMADA_OMADAC_ID`          | Yes        | -             | Controller ID (omadacId)                                                   |
+| `OMADA_MSP_ID`             | No         | —             | Explicit MSP context for discovered MSP routes                             |
+| `OMADA_AUTH_ID`            | No         | Controller ID | Optional separate OAuth credential principal                               |
+| `OMADA_SITE_ID`            | No         | -             | Default site ID                                                            |
+| `OMADA_WEB_USERNAME`       | Web mode   | -             | Omada web UI username                                                      |
+| `OMADA_WEB_PASSWORD`       | Web mode   | -             | Omada web UI password                                                      |
+| `OMADA_STRICT_SSL`         | No         | `true`        | SSL certificate and hostname verification                                  |
+| `OMADA_CA_FILE`            | No         | —             | PEM CA file/bundle added to default trust; requires strict SSL             |
+| `OMADA_API_SPEC`           | No         | `auto`        | API discovery source: `auto`, `live`, or `bundled`                         |
+| `OMADA_TRANSFER_DIR`       | No         | Disabled      | Existing private directory for file transfers                              |
+| `OMADA_MAX_TRANSFER_BYTES` | No         | `16777216`    | Maximum combined upload bytes or download size, up to 64 MiB               |
+| `OMADA_TIMEOUT`            | No         | `30000`       | Request timeout (ms)                                                       |
 
 For Fusion gateways that do not expose Platform Integration OAuth credentials, set `OMADA_AUTH_MODE=web` and provide `OMADA_WEB_USERNAME` / `OMADA_WEB_PASSWORD`. The server logs in through `/{omadacId}/api/v2/login` and uses that web session for OpenAPI requests.
 
@@ -171,6 +175,9 @@ For Fusion gateways that do not expose Platform Integration OAuth credentials, s
 | `getApAvailableChannels`        | Allowed radio channels and controller channel indices for use with `setApRadio`                                                                                     |
 | `getSiteTopology`               | Controller-discovered topology, uplinks and link speeds; requires web UI credentials                                                                                |
 | `getSiteDashboard`              | Wi-Fi, traffic, wireless retry/drop averages, switch and PoE summaries with explicit partial results                                                                |
+| `getTrafficHistory`             | Bounded timestamped AP/switch traffic history                                                                                                                       |
+| `diagnoseWifi`                  | Channel, interference, retry/drop and optional mesh evidence                                                                                                        |
+| `diagnoseWan`                   | Gateway WAN status, ISP history and health evidence                                                                                                                 |
 | `listVpnConnections`            | Paginated tunnel/IPsec or protocol-filtered site-to-site, server and client VPN status                                                                              |
 | `getGatewayWanSpeedTestResults` | Read saved gateway WAN speed-test results without starting a test                                                                                                   |
 | `listDhcpReservations`          | Read all DHCP reservation pages, optionally filtered by search text                                                                                                 |
@@ -212,33 +219,35 @@ The AP diagnostics use the bundled `docs/openapi/03-device.json` operations `get
 
 ### Write Tools
 
-| Tool                    | Description                                                                                                              |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `createLanNetwork`      | Create a LAN network (VLAN, subnet, DHCP range, DNS servers, custom DHCP options)                                        |
-| `updateLanNetwork`      | Update a LAN network                                                                                                     |
-| `deleteLanNetwork`      | Delete a LAN network                                                                                                     |
-| `createLanProfile`      | Create a LAN profile                                                                                                     |
-| `updateLanProfile`      | Update a LAN profile                                                                                                     |
-| `updateFirewallSetting` | Update firewall settings                                                                                                 |
-| `setIpsSetting`         | Enable/disable and configure IDS/IPS (mode, detection level) on a site's gateway; can reduce max throughput when enabled |
-| `createFirewallAcl`     | Create a firewall ACL rule                                                                                               |
-| `updateFirewallAcl`     | Update a firewall ACL rule                                                                                               |
-| `deleteFirewallAcl`     | Delete a firewall ACL rule                                                                                               |
-| `updateSsid`            | Update an SSID's basic config (name, band, security, VLAN, PSK, etc.)                                                    |
-| `setSsidEnable`         | Enable or disable an SSID network-wide                                                                                   |
-| `updateSwitchPort`      | Update switch port config (profile, PoE, speed, STP)                                                                     |
-| `updateClient`          | Update name, fixed IPv4 or rate limits through setting-specific endpoints; supports dry-run previews                     |
-| `setSwitchNetworks`     | Set switch VLAN trunking configuration                                                                                   |
-| `createRoute`           | Create a static route (internal web UI API only)                                                                         |
-| `updateRoute`           | Update a static route by ID (internal web UI API only)                                                                   |
-| `deleteRoute`           | Delete a static route by ID (internal web UI API only)                                                                   |
-| `createPortForward`     | Create a port forwarding rule (internal web UI API only)                                                                 |
-| `updatePortForward`     | Update a port forwarding rule by ID (internal web UI API only)                                                           |
-| `deletePortForward`     | Delete a port forwarding rule by ID (internal web UI API only)                                                           |
-| `updateWanPortSetting`  | Update a gateway WAN port's IPv4/IPv6/MAC connection settings (e.g. DHCP client `unicastDhcp`)                           |
-| `createDhcpReservation` | Create a MAC/IP reservation with preview and bounded read-back verification                                              |
-| `updateDhcpReservation` | Patch reservation settings while preserving other writable fields; preview and no-op detection                           |
-| `deleteDhcpReservation` | Remove a reservation with preview and verified absence after deletion                                                    |
+| Tool                     | Description                                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `createLanNetwork`       | Create a LAN network (VLAN, subnet, DHCP range, DNS servers, custom DHCP options)                                        |
+| `updateLanNetwork`       | Update a LAN network                                                                                                     |
+| `deleteLanNetwork`       | Delete a LAN network                                                                                                     |
+| `createLanProfile`       | Create a LAN profile                                                                                                     |
+| `updateLanProfile`       | Update a LAN profile                                                                                                     |
+| `updateFirewallSetting`  | Update firewall settings                                                                                                 |
+| `setIpsSetting`          | Enable/disable and configure IDS/IPS (mode, detection level) on a site's gateway; can reduce max throughput when enabled |
+| `createFirewallAcl`      | Create a firewall ACL rule                                                                                               |
+| `updateFirewallAcl`      | Update a firewall ACL rule                                                                                               |
+| `deleteFirewallAcl`      | Delete a firewall ACL rule                                                                                               |
+| `updateSsid`             | Update an SSID's basic config (name, band, security, VLAN, PSK, etc.)                                                    |
+| `setSsidEnable`          | Enable or disable an SSID network-wide                                                                                   |
+| `updateSwitchPort`       | Update switch port config (profile, PoE, speed, STP)                                                                     |
+| `updateClient`           | Update name, fixed IPv4 or rate limits through setting-specific endpoints; supports dry-run previews                     |
+| `updateRateLimitProfile` | Partial profile updates with previews, preservation, read-back verification and rollback receipts                        |
+| `rollbackNetworkChange`  | Restore a verified rate-limit profile change after checking for drift                                                    |
+| `setSwitchNetworks`      | Set switch VLAN trunking configuration                                                                                   |
+| `createRoute`            | Create a static route (internal web UI API only)                                                                         |
+| `updateRoute`            | Update a static route by ID (internal web UI API only)                                                                   |
+| `deleteRoute`            | Delete a static route by ID (internal web UI API only)                                                                   |
+| `createPortForward`      | Create a port forwarding rule (internal web UI API only)                                                                 |
+| `updatePortForward`      | Update a port forwarding rule by ID (internal web UI API only)                                                           |
+| `deletePortForward`      | Delete a port forwarding rule by ID (internal web UI API only)                                                           |
+| `updateWanPortSetting`   | Update a gateway WAN port's IPv4/IPv6/MAC connection settings (e.g. DHCP client `unicastDhcp`)                           |
+| `createDhcpReservation`  | Create a MAC/IP reservation with preview and bounded read-back verification                                              |
+| `updateDhcpReservation`  | Patch reservation settings while preserving other writable fields; preview and no-op detection                           |
+| `deleteDhcpReservation`  | Remove a reservation with preview and verified absence after deletion                                                    |
 
 DHCP writes support `dryRun`. Inspect `verification.status`: `verified` confirms the observed result, `mismatch` means the desired state was not observed, and `unknown` means verification could not establish the outcome. A lost write response is reconciled with reads; the tool does not replay an uncertain mutation. `written: "unknown"` is not a confirmed success.
 
@@ -276,12 +285,14 @@ DHCP writes support `dryRun`. Inspect `verification.status`: `verified` confirms
 
 ### Generic
 
-| Tool                   | Description                                                             |
-| ---------------------- | ----------------------------------------------------------------------- |
-| `genericApiCall`       | Invoke any Omada OpenAPI endpoint directly                              |
-| `searchApiOperations`  | Search API operations by keyword, category or HTTP method               |
-| `describeApiOperation` | Inspect an operation’s parameters, schemas and limitations              |
-| `executeApiOperation`  | Execute validated discovered JSON operations; writes preview by default |
+| Tool                   | Description                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------- |
+| `genericApiCall`       | Invoke any Omada OpenAPI endpoint directly                                               |
+| `searchApiOperations`  | Search API operations by keyword, category or HTTP method                                |
+| `describeApiOperation` | Inspect an operation’s parameters, schemas and limitations                               |
+| `executeApiOperation`  | Execute validated JSON, multipart or file-download operations; writes preview by default |
+
+See [network workflows](docs/network-workflows.md) for diagnostics and verified profile rollback, and [file transfers](docs/file-transfers.md) for bounded upload/download configuration.
 
 ### Meta
 

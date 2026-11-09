@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path';
 import { z } from 'zod';
 
 import { isValidBindAddress, isValidOrigin } from './utils/config-validations.js';
@@ -47,6 +48,10 @@ const envSchema = z
         clientId: z.string().min(1).optional(),
         clientSecret: z.string().min(1).optional(),
         omadacId: z.string().min(1, 'OMADA_OMADAC_ID is required'),
+        mspId: z.string().min(1).optional(),
+        authId: z.string().min(1).optional(),
+        transferDirectory: z.string().refine(isAbsolute, 'OMADA_TRANSFER_DIR must be an absolute directory').optional(),
+        maxTransferBytes: boundedIntegerStringSchema(16 * 1024 * 1024, 64 * 1024 * 1024),
         siteId: z.string().min(1).optional(),
         webUsername: z.string().min(1).optional(),
         webPassword: z.string().min(1).optional(),
@@ -137,6 +142,10 @@ export interface EnvironmentConfig {
     clientId?: string;
     clientSecret?: string;
     omadacId: string;
+    mspId?: string;
+    authId?: string;
+    transferDirectory?: string;
+    maxTransferBytes?: number;
     siteId?: string;
     webUsername?: string;
     webPassword?: string;
@@ -175,6 +184,10 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Environ
         clientId: env.OMADA_CLIENT_ID,
         clientSecret: env.OMADA_CLIENT_SECRET,
         omadacId: env.OMADA_OMADAC_ID,
+        mspId: env.OMADA_MSP_ID,
+        authId: env.OMADA_AUTH_ID,
+        transferDirectory: env.OMADA_TRANSFER_DIR,
+        maxTransferBytes: env.OMADA_MAX_TRANSFER_BYTES,
         siteId: env.OMADA_SITE_ID,
         webUsername: env.OMADA_WEB_USERNAME,
         webPassword: env.OMADA_WEB_PASSWORD,
@@ -232,6 +245,10 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Environ
         clientId: parsed.data.clientId,
         clientSecret: parsed.data.clientSecret,
         omadacId: parsed.data.omadacId,
+        mspId: parsed.data.mspId,
+        authId: parsed.data.authId,
+        transferDirectory: parsed.data.transferDirectory,
+        maxTransferBytes: parsed.data.maxTransferBytes,
         siteId: parsed.data.siteId,
         webUsername: parsed.data.webUsername,
         webPassword: parsed.data.webPassword,

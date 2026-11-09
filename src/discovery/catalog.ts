@@ -101,13 +101,18 @@ function dereferenceRecord(document: ApiDocument, value: unknown): ApiDocument {
 }
 
 function publicPathReason(path: string): string | undefined {
-    if (!/^\/openapi\/v[12]\/\{(?:omadacId|mspId)\}(?:\/|$)/.test(path)) {
-        return 'Execution supports controller-scoped Open API v1/v2 paths only';
+    if (!/^\/openapi\/v[12]\/(?:\{omadacId\}|msp\/\{mspId\})(?:\/|$)/.test(path)) {
+        return 'Execution supports controller- or MSP-scoped Open API v1/v2 paths only';
     }
     if (/[?#\\\s]/.test(path) || path.includes('//') || /(?:^|\/)\.{1,2}(?:\/|$)/.test(path) || /%(?:2e|2f|5c|00)/i.test(path)) {
         return 'OpenAPI path contains unsafe path syntax';
     }
     return undefined;
+}
+
+function schemaObject(document: ApiDocument, value: unknown): ApiDocument | undefined {
+    if (/^3\.1(?:\.|$)/.test(text(document.openapi)) && typeof value === 'boolean') return value ? {} : { not: {} };
+    return object(value);
 }
 
 function parseParameters(document: ApiDocument, shared: unknown, own: unknown, path: string, reasons: string[]): ApiParameter[] {
@@ -128,7 +133,7 @@ function parseParameters(document: ApiDocument, shared: unknown, own: unknown, p
                 }
                 if (raw.required !== undefined && typeof raw.required !== 'boolean')
                     throw new Error('OpenAPI parameter required flag must be boolean');
-                const schema = object(raw.schema);
+                const schema = schemaObject(document, raw.schema);
                 if (!schema || raw.content !== undefined) throw new Error(`Parameter ${raw.name} has an unsupported schema or serialization`);
                 const parameter: ApiParameter = {
                     name: raw.name,
@@ -163,9 +168,15 @@ function parseBody(document: ApiDocument, value: unknown, reasons: string[]): Ap
         const content = object(raw.content);
         if (!content || Object.keys(content).length === 0) throw new Error('OpenAPI request body has no media type');
         const contentType = Object.keys(content).find((key) => /^application\/(?:json|[\w.+-]+\+json)(?:;|$)/i.test(key)) ?? Object.keys(content)[0];
-        const schema = object(object(content[contentType])?.schema);
+        const media = object(content[contentType]);
+        const schema = schemaObject(document, media?.schema);
         if (!schema) throw new Error('OpenAPI request body has no supported schema');
-        if (!/^application\/(?:json|[\w.+-]+\+json)(?:;|$)/i.test(contentType)) reasons.push('Only JSON request bodies can be executed');
+        if (/^multipart\/form-data(?:;|$)/i.test(contentType) && media?.encoding !== undefined) {
+            const encoding = object(media.encoding);
+            if (!encoding || Object.keys(encoding).length > 0) reasons.push('Explicit multipart encoding metadata is not supported for execution');
+        }
+        if (!/^application\/(?:json|[\w.+-]+\+json)(?:;|$)/i.test(contentType) && !/^multipart\/form-data(?:;|$)/i.test(contentType))
+            reasons.push('Only JSON or multipart request bodies can be executed');
         return { required: raw.required === true, contentType, schema };
     } catch (error) {
         reasons.push(error instanceof Error ? error.message : 'Invalid OpenAPI request body');
@@ -186,7 +197,7 @@ function parseResponse(document: ApiDocument, value: unknown, warnings: string[]
         const content = object(response.content);
         if (!content) return {};
         const media = Object.keys(content).find((type) => type.includes('json')) ?? Object.keys(content)[0];
-        return { responseContentType: media, responseSchema: object(object(content[media])?.schema) };
+        return { responseContentType: media, responseSchema: schemaObject(document, object(content[media])?.schema) };
     } catch (error) {
         // Response metadata does not prevent a request, but descriptions disclose unresolved evidence.
         warnings.push(error instanceof Error ? error.message : 'Response metadata could not be resolved');
@@ -239,7 +250,12 @@ function expandSchema(
         try {
             if (seen.has(reference)) throw new Error(`Cyclic schema reference: ${reference}`);
             const next = new Set(seen).add(reference);
-            return expandSchema(document, localReference(document, reference), warnings, next, depth + 1, budget);
+            const referenced = expandSchema(document, localReference(document, reference), warnings, next, depth + 1, budget);
+            const siblings = Object.fromEntries(Object.entries(source).filter(([key]) => key !== '$ref'));
+            if (/^3\.1(?:\.|$)/.test(text(document.openapi)) && Object.keys(siblings).length) {
+                return { allOf: [referenced, expandSchema(document, siblings, warnings, seen, depth + 1, budget)] };
+            }
+            return referenced;
         } catch (error) {
             warnings.add(error instanceof Error ? error.message : 'Schema reference could not be resolved');
             return { $ref: reference, 'x-discovery-unresolved': true };
