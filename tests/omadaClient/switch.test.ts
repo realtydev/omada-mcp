@@ -89,6 +89,11 @@ describe('SwitchOperations', () => {
             expect(mockRequest.fetchPaginated).toHaveBeenCalledWith('/openapi/v1/test-omadac/sites/site%2Fone/switches/ports/poe-info');
         });
 
+        it('returns an empty filter result when the controller omits a non-PoE switch', async () => {
+            vi.mocked(mockRequest.fetchPaginated).mockResolvedValue([{ switchMac: 'AA-BB-CC-DD-EE-FF', port: 1 }]);
+            await expect(switchOps.listSwitchPorts('11-22-33-44-55-66', 'site-123')).resolves.toEqual([]);
+        });
+
         it('filters port telemetry by switch MAC case-insensitively', async () => {
             const mockPorts = [
                 { switchMac: 'AA-BB-CC-DD-EE-FF', port: 1 },
