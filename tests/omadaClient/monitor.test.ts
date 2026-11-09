@@ -167,6 +167,43 @@ describe('MonitorOperations dashboard', () => {
         if (result.sections.poe.status === 'ok') expect(result.sections.poe.data).toHaveLength(50);
     });
 
+    it('preserves powered switch metrics alongside an explicitly unsupported switch without inventing power readings', async () => {
+        const unsupported = { mac: 'CC', name: 'Non-PoE switch', portNum: 2, poePorts: [{ poeSupported: false }, { poeSupported: false }] };
+        request.get.mockImplementation(async (path: string) => ({
+            errorCode: 0,
+            result: path.endsWith('poe-usage') ? [...(payloads['poe-usage'] as unknown[]), unsupported] : payloads[path.split('/').at(-1) ?? ''],
+        }));
+        const result = await ops.getSiteDashboard();
+        expect(result.collectionComplete).toBe(true);
+        expect(result.sections.poe).toEqual({
+            status: 'ok',
+            truncated: false,
+            data: [
+                { mac: 'BB', portNum: 8, totalPowerUsed: 14, totalPercentUsed: 17.5, totalPower: 80 },
+                { mac: 'CC', name: 'Non-PoE switch', portNum: 2, supported: false },
+            ],
+        });
+    });
+
+    it.each([
+        undefined,
+        [],
+        [{ poeSupported: false }, {}],
+        [{ poeSupported: false }, { poeSupported: true }],
+        [{ poeSupported: false }, { poeSupported: null }],
+        [{ poeSupported: false }, null],
+        [{ poeSupported: false }, { poeSupported: 'false' }],
+        [Object.create({ poeSupported: false })],
+    ])('requires explicit nonempty unsupported-port evidence before omitting power metrics: %j', async (poePorts) => {
+        request.get.mockImplementation(async (path: string) => ({
+            errorCode: 0,
+            result: path.endsWith('poe-usage') ? [{ mac: 'CC', portNum: 2, poePorts }] : payloads[path.split('/').at(-1) ?? ''],
+        }));
+        const result = await ops.getSiteDashboard();
+        expect(result.collectionComplete).toBe(false);
+        expect(result.sections.poe).toEqual({ status: 'unavailable', message: 'Controller omitted dashboard metric: totalPowerUsed.' });
+    });
+
     it.each([
         { start: -1 },
         { start: 1.5 },

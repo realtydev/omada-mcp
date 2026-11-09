@@ -9,7 +9,7 @@ import type { EnvironmentConfig } from '../config.js';
 
 type ControllerHttpOptions = Pick<EnvironmentConfig, 'baseUrl' | 'strictSsl' | 'caFile' | 'requestTimeout'>;
 
-function loadCaCertificates(filePath: string): string[] {
+export function loadCaCertificates(filePath: string): string[] {
     let pem: string;
     try {
         pem = readFileSync(filePath, 'utf8');

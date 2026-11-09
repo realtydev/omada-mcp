@@ -161,7 +161,52 @@ describe('runtime commands', () => {
             ports: ['127.0.0.1:3017:3000'],
         });
         expect(await core.readState(home, 'docker')).toMatchObject({ current, url: 'http://127.0.0.1:3017/mcp' });
+        expect(config.services['omada-mcp']).not.toHaveProperty('volumes');
     });
+    it('validates and mounts a private CA read-only with a container-local path and literal dollar signs', async () => {
+        const caFile = join(home, 'ca-${NETWORK}-$controller.pem');
+        const certificate = await readFile(new URL('../fixtures/tls/ca.pem', import.meta.url), 'utf8');
+        await writeFile(caFile, certificate);
+        const environment = `OMADA_CLIENT_SECRET=test-secret\nOMADA_CA_FILE='${caFile}'\n`;
+        await writeFile(envFile, environment);
+
+        await cli('setup', 'docker', '--env-file', envFile);
+
+        const config = JSON.parse(await readFile(join(home, 'compose.json'), 'utf8'));
+        expect(config.services['omada-mcp'].environment.OMADA_CA_FILE).toBe('/certs/omada-ca.pem');
+        expect(config.services['omada-mcp'].volumes).toEqual([
+            { type: 'bind', source: join(home, 'ca-$${NETWORK}-$$controller.pem'), target: '/certs/omada-ca.pem', read_only: true },
+        ]);
+        expect(core.pullImage).toHaveBeenCalledTimes(1);
+        expect(core.switchDocker).toHaveBeenCalledTimes(1);
+        expect(await readFile(envFile, 'utf8')).toBe(environment);
+        expect(await readFile(caFile, 'utf8')).toBe(certificate);
+        expect(JSON.stringify(config)).not.toContain('BEGIN CERTIFICATE');
+    });
+    it.each(['relative.pem', '', '   '])('rejects ambiguous private CA paths before image or service changes: %j', async (path) => {
+        await writeFile(envFile, `OMADA_CA_FILE='${path}'\n`);
+        await expect(cli('setup', 'docker', '--env-file', envFile)).rejects.toThrow('OMADA_CA_FILE must be an absolute path');
+        expect(core.pullImage).not.toHaveBeenCalled();
+        expect(core.switchDocker).not.toHaveBeenCalled();
+        await expect(readFile(join(home, 'compose.json'))).rejects.toThrow();
+    });
+    it.each(['missing', 'empty', 'malformed', 'directory', 'insecure'])(
+        'rejects unusable private CAs before image or service changes: %s',
+        async (kind) => {
+            const caFile = kind === 'directory' ? home : join(home, 'ca.pem');
+            if (kind === 'empty') await writeFile(caFile, '');
+            if (kind === 'malformed') await writeFile(caFile, 'private-certificate-content');
+            if (kind === 'insecure') await writeFile(caFile, await readFile(new URL('../fixtures/tls/ca.pem', import.meta.url)));
+            await writeFile(envFile, `OMADA_CA_FILE='${caFile}'\n${kind === 'insecure' ? 'OMADA_STRICT_SSL=false\n' : ''}`);
+
+            await expect(cli('setup', 'docker', '--env-file', envFile)).rejects.toThrow('OMADA_CA_FILE');
+
+            expect(core.pullImage).not.toHaveBeenCalled();
+            expect(core.switchDocker).not.toHaveBeenCalled();
+            await expect(readFile(join(home, 'compose.json'))).rejects.toThrow();
+            await expect(core.readState(home, 'docker')).rejects.toThrow('setup docker');
+        }
+    );
     it('rejects invalid ports, missing credentials and existing project collisions', async () => {
         await expect(cli('setup', 'docker')).rejects.toThrow('--env-file');
         await expect(cli('setup', 'docker', '--project', 'other')).rejects.toThrow('--compose-file');

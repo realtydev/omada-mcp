@@ -82,6 +82,34 @@ function summarizeGroups(value: unknown, groups: readonly string[], fields: read
     return { status: 'ok', data, truncated };
 }
 
+function summarizePoe(value: unknown): DashboardSection {
+    if (!Array.isArray(value)) throw new Error('Controller did not return a dashboard device list.');
+    const data = value.slice(0, MAX_DEVICES).map((item) => {
+        const source = record(item);
+        const ports = source.poePorts;
+        const explicitlyUnsupported =
+            Array.isArray(ports) &&
+            ports.length > 0 &&
+            ports.every(
+                (port) =>
+                    port !== null &&
+                    typeof port === 'object' &&
+                    !Array.isArray(port) &&
+                    Object.hasOwn(port, 'poeSupported') &&
+                    port.poeSupported === false
+            );
+        if (explicitlyUnsupported) {
+            return { ...select(source, ['mac', 'name', 'portNum'], ['portNum']), supported: false };
+        }
+        return select(
+            source,
+            ['mac', 'name', 'portNum', 'totalPowerUsed', 'totalPercentUsed', 'totalPower'],
+            ['portNum', 'totalPowerUsed', 'totalPercentUsed', 'totalPower']
+        );
+    });
+    return { status: 'ok', data, truncated: value.length > MAX_DEVICES };
+}
+
 /** Bounded, read-only dashboard summaries; no scans, tests or controller changes. */
 export class MonitorOperations {
     constructor(
@@ -134,14 +162,7 @@ export class MonitorOperations {
                 summarizeGroups(value, ['retryEaps', 'droppedEaps'], ['apMac', 'name', 'avg', 'status'], ['avg'])
             ),
             read('switch-summary', true, (value) => summarize(value, ['clients', 'portUtilization', 'connectedSwitchNum', 'totalTraffic'])),
-            read('poe-usage', false, (value) => ({
-                status: 'ok',
-                ...summarizeList(
-                    value,
-                    ['mac', 'name', 'portNum', 'totalPowerUsed', 'totalPercentUsed', 'totalPower'],
-                    ['portNum', 'totalPowerUsed', 'totalPercentUsed', 'totalPower']
-                ),
-            })),
+            read('poe-usage', false, summarizePoe),
         ]);
         const sections = { wifi, traffic, wirelessRates, switches, poe };
         return {
