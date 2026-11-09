@@ -98,6 +98,7 @@ try {
     const { tools } = await protocolClient.listTools();
     const registered = new Set(tools.map((tool) => tool.name));
     const required = [
+        'diagnoseWifi',
         'getControllerCapabilities',
         'listDhcpReservations',
         'getSiteTopology',
@@ -140,6 +141,18 @@ try {
     const aps = devices.filter((device) => device.type === 'ap' && device.status === 1);
     const gateways = devices.filter((device) => device.type === 'gateway' && device.status === 1);
     emit({ inventory: { sites: sites.length, devices: devices.length, aps: aps.length, gateways: gateways.length } });
+    await check('wifi-audit', async () => {
+        const audit = await call('diagnoseWifi', { siteId, maxAps: 10 });
+        assert(typeof audit.collectionComplete === 'boolean' && Array.isArray(audit.aps), 'Unexpected Wi-Fi audit result');
+        assert(audit.aps.length <= 10 && audit.snapshot?.scope === 'radio_configuration', 'Audit scope is not bounded');
+        assert(audit.comparison?.status === 'not_requested', 'An audit must not invent a baseline comparison');
+        return {
+            aps: audit.aps.length,
+            auditCollectionComplete: audit.collectionComplete,
+            snapshotComplete: audit.snapshot.complete,
+            rfStatuses: audit.aps.map((ap) => ap.rf.status),
+        };
+    });
     await check('site-dashboard', async () => {
         const dashboard = await call('getSiteDashboard', { siteId });
         assert(dashboard?.sections && typeof dashboard.collectionComplete === 'boolean', 'Unexpected dashboard result');

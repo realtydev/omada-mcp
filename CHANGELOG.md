@@ -6,11 +6,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- `diagnoseWifi` collects bounded dashboard, radio and saved-RF evidence with explicit coverage/freshness and portable, scope-matched configuration snapshots.
+- Optional `MCP_TOOL_CATEGORIES` read/write scopes consistently restrict dedicated tools, discovery and generic API dispatch while intersecting the existing read-only profile.
 - `getControllerCapabilities` reports controller version/mode, configured surfaces, shared catalog evidence and optional missing-field checks for one SSID, separating documentation from verified hardware support.
 - Switch-port previews, target/prerequisite checks, explicit disruption-risk handling and per-port configuration verification across single and batch tools. Uncertain mutations are reconciled without replay.
 
 ### Fixed
 
+- Wi-Fi inventory pagination accepts record bounds and cancellation instead of continuing collection after its audit deadline.
 - Generic switch port PATCH calls are replaced by documented profile/PoE setters; unsupported settings are rejected before requests.
 - Controller error envelopes retain safe numeric rejection codes for capability classification.
 

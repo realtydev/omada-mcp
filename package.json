@@ -16,6 +16,8 @@
         "docs/api-discovery.md",
         "docs/controller-capabilities.md",
         "docs/switch-safety.md",
+        "docs/wifi-audit.md",
+        "docs/scoped-tools.md",
         "docs/openapi/00-all.json",
         "LICENSE"
     ],

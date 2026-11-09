@@ -6,7 +6,7 @@ import { logger } from '../utils/logger.js';
 
 import { createServer } from './common.js';
 
-export async function startStdioServer(client: OmadaClient, options: Pick<EnvironmentConfig, 'toolProfile'> = {}): Promise<void> {
+export async function startStdioServer(client: OmadaClient, options: Pick<EnvironmentConfig, 'toolProfile' | 'toolCategories'> = {}): Promise<void> {
     logger.info('Starting stdio server');
     const server = createServer(client, options);
     const transport = new StdioServerTransport();

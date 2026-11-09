@@ -1,6 +1,7 @@
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
 
 import type { RequestHandler } from '../omadaClient/request.js';
+import type { ToolAccessPolicy } from '../server/toolPolicy.js';
 import type { ApiOperation, ApiParameter, OperationCatalog } from './catalog.js';
 
 type Schema = Record<string, unknown>;
@@ -17,6 +18,7 @@ export interface DiscoveryExecutionContext {
     omadacId: string;
     siteId?: string;
     readOnly: boolean;
+    accessPolicy?: ToolAccessPolicy;
 }
 
 export interface DiscoveredExecutionResult {
@@ -294,6 +296,7 @@ export async function executeDiscoveredOperation(
     if (!operation) throw new Error('Unknown or ambiguous operationId. Search and describe the operation first.');
     const mutation = operation.method !== 'GET';
     if (context.readOnly && mutation) throw new Error('Read-only profile blocks mutating API operations, including previews.');
+    context.accessPolicy?.assertOperation(operation.method, operation.path);
     // The SDK validator implements draft-07 and OpenAPI 3.0, not 3.1's JSON Schema 2020 semantics.
     if (typeof catalog.document.openapi !== 'string' || !/^3\.0(?:\.|$)/.test(catalog.document.openapi)) {
         throw new Error('Execution requires OpenAPI 3.0 schema semantics; this specification remains available for search and description only.');

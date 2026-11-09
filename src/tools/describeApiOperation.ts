@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-
+import type { DiscoveryPolicy } from '../omadaClient/discovery.js';
 import type { OmadaClient } from '../omadaClient/index.js';
 import { toToolResult, wrapToolHandler } from '../server/common.js';
 
@@ -8,7 +8,7 @@ const describeApiOperationSchema = z
     .object({ operationId: z.string().trim().min(1).max(256).describe('An operationId returned by searchApiOperations') })
     .strict();
 
-export function registerDescribeApiOperationTool(server: McpServer, client: OmadaClient, options: { readOnly?: boolean } = {}): void {
+export function registerDescribeApiOperationTool(server: McpServer, client: OmadaClient, options: DiscoveryPolicy = {}): void {
     const readOnly = options.readOnly === true;
     server.registerTool(
         'describeApiOperation',
@@ -19,6 +19,8 @@ export function registerDescribeApiOperationTool(server: McpServer, client: Omad
             inputSchema: describeApiOperationSchema,
             annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
         },
-        wrapToolHandler('describeApiOperation', async ({ operationId }) => toToolResult(await client.describeApiOperation(operationId, { readOnly })))
+        wrapToolHandler('describeApiOperation', async ({ operationId }) =>
+            toToolResult(await client.describeApiOperation(operationId, { ...options, readOnly }))
+        )
     );
 }

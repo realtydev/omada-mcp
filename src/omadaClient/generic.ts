@@ -1,3 +1,4 @@
+import { ToolAccessPolicy } from '../server/toolPolicy.js';
 import type { RequestHandler } from './request.js';
 
 /**
@@ -7,7 +8,8 @@ import type { RequestHandler } from './request.js';
 export class GenericOperations {
     constructor(
         private readonly request: RequestHandler,
-        private readonly buildPath: (path: string, version?: string) => string
+        private readonly buildPath: (path: string, version?: string) => string,
+        private readonly policy = new ToolAccessPolicy()
     ) {}
 
     /**
@@ -20,6 +22,7 @@ export class GenericOperations {
         body?: unknown,
         queryParams?: Record<string, unknown>
     ): Promise<unknown> {
+        this.policy.assertGeneric(method, path, version, queryParams);
         const fullPath = this.buildPath(path, version);
         return await this.request.request<unknown>({
             method,

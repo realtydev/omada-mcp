@@ -11,6 +11,11 @@ import { controllerRequest, remainingTimeout, requestDeadline, waitFor } from '.
 const DEFAULT_PAGE_SIZE = 200;
 const MAX_PAGINATION_PAGES = 1000;
 
+export interface PaginationReadOptions {
+    signal?: AbortSignal;
+    maxRecords?: number;
+}
+
 /**
  * HTTP request handler for Omada API calls with authentication and retry logic.
  */
@@ -186,10 +191,19 @@ export class RequestHandler {
     /**
      * Fetch all pages of a paginated API endpoint.
      */
-    public async fetchPaginated<T>(path: string, params: Record<string, unknown> = {}, pageSize = DEFAULT_PAGE_SIZE): Promise<T[]> {
+    public async fetchPaginated<T>(
+        path: string,
+        params: Record<string, unknown> = {},
+        pageSize = DEFAULT_PAGE_SIZE,
+        options: PaginationReadOptions = {}
+    ): Promise<T[]> {
         if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 1000) {
             throw new Error('Pagination pageSize must be an integer between 1 and 1000.');
         }
+        if (options.maxRecords !== undefined && (!Number.isSafeInteger(options.maxRecords) || options.maxRecords < 1)) {
+            throw new Error('Pagination maxRecords must be a positive safe integer.');
+        }
+        const collectionPageSize = Math.min(pageSize, options.maxRecords ?? pageSize);
         const records: T[] = [];
         const seenPages = new Set<string>();
         let totalRows: number | undefined;
@@ -197,11 +211,12 @@ export class RequestHandler {
         // Never return a partial collection as successful absence: mutation verification depends
         // on these reads. A changing collection must be retried rather than silently truncated.
         for (let page = 1; page <= MAX_PAGINATION_PAGES; page += 1) {
-            const response = await this.get<OmadaApiResponse<PaginatedResult<T>>>(path, {
-                ...params,
-                page,
-                pageSize,
-            });
+            options.signal?.throwIfAborted();
+            const query = { ...params, page, pageSize: collectionPageSize };
+            const response = options.signal
+                ? await this.request<OmadaApiResponse<PaginatedResult<T>>>({ method: 'GET', url: path, params: query, signal: options.signal })
+                : await this.get<OmadaApiResponse<PaginatedResult<T>>>(path, query);
+            options.signal?.throwIfAborted();
             const result = this.ensureSuccess(response);
             if (!result || typeof result !== 'object' || Array.isArray(result) || !Array.isArray(result.data)) {
                 throw new Error(`Invalid pagination response for ${path}: expected a result object with a data array.`);
@@ -214,6 +229,9 @@ export class RequestHandler {
                     throw new Error(`Incomplete pagination for ${path}: totalRows changed during collection; retry the read.`);
                 }
                 totalRows = result.totalRows;
+            }
+            if (options.maxRecords !== undefined && (totalRows ?? records.length + result.data.length) > options.maxRecords) {
+                throw new Error(`Incomplete pagination for ${path}: collection exceeds the ${options.maxRecords}-record limit.`);
             }
             if (result.currentPage !== undefined && (!Number.isSafeInteger(result.currentPage) || result.currentPage !== page)) {
                 throw new Error(`Incomplete pagination for ${path}: the controller did not return requested page ${page}.`);

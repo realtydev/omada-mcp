@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ToolProfile } from '../config.js';
 import type { OmadaClient } from '../omadaClient/index.js';
+import { ToolAccessPolicy } from '../server/toolPolicy.js';
 
 import { registerAdoptDeviceTool } from './adoptDevice.js';
 import { registerBatchSetSwitchPortNameTool } from './batchSetSwitchPortName.js';
@@ -22,6 +23,7 @@ import { registerDeleteRouteTool } from './deleteRoute.js';
 import { registerDescribeApiOperationTool } from './describeApiOperation.js';
 import { registerDiagnoseClientTool } from './diagnoseClient.js';
 import { registerDiagnoseLogsTool } from './diagnoseLogs.js';
+import { registerDiagnoseWifiTool } from './diagnoseWifi.js';
 import { registerExecuteApiOperationTool } from './executeApiOperation.js';
 import { registerGenericApiCallTool } from './genericApiCall.js';
 import { registerGetApAfcStatusTool } from './getApAfcStatus.js';
@@ -101,8 +103,13 @@ import { registerUpdateSsidTool } from './updateSsid.js';
 import { registerUpdateSwitchPortTool } from './updateSwitchPort.js';
 import { registerUpdateWanPortSettingTool } from './updateWanPortSetting.js';
 
-export function registerAllTools(server: McpServer, client: OmadaClient, profile: ToolProfile = 'full'): void {
-    const discoveryPolicy = { readOnly: profile === 'read-only' };
+export function registerAllTools(
+    server: McpServer,
+    client: OmadaClient,
+    profile: ToolProfile = 'full',
+    policy = new ToolAccessPolicy(profile)
+): void {
+    const discoveryPolicy = { readOnly: policy.readOnly || !policy.permitsWrites, ...(policy.unrestricted ? {} : { accessPolicy: policy }) };
     registerSearchApiOperationsTool(server, client, discoveryPolicy);
     registerDescribeApiOperationTool(server, client, discoveryPolicy);
     registerExecuteApiOperationTool(server, client, discoveryPolicy);
@@ -110,6 +117,7 @@ export function registerAllTools(server: McpServer, client: OmadaClient, profile
     registerGetControllerCapabilitiesTool(server, client);
     registerDiagnoseClientTool(server, client);
     registerDiagnoseLogsTool(server, client);
+    registerDiagnoseWifiTool(server, client);
     registerListDhcpReservationsTool(server, client);
     registerGetSiteTopologyTool(server, client);
     registerGetSiteDashboardTool(server, client);
@@ -208,6 +216,6 @@ export function registerAllTools(server: McpServer, client: OmadaClient, profile
     registerSetGatewayWanConnectTool(server, client);
 
     // Generic escape hatch
-    registerGenericApiCallTool(server, client);
+    registerGenericApiCallTool(server, client, policy);
     registerGetServerInfoTool(server, client);
 }

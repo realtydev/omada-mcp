@@ -3,10 +3,12 @@ import type { EnvironmentConfig } from '../config.js';
 import type { OperationCatalog } from '../discovery/catalog.js';
 import { executeDiscoveredOperation } from '../discovery/execute.js';
 import { CatalogLoader, documentationPath } from '../discovery/load.js';
+import { ToolAccessPolicy } from '../server/toolPolicy.js';
 import type { RequestHandler } from './request.js';
 
 export interface DiscoveryPolicy {
     readOnly?: boolean;
+    accessPolicy?: ToolAccessPolicy;
 }
 export interface SearchApiOperationsOptions {
     query?: string;
@@ -27,7 +29,7 @@ export class DiscoveryOperations {
     constructor(
         private readonly request: RequestHandler,
         http: AxiosInstance,
-        private readonly config: Pick<EnvironmentConfig, 'omadacId' | 'siteId' | 'toolProfile' | 'apiSpec' | 'requestTimeout'>,
+        private readonly config: Pick<EnvironmentConfig, 'omadacId' | 'siteId' | 'toolProfile' | 'toolCategories' | 'apiSpec' | 'requestTimeout'>,
         loader?: CatalogLoader
     ) {
         this.loader =
@@ -47,6 +49,11 @@ export class DiscoveryOperations {
         return this.config.toolProfile === 'read-only' || policy.readOnly === true;
     }
 
+    private accessPolicy(policy: DiscoveryPolicy): ToolAccessPolicy {
+        const configured = new ToolAccessPolicy(this.config.toolProfile, this.config.toolCategories);
+        return configured.intersect(policy.accessPolicy ?? new ToolAccessPolicy(policy.readOnly ? 'read-only' : 'full'));
+    }
+
     /** Share provenance and structural eligibility without fetching a second specification. */
     public async getCatalog(): Promise<OperationCatalog> {
         return await this.loader.get();
@@ -54,11 +61,22 @@ export class DiscoveryOperations {
 
     public async searchApiOperations(options: SearchApiOperationsOptions = {}, policy: DiscoveryPolicy = {}): Promise<unknown> {
         if (this.readOnly(policy) && options.method && options.method !== 'GET') throw new Error('Read-only discovery only exposes GET operations');
-        return (await this.loader.get()).search({ ...options, readOnly: this.readOnly(policy) });
+        const access = this.accessPolicy(policy);
+        return (await this.loader.get()).search({
+            ...options,
+            readOnly: this.readOnly(policy),
+            allowsOperation: (operation) => access.allowsOperation(operation.method, operation.path),
+        });
     }
 
     public async describeApiOperation(operationId: string, policy: DiscoveryPolicy = {}): Promise<unknown> {
-        return (await this.loader.get()).describe(operationId, { readOnly: this.readOnly(policy) });
+        const catalog = await this.loader.get();
+        const operation = catalog.get(operationId);
+        if (operation && !this.accessPolicy(policy).allowsOperation(operation.method, operation.path)) {
+            if (this.readOnly(policy) && operation.method !== 'GET') throw new Error('The read-only profile does not expose write operations');
+            throw new Error('Unknown or inaccessible API operation.');
+        }
+        return catalog.describe(operationId, { readOnly: this.readOnly(policy) });
     }
 
     public async executeApiOperation(options: ExecuteApiOperationOptions, policy: DiscoveryPolicy = {}): Promise<unknown> {
@@ -67,6 +85,7 @@ export class DiscoveryOperations {
             omadacId: this.config.omadacId,
             siteId: this.config.siteId,
             readOnly: this.readOnly(policy),
+            accessPolicy: this.accessPolicy(policy),
         });
     }
 }

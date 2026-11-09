@@ -25,6 +25,19 @@ describe('config', () => {
     });
 
     describe('loadConfigFromEnv', () => {
+        it('validates explicit category scopes without changing the default profile', () => {
+            expect(loadConfigFromEnv(mockEnv).toolCategories).toBeUndefined();
+            expect(loadConfigFromEnv({ ...mockEnv, MCP_TOOL_CATEGORIES: 'all:r,wireless:rw' })).toMatchObject({
+                toolProfile: 'full',
+                toolCategories: 'all:r,wireless:rw',
+            });
+            expect(loadConfigFromEnv({ ...mockEnv, MCP_TOOL_PROFILE: 'read-only', MCP_TOOL_CATEGORIES: 'all:rw' })).toMatchObject({
+                toolProfile: 'read-only',
+                toolCategories: 'all:rw',
+            });
+            for (const value of ['', 'all:admin', 'wireles:rw', 'all:r,all:rw'])
+                expect(() => loadConfigFromEnv({ ...mockEnv, MCP_TOOL_CATEGORIES: value })).toThrow('MCP_TOOL_CATEGORIES');
+        });
         it('defaults and validates API specification selection', () => {
             expect(loadConfigFromEnv(mockEnv).apiSpec).toBe('auto');
             for (const mode of ['auto', 'live', 'bundled']) {

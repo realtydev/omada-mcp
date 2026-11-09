@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { OmadaClient } from '../omadaClient/index.js';
 import { toToolResult, wrapToolHandler } from '../server/common.js';
+import { ToolAccessPolicy } from '../server/toolPolicy.js';
 
 const genericApiCallSchema = z.object({
     method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
@@ -12,7 +13,7 @@ const genericApiCallSchema = z.object({
     queryParams: z.record(z.string(), z.unknown()).optional(),
 });
 
-export function registerGenericApiCallTool(server: McpServer, client: OmadaClient): void {
+export function registerGenericApiCallTool(server: McpServer, client: OmadaClient, policy = new ToolAccessPolicy()): void {
     server.registerTool(
         'genericApiCall',
         {
@@ -24,11 +25,13 @@ export function registerGenericApiCallTool(server: McpServer, client: OmadaClien
                 'dedicated tools (listFirewallAcls, createFirewallAcl, listIpGroups, etc.) for those instead.',
             inputSchema: genericApiCallSchema.strict(),
             annotations: {
-                destructiveHint: true,
+                destructiveHint: policy.permitsWrites,
+                ...(!policy.permitsWrites ? { readOnlyHint: true } : {}),
             },
         },
-        wrapToolHandler('genericApiCall', async ({ method, path, version, body, queryParams }) =>
-            toToolResult(await client.genericApiCall(method, path, version, body, queryParams))
-        )
+        wrapToolHandler('genericApiCall', async ({ method, path, version, body, queryParams }) => {
+            policy.assertGeneric(method, path, version, queryParams);
+            return toToolResult(await client.genericApiCall(method, path, version, body, queryParams));
+        })
     );
 }

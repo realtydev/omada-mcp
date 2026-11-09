@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-
+import type { DiscoveryPolicy } from '../omadaClient/discovery.js';
 import type { OmadaClient } from '../omadaClient/index.js';
 import { toToolResult, wrapToolHandler } from '../server/common.js';
 
@@ -19,7 +19,7 @@ const executeApiOperationSchema = z
     })
     .strict();
 
-export function registerExecuteApiOperationTool(server: McpServer, client: OmadaClient, options: { readOnly?: boolean } = {}): void {
+export function registerExecuteApiOperationTool(server: McpServer, client: OmadaClient, options: DiscoveryPolicy = {}): void {
     const readOnly = options.readOnly === true;
     server.registerTool(
         'executeApiOperation',
@@ -31,6 +31,6 @@ export function registerExecuteApiOperationTool(server: McpServer, client: Omada
             inputSchema: executeApiOperationSchema,
             annotations: { readOnlyHint: readOnly, destructiveHint: !readOnly, ...(readOnly ? { idempotentHint: true } : {}) },
         },
-        wrapToolHandler('executeApiOperation', async (args) => toToolResult(await client.executeApiOperation(args, { readOnly })))
+        wrapToolHandler('executeApiOperation', async (args) => toToolResult(await client.executeApiOperation(args, { ...options, readOnly })))
     );
 }
