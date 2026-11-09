@@ -23,7 +23,7 @@ try {
     const credentials = join(temporary, 'test.env');
     await writeFile(
         credentials,
-        'OMADA_BASE_URL=https://controller.example.com\nOMADA_OMADAC_ID=test-controller\nOMADA_CLIENT_ID=test-client\nOMADA_CLIENT_SECRET=test-secret\nMCP_SERVER_USE_HTTP=true\n',
+        'OMADA_BASE_URL=https://controller.example.com\nOMADA_OMADAC_ID=test-controller\nOMADA_CLIENT_ID=test-client\nOMADA_CLIENT_SECRET=test-secret\nMCP_SERVER_USE_HTTP=true\nOMADA_API_SPEC=bundled\n',
         { mode: 0o600 }
     );
     const state = { mode: 'stdio', current: selection, envFile: credentials };
@@ -58,6 +58,12 @@ try {
         const response = await client.callTool({ name: 'getServerInfo', arguments: {} });
         assert.notEqual(response.isError, true);
         assert.equal(JSON.parse(response.content[0].text).packageVersion, metadata.version);
+        const discovery = await client.callTool({ name: 'searchApiOperations', arguments: { query: 'clients', limit: 2 } });
+        assert.notEqual(discovery.isError, true);
+        const catalogue = JSON.parse(discovery.content[0].text);
+        assert.equal(catalogue.source, 'bundled');
+        assert.ok(catalogue.operations.length > 0);
+        assert.ok(catalogue.operations.length <= 2);
     } finally {
         await client.close();
     }
