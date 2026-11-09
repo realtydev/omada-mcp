@@ -47,6 +47,7 @@
         "test:watch": "yarn generate:build-info && vitest",
         "test:coverage": "yarn generate:build-info && vitest run --coverage",
         "audit": "yarn npm audit --all --recursive",
+        "smoke:readonly": "node scripts/smoke-readonly.mjs",
         "dev": "yarn generate:build-info && tsx src/index.ts",
         "wan-guard": "node dist/wanGuard.js",
         "start": "node dist/index.js",

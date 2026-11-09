@@ -22,6 +22,15 @@ describe('tools/index', () => {
             // Verify registerTool was called for each tool
             const expectedTools = [
                 // Read tools
+                'diagnoseClient',
+                'diagnoseLogs',
+                'listDhcpReservations',
+                'createDhcpReservation',
+                'updateDhcpReservation',
+                'deleteDhcpReservation',
+                'getSiteTopology',
+                'listVpnConnections',
+                'getGatewayWanSpeedTestResults',
                 'listSites',
                 'listDevices',
                 'listClients',

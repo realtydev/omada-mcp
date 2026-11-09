@@ -6,8 +6,20 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- DHCP reservation list/create/update/delete tools with strict inputs, previews, no-op detection, and bounded read-back verification. Uncertain writes are reconciled without replaying mutations.
+- Site topology, VPN connection status, and saved gateway WAN speed-test results.
+- Client-path and log diagnostics with explicit query windows, unavailable sections, truncation and topology staleness.
+- Optional read-only tool profile and a guarded, repeatable `yarn smoke:readonly` hardware check.
+
 - `listSwitchPorts`: paginated site-wide switch link, traffic, STP, LLDP and PoE telemetry with optional case-insensitive MAC filtering; contributor-tested on ES206GP with Controller 6.2.14.11. (@tkdpython, Paul)
 - Read-only AP diagnostics: `getApRfScanResults` (non-deprecated Open API v2), `getApAfcStatus`, and `getApAvailableChannels`. These read existing telemetry without scanning or changing radio settings.
+
+### Fixed
+
+- Malformed, incomplete, repeated and non-advancing paginated responses now fail explicitly; DHCP verification also rejects missing or duplicated MAC evidence.
+- Concurrent OAuth renewal and web/internal login races; invalidated authentication results and late failures no longer overwrite newer credentials.
+- HTTP/SSE session retention is bounded by configurable idle expiry and capacity. In-flight tool calls survive idle sweeps, and resources are released on close/shutdown.
+- SSE double-start failures and SDK session query routing; retry failures retain detailed controller errors.
 
 ### Changed
 
