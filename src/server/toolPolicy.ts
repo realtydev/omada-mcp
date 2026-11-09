@@ -43,6 +43,7 @@ const groups: Record<ToolCategory, readonly string[]> = {
         'reconnectClient',
     ],
     wireless: [
+        'getRfPlanningStatus',
         'getApSsidOverrides',
         'updateApSsidOverride',
         'getApRadios',
@@ -181,7 +182,7 @@ export function categoryForPath(path: string): ToolCategory | undefined {
     if (/^\/dashboard\/(?:active-clients|client-activity)(?:\/|$)/.test(route) || /^\/insight\/past-connection(?:\/|$)/.test(route)) return 'clients';
     if (/^\/insight\/port-forwarding(?:\/|$)/.test(route)) return 'network';
     if (
-        /^\/(?:wireless-network|aps|rfPlanning|rfplanning|rogue-ap|full-channel-detect|roaming|mesh|beacon-control|band-steering|ppsk-profiles?)(?:\/|$)/.test(
+        /^\/(?:wireless-network|aps|rfPlanning|rfplanning|planningHistory|rogue-ap|full-channel-detect|roaming|mesh|beacon-control|band-steering|ppsk-profiles?)(?:\/|$)/.test(
             route
         )
     )

@@ -49,6 +49,7 @@ describe('tools/index', () => {
                 'getDevice',
                 'getGatewayWanStatus',
                 'getApSsidOverrides',
+                'getRfPlanningStatus',
                 'updateApSsidOverride',
                 'getApRadios',
                 'getApRfScanResults',

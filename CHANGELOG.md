@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Read-only RF planning reports combine configuration, native status, successful-deployment evidence, bounded history and optional per-device/radio detail, with explicit partial-failure and tool-scope handling.
 - Typed per-AP SSID override reads and updates with redacted previews, internal configuration evidence, sibling preservation, preflight drift refusal and bounded read-back verification.
 
 ## [0.11.0] - 2026-11-09
