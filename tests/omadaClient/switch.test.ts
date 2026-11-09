@@ -77,6 +77,18 @@ describe('SwitchOperations', () => {
             expect(result).toEqual(mockPorts);
         });
 
+        it('uses the default site and safely ignores rows without a switch MAC when filtering', async () => {
+            vi.mocked(mockRequest.fetchPaginated).mockResolvedValue([{ port: 1 }, { switchMac: 'AA-BB-CC-DD-EE-FF', port: 2 }]);
+            await expect(switchOps.listSwitchPorts('aa-bb-cc-dd-ee-ff')).resolves.toEqual([{ switchMac: 'AA-BB-CC-DD-EE-FF', port: 2 }]);
+            expect(mockRequest.fetchPaginated).toHaveBeenCalledWith('/openapi/v1/test-omadac/sites/default-site/switches/ports/poe-info');
+        });
+
+        it('encodes site IDs and propagates pagination errors', async () => {
+            vi.mocked(mockRequest.fetchPaginated).mockRejectedValue(new Error('Unsupported endpoint'));
+            await expect(switchOps.listSwitchPorts(undefined, 'site/one')).rejects.toThrow('Unsupported endpoint');
+            expect(mockRequest.fetchPaginated).toHaveBeenCalledWith('/openapi/v1/test-omadac/sites/site%2Fone/switches/ports/poe-info');
+        });
+
         it('filters port telemetry by switch MAC case-insensitively', async () => {
             const mockPorts = [
                 { switchMac: 'AA-BB-CC-DD-EE-FF', port: 1 },

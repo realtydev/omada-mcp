@@ -10,7 +10,7 @@ export class DeviceOperations {
     constructor(
         private readonly request: RequestHandler,
         private readonly site: SiteOperations,
-        private readonly buildPath: (path: string) => string
+        private readonly buildPath: (path: string, version?: string) => string
     ) {}
 
     /**
@@ -34,6 +34,30 @@ export class DeviceOperations {
             this.request.get<OmadaApiResponse<unknown>>(this.buildPath(`${base}/radios`)),
         ]);
         return { radioConfig: this.request.ensureSuccess(config), radioStats: this.request.ensureSuccess(stats) };
+    }
+
+    /** Read the latest RF scan results using the non-deprecated v2 endpoint. Does not start a scan. */
+    public async getApRfScanResults(apMac: string, siteId?: string): Promise<unknown> {
+        const resolvedSiteId = this.site.resolveSiteId(siteId);
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/aps/${encodeURIComponent(apMac)}/rf-scan-result`, 'v2');
+        const response = await this.request.get<OmadaApiResponse<unknown>>(path);
+        return this.request.ensureSuccess(response);
+    }
+
+    /** Read AFC status on supported APs without changing their regulatory configuration. */
+    public async getApAfcStatus(apMac: string, siteId?: string): Promise<unknown> {
+        const resolvedSiteId = this.site.resolveSiteId(siteId);
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/aps/${encodeURIComponent(apMac)}/afc`);
+        const response = await this.request.get<OmadaApiResponse<unknown>>(path);
+        return this.request.ensureSuccess(response);
+    }
+
+    /** Read the controller's allowed channels and channel indices before configuring a radio. */
+    public async getApAvailableChannels(apMac: string, siteId?: string): Promise<unknown> {
+        const resolvedSiteId = this.site.resolveSiteId(siteId);
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/aps/${encodeURIComponent(apMac)}/available-channel`);
+        const response = await this.request.get<OmadaApiResponse<unknown>>(path);
+        return this.request.ensureSuccess(response);
     }
 
     /**

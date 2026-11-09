@@ -1,31 +1,35 @@
 version: 2
 updates:
-  - package-ecosystem: npm
-    directory: /
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-    groups:
-      dev-dependencies:
-        dependency-type: development
-        update-types: [minor, patch]
-      production-dependencies:
-        dependency-type: production
-        update-types: [minor, patch]
+    - package-ecosystem: npm
+      directory: /
+      schedule:
+          interval: weekly
+      open-pull-requests-limit: 5
+      ignore:
+          # Match Node types to the supported runtime in .nvmrc and Dockerfile.
+          - dependency-name: "@types/node"
+            update-types: [ version-update:semver-major ]
+      groups:
+          dev-dependencies:
+              dependency-type: development
+              update-types: [ minor, patch ]
+          production-dependencies:
+              dependency-type: production
+              update-types: [ minor, patch ]
 
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: monthly
-    groups:
-      actions:
-        patterns: ["*"]
+    - package-ecosystem: github-actions
+      directory: /
+      schedule:
+          interval: monthly
+      groups:
+          actions:
+              patterns: [ "*" ]
 
-  - package-ecosystem: docker
-    directory: /
-    schedule:
-      interval: monthly
-    ignore:
-      # Stay on the Node LTS line; move majors deliberately alongside engines and .nvmrc.
-      - dependency-name: node
-        update-types: [version-update:semver-major]
+    - package-ecosystem: docker
+      directory: /
+      schedule:
+          interval: monthly
+      ignore:
+          # Stay on the Node LTS line; move majors deliberately alongside engines and .nvmrc.
+          - dependency-name: node
+            update-types: [ version-update:semver-major ]

@@ -6,6 +6,7 @@ ACLs are only available via the **internal web UI API** (`/{omadacId}/api/v2/...
 ## Authentication
 
 ### Login
+
 ```
 POST /{omadacId}/api/v2/login
 Content-Type: application/json
@@ -14,6 +15,7 @@ Content-Type: application/json
 ```
 
 Response:
+
 ```json
 {
   "errorCode": 0,
@@ -25,32 +27,38 @@ Response:
 ```
 
 All subsequent requests need:
+
 - Cookie from login response (session cookie)
 - Header: `Csrf-Token: {token}`
 
 ## ACL Endpoints
 
 ### List ACL Rules
+
 ```
 GET /{omadacId}/api/v2/sites/{siteId}/setting/firewall/acls?type={type}&currentPage=1&currentPageSize=100
 ```
 
 Type values:
+
 - `0` = Gateway ACL (LAN→WAN, LAN→LAN, WAN→LAN)
 - `1` = Switch ACL
 - `2` = EAP ACL
 
 Response includes metadata:
+
 - `aclDisable` - whether ACL is globally disabled
 - `supportLanToLan` - whether LAN-to-LAN rules are supported
 - `supportVpn` - VPN ACL support
 
 ### Create ACL Rule
+
 ```
 POST /{omadacId}/api/v2/sites/{siteId}/setting/firewall/acls
 ```
 
 Body:
+
 ```json
 {
   "name": "Block IoT to Trusted",
@@ -74,6 +82,7 @@ Body:
 ```
 
 ### Delete ACL Rule
+
 ```
 DELETE /{omadacId}/api/v2/sites/{siteId}/setting/firewall/acls/{aclId}
 ```
@@ -81,11 +90,13 @@ DELETE /{omadacId}/api/v2/sites/{siteId}/setting/firewall/acls/{aclId}
 ## IP/Port Groups
 
 ### List Groups
+
 ```
 GET /{omadacId}/api/v2/sites/{siteId}/setting/profiles/groups?currentPage=1&currentPageSize=100
 ```
 
 Built-in groups:
+
 - `IPGroup_Any` (0.0.0.0/0)
 - `IPv6Group_Any` (::/0)
 - `DomainGroup_Any` (*)
@@ -93,6 +104,7 @@ Built-in groups:
 ## Network IDs (for sourceIds/destinationIds)
 
 These are the LAN network IDs from getLanNetworkList:
+
 - Default (VLAN 1): `66209b7774bc11566b993281`
 - Trusted (VLAN 10): `699761ad097e025cc474a3f9`
 - IoT (VLAN 20): `699761b9097e025cc474a41b`

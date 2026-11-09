@@ -17,6 +17,7 @@ export function registerListSwitchPortsTool(server: McpServer, client: OmadaClie
                 'List switch port telemetry including link state, speed, duplex, traffic, STP, LLDP and PoE. ' +
                 'Optionally filter by switch MAC. Supports Agile Series switches through the site-wide PoE port endpoint.',
             inputSchema: listSwitchPortsSchema.shape,
+            annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
         },
         wrapToolHandler('listSwitchPorts', async ({ switchMac, siteId }) => toToolResult(await client.listSwitchPorts(switchMac, siteId)))
     );

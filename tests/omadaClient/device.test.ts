@@ -53,6 +53,39 @@ describe('omadaClient/device', () => {
         });
     });
 
+    describe.each([
+        ['getApRfScanResults', 'rf-scan-result', 'v2'],
+        ['getApAfcStatus', 'afc', 'v1'],
+        ['getApAvailableChannels', 'available-channel', 'v1'],
+    ] as const)('%s diagnostics', (method, endpoint, version) => {
+        it('uses the documented API version, encodes identifiers and preserves firmware fields', async () => {
+            const payload = { status: 'ready', firmwareSpecific: [{ channel: 36, index: 1 }] };
+            vi.mocked(mockRequest.get).mockResolvedValue({ errorCode: 0, result: payload });
+            const pathBuilder = vi.fn((path: string, apiVersion = 'v1') => `/openapi/${apiVersion}/controller${path}`);
+            const ops = new DeviceOperations(mockRequest, mockSite, pathBuilder);
+
+            await expect(ops[method]('AA/BB', 'site/one')).resolves.toEqual(payload);
+
+            expect(mockRequest.get).toHaveBeenCalledWith(`/openapi/${version}/controller/sites/site%2Fone/aps/AA%2FBB/${endpoint}`);
+            expect(mockRequest.get).toHaveBeenCalledTimes(1);
+        });
+
+        it('resolves the default site', async () => {
+            vi.mocked(mockRequest.get).mockResolvedValue({ errorCode: 0, result: {} });
+            await deviceOps[method]('AA-BB-CC-DD-EE-FF');
+            expect(mockSite.resolveSiteId).toHaveBeenCalledWith(undefined);
+            expect(mockRequest.get).toHaveBeenCalledWith(`/api/sites/default-site/aps/AA-BB-CC-DD-EE-FF/${endpoint}`);
+        });
+
+        it('propagates unsupported-device responses instead of returning empty success', async () => {
+            vi.mocked(mockRequest.get).mockResolvedValue({ errorCode: -39303, msg: 'AP does not exist' });
+            vi.mocked(mockRequest.ensureSuccess).mockImplementation(() => {
+                throw new Error('AP does not exist');
+            });
+            await expect(deviceOps[method]('AA-BB-CC-DD-EE-FF')).rejects.toThrow('AP does not exist');
+        });
+    });
+
     describe('getDevice', () => {
         it('should find device by MAC address', async () => {
             const mockDevices: OmadaDeviceInfo[] = [

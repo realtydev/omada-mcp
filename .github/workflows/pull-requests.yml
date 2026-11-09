@@ -1,121 +1,119 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "scripts/**"
-      - "*.json"
-      - "*.ts"
-      - "yarn.lock"
-      - "Dockerfile"
-      - ".github/workflows/*.yml"
+    push:
+        branches:
+            - main
+    pull_request:
+        paths:
+            - "src/**"
+            - "tests/**"
+            - "scripts/**"
+            - "*.json"
+            - "*.ts"
+            - "yarn.lock"
+            - "Dockerfile"
+            - ".github/workflows/*.yml"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
 
 env:
-  MIN_COVERAGE_THRESHOLD: ${{ vars.MIN_COVERAGE_THRESHOLD || '80' }}
+    MIN_COVERAGE_THRESHOLD: ${{ vars.MIN_COVERAGE_THRESHOLD || '80' }}
 
 jobs:
-  build-and-lint:
-    name: Build and Check Code Style
-    runs-on: ubuntu-latest
+    build-and-lint:
+        name: Build and Check Code Style
+        runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v7
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: "24"
+            - name: Set up Node.js
+              uses: actions/setup-node@v7
+              with:
+                  node-version: "24"
 
-      - name: Enable Corepack
-        run: corepack enable
+            - name: Enable Corepack
+              run: corepack enable
 
-      - name: Install dependencies
-        run: yarn install --immutable
+            - name: Install dependencies
+              run: yarn install --immutable
 
-      - name: Build project
-        run: yarn build
+            - name: Audit dependencies
+              run: yarn audit
 
-      - name: Check code style
-        run: yarn check
+            - name: Build project
+              run: yarn build
 
-      - name: Run tests with coverage
-        run: yarn test:coverage
+            - name: Check code style
+              run: yarn check
 
-      - name: Upload coverage reports
-        uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: coverage-report
-          path: coverage/
-          retention-days: 15
+            - name: Run tests with coverage
+              run: yarn test:coverage
 
-      - name: Check coverage thresholds
-        run: |
-          # Parse coverage summary
-          if [ -f coverage/coverage-summary.json ]; then
-            COVERAGE=$(node -e "
-              const fs = require('fs');
-              const summary = JSON.parse(fs.readFileSync('coverage/coverage-summary.json', 'utf8'));
-              const total = summary.total;
-              console.log(JSON.stringify({
-                lines: total.lines.pct,
-                statements: total.statements.pct,
-                functions: total.functions.pct,
-                branches: total.branches.pct
-              }));
-            ")
-            
-            echo "Coverage Summary:"
-            echo "$COVERAGE" | node -e "
-              const coverage = JSON.parse(require('fs').readFileSync(0, 'utf-8'));
-              console.log('Lines: ' + coverage.lines + '%');
-              console.log('Statements: ' + coverage.statements + '%');
-              console.log('Functions: ' + coverage.functions + '%');
-              console.log('Branches: ' + coverage.branches + '%');
-            "
-            
-            # Check if coverage meets minimum thresholds
-            node -e "
-              const coverage = $COVERAGE;
-              const minCoverage = parseInt(process.env.MIN_COVERAGE_THRESHOLD) || 80;
-              
-              let failed = false;
-              
-              if (coverage.lines < minCoverage) {
-                console.error('❌ Line coverage (' + coverage.lines + '%) is below ' + minCoverage + '%');
-                failed = true;
-              }
-              if (coverage.statements < minCoverage) {
-                console.error('❌ Statement coverage (' + coverage.statements + '%) is below ' + minCoverage + '%');
-                failed = true;
-              }
-              if (coverage.functions < minCoverage) {
-                console.error('❌ Function coverage (' + coverage.functions + '%) is below ' + minCoverage + '%');
-                failed = true;
-              }
-              if (coverage.branches < minCoverage) {
-                console.error('❌ Branch coverage (' + coverage.branches + '%) is below ' + minCoverage + '%');
-                failed = true;
-              }
-              
-              if (failed) {
-                console.error('\\n❌ Coverage check failed! Minimum coverage threshold is ' + minCoverage + '%');
-                process.exit(1);
-              } else {
-                console.log('\\n✅ All coverage thresholds met!');
-              }
-            "
-          else
-            echo "❌ Coverage summary not found!"
-            exit 1
-          fi
+            - name: Upload coverage reports
+              uses: actions/upload-artifact@v7
+              if: always()
+              with:
+                  name: coverage-report
+                  path: coverage/
+                  retention-days: 15
+
+            - name: Check coverage thresholds
+              run: |
+                  # Parse coverage summary
+                  if [ -f coverage/coverage-summary.json ]; then
+                    COVERAGE=$(node -e "
+                      const fs = require('fs');
+                      const summary = JSON.parse(fs.readFileSync('coverage/coverage-summary.json', 'utf8'));
+                      const total = summary.total;
+                      console.log(JSON.stringify({
+                        lines: total.lines.pct,
+                        statements: total.statements.pct,
+                        functions: total.functions.pct,
+                        branches: total.branches.pct
+                      }));
+                    ")
+                    echo "Coverage Summary:"
+                    echo "$COVERAGE" | node -e "
+                      const coverage = JSON.parse(require('fs').readFileSync(0, 'utf-8'));
+                      console.log('Lines: ' + coverage.lines + '%');
+                      console.log('Statements: ' + coverage.statements + '%');
+                      console.log('Functions: ' + coverage.functions + '%');
+                      console.log('Branches: ' + coverage.branches + '%');
+                    "
+                    # Check if coverage meets minimum thresholds
+                    node -e "
+                      const coverage = $COVERAGE;
+                      const minCoverage = parseInt(process.env.MIN_COVERAGE_THRESHOLD) || 80;
+                      let failed = false;
+                      if (coverage.lines < minCoverage) {
+                        console.error('❌ Line coverage (' + coverage.lines + '%) is below ' + minCoverage + '%');
+                        failed = true;
+                      }
+                      if (coverage.statements < minCoverage) {
+                        console.error('❌ Statement coverage (' + coverage.statements + '%) is below ' + minCoverage + '%');
+                        failed = true;
+                      }
+                      if (coverage.functions < minCoverage) {
+                        console.error('❌ Function coverage (' + coverage.functions + '%) is below ' + minCoverage + '%');
+                        failed = true;
+                      }
+                      if (coverage.branches < minCoverage) {
+                        console.error('❌ Branch coverage (' + coverage.branches + '%) is below ' + minCoverage + '%');
+                        failed = true;
+                      }
+                      if (failed) {
+                        console.error('\\n❌ Coverage check failed! Minimum coverage threshold is ' + minCoverage + '%');
+                        process.exit(1);
+                      } else {
+                        console.log('\\n✅ All coverage thresholds met!');
+                      }
+                    "
+                  else
+                    echo "❌ Coverage summary not found!"
+                    exit 1
+                  fi

@@ -58,13 +58,13 @@ const sseModule = vi.hoisted(() => {
     return {
         handleSseConnection: vi.fn(async (_client, _config, _messagePath, _req, res: { writeHead: Function }) => {
             await Promise.resolve();
-            res.writeHead?.(200, { 'Content-Type': 'text/event-stream' });
+            res.writeHead(200, { 'Content-Type': 'text/event-stream' });
             return connection;
         }),
         handleSseMessage: vi.fn(async (_transport, _req, res: { writeHead: Function; end: Function }) => {
             await Promise.resolve();
-            res.writeHead?.(200, { 'Content-Type': 'application/json' });
-            res.end?.('{}');
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end('{}');
             return undefined;
         }),
         getSseMessagePath: vi.fn(() => '/sse/messages'),
@@ -312,7 +312,7 @@ describe('startHttpServer', () => {
         await flushTasks();
 
         sseModule.handleSseMessage.mockImplementationOnce(async (_transport, _req, res) => {
-            res.writeHead?.(200, { 'Content-Type': 'application/json' });
+            res.writeHead(200, { 'Content-Type': 'application/json' });
             await Promise.resolve();
             throw new Error('message-fail');
         });

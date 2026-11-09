@@ -12,14 +12,14 @@ In controller-managed mode, Omada gateways (seen on ER7206 v1 firmware 1.4.x) ca
 
 Every `OMADA_WAN_GUARD_INTERVAL_MS` it reads the gateway's WAN status through the Open API (`getGatewayWanStatus`) and looks at the configured primary port:
 
-| Observation | Action |
-|---|---|
-| Primary port has an address outside the fallback CIDRs | `healthy`: reset the counter |
-| Address inside a fallback CIDR, fewer than `FAILURE_THRESHOLD` consecutive times | `observed_fallback`: wait |
-| Threshold reached, `DRY_RUN=true` | `would_disconnect`: log only |
-| Threshold reached | `disconnected`: software-disconnect **only** the primary port so Link Backup moves traffic to the backup WAN |
-| Port already disconnected | `already_disconnected`: do nothing |
-| Controller request fails | Log the error and leave WAN state unchanged |
+| Observation                                                                      | Action                                                                                                       |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Primary port has an address outside the fallback CIDRs                           | `healthy`: reset the counter                                                                                 |
+| Address inside a fallback CIDR, fewer than `FAILURE_THRESHOLD` consecutive times | `observed_fallback`: wait                                                                                    |
+| Threshold reached, `DRY_RUN=true`                                                | `would_disconnect`: log only                                                                                 |
+| Threshold reached                                                                | `disconnected`: software-disconnect **only** the primary port so Link Backup moves traffic to the backup WAN |
+| Port already disconnected                                                        | `already_disconnected`: do nothing                                                                           |
+| Controller request fails                                                         | Log the error and leave WAN state unchanged                                                                  |
 
 Recovery is deliberately manual. This matches Omada's "Link Backup" recovery mode and avoids knocking traffic off the healthy backup just to probe a modem that may still be failing. Reconnect the primary with the `setGatewayWanConnect` tool or the controller UI once it's back.
 
@@ -27,16 +27,16 @@ Recovery is deliberately manual. This matches Omada's "Link Backup" recovery mod
 
 Set these alongside the normal `OMADA_*` controller variables (see [`.env.example`](../.env.example)):
 
-| Variable | Default | Description |
-|---|---|---|
-| `OMADA_WAN_GUARD_ENABLED` | `false` | Must be `true` for the guard to start |
-| `OMADA_WAN_GUARD_DRY_RUN` | `true` | Log the action it would take without changing anything |
-| `OMADA_WAN_GUARD_GATEWAY_MAC` | (required) | Gateway MAC, e.g. `AA-BB-CC-DD-EE-FF` |
-| `OMADA_WAN_GUARD_PRIMARY_PORT` | `2` | Primary WAN port number (see `getGatewayWanStatus`) |
-| `OMADA_WAN_GUARD_FALLBACK_CIDRS` | `192.168.100.0/24` | Comma-separated CIDRs that indicate a modem fallback lease |
-| `OMADA_WAN_GUARD_INTERVAL_MS` | `5000` | Poll interval |
-| `OMADA_WAN_GUARD_FAILURE_THRESHOLD` | `2` | Consecutive fallback observations before acting |
-| `OMADA_TIMEOUT` | `5000` for the guard | Controller request timeout, so a hung request can't stall the loop |
+| Variable                            | Default              | Description                                                        |
+| ----------------------------------- | -------------------- | ------------------------------------------------------------------ |
+| `OMADA_WAN_GUARD_ENABLED`           | `false`              | Must be `true` for the guard to start                              |
+| `OMADA_WAN_GUARD_DRY_RUN`           | `true`               | Log the action it would take without changing anything             |
+| `OMADA_WAN_GUARD_GATEWAY_MAC`       | (required)           | Gateway MAC, e.g. `AA-BB-CC-DD-EE-FF`                              |
+| `OMADA_WAN_GUARD_PRIMARY_PORT`      | `2`                  | Primary WAN port number (see `getGatewayWanStatus`)                |
+| `OMADA_WAN_GUARD_FALLBACK_CIDRS`    | `192.168.100.0/24`   | Comma-separated CIDRs that indicate a modem fallback lease         |
+| `OMADA_WAN_GUARD_INTERVAL_MS`       | `5000`               | Poll interval                                                      |
+| `OMADA_WAN_GUARD_FAILURE_THRESHOLD` | `2`                  | Consecutive fallback observations before acting                    |
+| `OMADA_TIMEOUT`                     | `5000` for the guard | Controller request timeout, so a hung request can't stall the loop |
 
 ## Running it
 
@@ -53,20 +53,20 @@ The published image runs the MCP server by default. Override the command to run 
 
 ```yaml
 services:
-  wan-guard:
-    image: ghcr.io/realtydev/omada-mcp:latest # pin a version tag in production
-    command: ["node", "dist/wanGuard.js"]
-    env_file: ./guard.env
-    restart: unless-stopped
-    read_only: true
-    security_opt:
-      - no-new-privileges:true
-    mem_limit: 256m
-    logging:
-      driver: local
-      options:
-        max-size: 10m
-        max-file: "3"
+    wan-guard:
+        image: ghcr.io/realtydev/omada-mcp:latest # pin a version tag in production
+        command: [ "node", "dist/wanGuard.js" ]
+        env_file: ./guard.env
+        restart: unless-stopped
+        read_only: true
+        security_opt:
+            - no-new-privileges:true
+        mem_limit: 256m
+        logging:
+            driver: local
+            options:
+                max-size: 10m
+                max-file: "3"
 ```
 
 ## Where to host it

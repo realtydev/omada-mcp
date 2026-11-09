@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- `listSwitchPorts`: paginated site-wide switch link, traffic, STP, LLDP and PoE telemetry with optional case-insensitive MAC filtering; contributor-tested on ES206GP with Controller 6.2.14.11. (@tkdpython, Paul)
+- Read-only AP diagnostics: `getApRfScanResults` (non-deprecated Open API v2), `getApAfcStatus`, and `getApAvailableChannels`. These read existing telemetry without scanning or changing radio settings.
+
+### Changed
+
+- Refreshed compatible runtime and development dependencies, including MCP SDK 1.32, ngrok 1.7, Biome 2.6 and Vitest 5.1, and updated transitive packages to clear known audit findings.
+- Kept Node types on the supported Node 24 line and disabled automatic major Node type upgrades in Dependabot.
+- Synchronized Docker authentication and tool documentation, and updated contributor automation guidance to match the current runtime and authentication modes.
+
 ## [0.6.1] - 2026-09-24
 
 ### Changed

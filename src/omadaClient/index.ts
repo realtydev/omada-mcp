@@ -291,6 +291,18 @@ export class OmadaClient {
         return await this.deviceOps.getApRadios(apMac, siteId);
     }
 
+    public async getApRfScanResults(apMac: string, siteId?: string): Promise<unknown> {
+        return await this.deviceOps.getApRfScanResults(apMac, siteId);
+    }
+
+    public async getApAfcStatus(apMac: string, siteId?: string): Promise<unknown> {
+        return await this.deviceOps.getApAfcStatus(apMac, siteId);
+    }
+
+    public async getApAvailableChannels(apMac: string, siteId?: string): Promise<unknown> {
+        return await this.deviceOps.getApAvailableChannels(apMac, siteId);
+    }
+
     public async getClientHistory(options: GetClientHistoryOptions): Promise<ClientHistory> {
         return await this.clientOps.getClientHistory(options);
     }
