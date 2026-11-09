@@ -68,6 +68,7 @@ import { type GetRfPlanningOptions, RfPlanningOperations } from './rfPlanning.js
 import { SecurityOperations } from './security.js';
 import { SiteOperations } from './site.js';
 import { SwitchOperations } from './switch.js';
+import { SwitchPortReadOperations } from './switchPortRead.js';
 import { type GetWifiAuditOptions, WifiAuditOperations, type WifiAuditResult } from './wifiAudit.js';
 
 export type OmadaClientOptions = EnvironmentConfig;
@@ -117,6 +118,7 @@ export class OmadaClient {
     private readonly capabilityOps: ControllerCapabilityOperations;
 
     private readonly switchOps: SwitchOperations;
+    private readonly switchPortReadOps: SwitchPortReadOperations;
 
     private readonly logNotificationOps: LogNotificationOperations;
 
@@ -165,6 +167,13 @@ export class OmadaClient {
         this.discoveryOps = new DiscoveryOperations(this.request, this.http, options);
         this.capabilityOps = new ControllerCapabilityOperations(this.http, this.discoveryOps, options, this);
         this.switchOps = new SwitchOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.switchPortReadOps = new SwitchPortReadOperations(
+            this.request,
+            this.siteOps,
+            this.buildOmadaPath.bind(this),
+            this.deviceOps,
+            this.switchOps
+        );
         this.diagnosticsOps = new DiagnosticsOperations(this);
         this.wifiAuditOps = new WifiAuditOperations(this, { omadacId: options.omadacId, siteId: options.siteId });
 
@@ -173,6 +182,7 @@ export class OmadaClient {
             const internalAuth = new InternalAuthManager(this.http, options.webUsername, options.webPassword, options.omadacId);
             const internalReq = new InternalRequestHandler(this.http, internalAuth, options.omadacId);
             this.apSsidOverrideOps.setInternalRequest(internalReq);
+            this.switchPortReadOps.setInternalRequest(internalReq);
             this.networkOps.setInternalRequest(internalReq);
             this.monitoringOps.setInternalRequest(internalReq);
             logger.info('Internal web UI API enabled for ACL management');
@@ -565,7 +575,10 @@ export class OmadaClient {
     }
 
     public async listSwitchPorts(switchMac?: string, siteId?: string): Promise<Record<string, unknown>[]> {
-        return await this.switchOps.listSwitchPorts(switchMac, siteId);
+        return await this.switchPortReadOps.listSwitchPorts(switchMac, siteId);
+    }
+    public async getSwitchPortOverview(switchMac?: string, siteId?: string) {
+        return await this.switchPortReadOps.getSwitchPortOverview(switchMac, siteId);
     }
 
     public async setSwitchPortProfile(

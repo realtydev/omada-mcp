@@ -54,6 +54,7 @@ import { registerGetSsidDetailTool } from './getSsidDetail.js';
 import { registerGetSsidListTool } from './getSsidList.js';
 import { registerGetSwitchTool } from './getSwitch.js';
 import { registerGetSwitchNetworksTool } from './getSwitchNetworks.js';
+import { registerGetSwitchPortOverviewTool } from './getSwitchPortOverview.js';
 import { registerGetSwitchStackDetailTool } from './getSwitchStackDetail.js';
 import { registerGetThreatListTool } from './getThreatList.js';
 import { registerGetTrafficHistoryTool } from './getTrafficHistory.js';
@@ -131,6 +132,7 @@ export function registerAllTools(
     // Read tools
     registerGetApSsidOverridesTool(server, client);
     registerGetRfPlanningStatusTool(server, client);
+    registerGetSwitchPortOverviewTool(server, client);
     registerUpdateApSsidOverrideTool(server, client);
     registerGetControllerCapabilitiesTool(server, client);
     registerDiagnoseClientTool(server, client);

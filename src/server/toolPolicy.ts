@@ -60,6 +60,7 @@ const groups: Record<ToolCategory, readonly string[]> = {
         'getWifiHistory',
     ],
     switching: [
+        'getSwitchPortOverview',
         'getSwitch',
         'listSwitchPorts',
         'getSwitchStackDetail',

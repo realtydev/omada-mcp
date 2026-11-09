@@ -50,6 +50,7 @@ describe('tools/index', () => {
                 'getGatewayWanStatus',
                 'getApSsidOverrides',
                 'getRfPlanningStatus',
+                'getSwitchPortOverview',
                 'updateApSsidOverride',
                 'getApRadios',
                 'getApRfScanResults',

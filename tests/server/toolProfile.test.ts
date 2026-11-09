@@ -68,6 +68,7 @@ describe('tool exposure profiles', () => {
         for (const name of [
             'getApSsidOverrides',
             'getRfPlanningStatus',
+            'getSwitchPortOverview',
             'refreshApiCatalog',
             'getApRfScanResults',
             'getApAfcStatus',
