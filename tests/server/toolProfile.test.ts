@@ -18,6 +18,7 @@ describe('tool exposure profiles', () => {
     async function connect(profile?: ToolProfile) {
         const api = {
             listSites: vi.fn().mockResolvedValue([{ id: 'test-site' }]),
+            getControllerCapabilities: vi.fn().mockResolvedValue({ controller: { status: 'ok', mode: 'classic' } }),
             rebootDevice: vi.fn(),
             genericApiCall: vi.fn(),
             deleteDhcpReservation: vi.fn(),
@@ -59,6 +60,7 @@ describe('tool exposure profiles', () => {
         for (const name of [
             'getApRfScanResults',
             'getApAfcStatus',
+            'getControllerCapabilities',
             'listDhcpReservations',
             'getSiteTopology',
             'getSiteDashboard',
@@ -83,6 +85,15 @@ describe('tool exposure profiles', () => {
         expect(result.isError).toBe(true);
         expect(result.content).toEqual([expect.objectContaining({ text: expect.stringContaining(`Tool ${name} not found`) })]);
         expect(api[name]).not.toHaveBeenCalled();
+    });
+
+    it('can collect explicit capability evidence through the read-only profile', async () => {
+        const { api, client } = await connect('read-only');
+        const options = { siteId: 'site', wlanId: 'wlan', ssidId: 'ssid' };
+        const result = await client.callTool({ name: 'getControllerCapabilities', arguments: options });
+        expect(result.isError).toBeFalsy();
+        expect(api.getControllerCapabilities).toHaveBeenCalledExactlyOnceWith(options);
+        expect(result.content).toEqual([{ type: 'text', text: JSON.stringify({ controller: { status: 'ok', mode: 'classic' } }, null, 2) }]);
     });
 
     it('fails closed on unknown naming families and destructive reads while retaining SDK this', () => {

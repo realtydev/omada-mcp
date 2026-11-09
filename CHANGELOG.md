@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- `getControllerCapabilities` reports controller version/mode, configured surfaces, shared catalog evidence and optional missing-field checks for one SSID, separating documentation from verified hardware support.
+- Switch-port previews, target/prerequisite checks, explicit disruption-risk handling and per-port configuration verification across single and batch tools. Uncertain mutations are reconciled without replay.
+
+### Fixed
+
+- Generic switch port PATCH calls are replaced by documented profile/PoE setters; unsupported settings are rejected before requests.
+- Controller error envelopes retain safe numeric rejection codes for capability classification.
+
 ## [0.9.0] - 2026-11-08
 
 ### Added

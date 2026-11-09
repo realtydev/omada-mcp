@@ -3,11 +3,13 @@ import { z } from 'zod';
 
 import type { OmadaClient } from '../omadaClient/index.js';
 import { toToolResult, wrapToolHandler } from '../server/common.js';
+import { portWriteOptions, switchPortListSchema, switchWriteOptionsSchema } from '../utils/switch-port-safety.js';
 
 const batchSetSwitchPortStatusSchema = z.object({
+    ...switchWriteOptionsSchema.shape,
     siteId: z.string().min(1).optional(),
     switchMac: z.string().min(1, 'switchMac is required'),
-    portList: z.array(z.number().int().min(1)).min(1, 'portList must contain at least one port'),
+    portList: switchPortListSchema,
     status: z.number().int().min(0).max(1).describe('0=off, 1=on'),
 });
 
@@ -21,8 +23,13 @@ export function registerBatchSetSwitchPortStatusTool(server: McpServer, client: 
                 destructiveHint: true,
             },
         },
-        wrapToolHandler('batchSetSwitchPortStatus', async ({ switchMac, portList, status, siteId }) =>
-            toToolResult(await client.batchSetSwitchPortStatus(switchMac, portList, status, siteId))
-        )
+        wrapToolHandler('batchSetSwitchPortStatus', async ({ switchMac, portList, status, siteId, dryRun, allowDisruption }) => {
+            const options = portWriteOptions(dryRun, allowDisruption);
+            return toToolResult(
+                await (options
+                    ? client.batchSetSwitchPortStatus(switchMac, portList, status, siteId, options)
+                    : client.batchSetSwitchPortStatus(switchMac, portList, status, siteId))
+            );
+        })
     );
 }

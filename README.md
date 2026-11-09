@@ -14,6 +14,8 @@
 
 > **Release:** [v0.9.0](https://github.com/realtydev/omada-mcp/releases/tag/v0.9.0) includes 97 tools, automatic API discovery and runtime client setup. Use `getServerInfo` to confirm the running build.
 
+The current source adds controller capability reporting and guarded switch-port workflows (98 tools, 50 in read-only mode). These additions await the next release; build from source to use them.
+
 ```text
 You:    Why is the guest SSID slow on the upstairs AP?
 Claude: (getApRadios → listClientsActivity → getSsidDetail)
@@ -29,7 +31,7 @@ Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned
 ## Highlights
 
 - **Automatic API discovery.** `searchApiOperations` → `describeApiOperation` → `executeApiOperation`. Prefer the controller's live specification, with an explicit bundled fallback containing 1,676 indexed operations. Unsupported operations are identified; a catalogue entry does not prove device support. See [API discovery](docs/api-discovery.md).
-- **97 tools, including 49 in read-only mode.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
+- **98 tools in the current source, including 50 in read-only mode.** Dedicated tools cover controller capabilities, dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
 - **Guarded configuration changes.** Discovered writes default to validated previews. Radio, DHCP and log-notification writes retain their dedicated preservation and read-back checks. Other discovered writes explicitly report that they have not been verified by reading settings back.
 - **Explicit read-only access.** `MCP_TOOL_PROFILE=read-only` blocks writes, including discovered operations. Controller permissions still govern which data is accessible.
 - **Two API surfaces.** The official Omada Open API, plus the controller's internal web UI API for features the Open API doesn't expose (ACLs, routes, port forwarding on OC200).
@@ -226,7 +228,7 @@ The AP diagnostics use the bundled `docs/openapi/03-device.json` operations `get
 | `deleteFirewallAcl`     | Delete a firewall ACL rule                                                                                               |
 | `updateSsid`            | Preserve SSID settings with typed partial updates, redacted previews and read-back verification                          |
 | `setSsidEnable`         | Enable or disable an SSID network-wide                                                                                   |
-| `updateSwitchPort`      | Update switch port config (profile, PoE, speed, STP)                                                                     |
+| `updateSwitchPort`      | Guarded profile or PoE update (one setting); unsupported generic settings are rejected                                   |
 | `updateClient`          | Update name, fixed IPv4 or rate limits through setting-specific endpoints; supports dry-run previews                     |
 | `setSwitchNetworks`     | Set switch VLAN trunking configuration                                                                                   |
 | `createRoute`           | Create a static route (internal web UI API only)                                                                         |
@@ -285,9 +287,10 @@ DHCP writes support `dryRun`. Inspect `verification.status`: `verified` confirms
 
 ### Meta
 
-| Tool            | Description                                                                                        |
-| --------------- | -------------------------------------------------------------------------------------------------- |
-| `getServerInfo` | Report the package version, git commit, and build time this server process was actually built from |
+| Tool                        | Description                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `getServerInfo`             | Report the package version, git commit, and build time this server process was actually built from      |
+| `getControllerCapabilities` | Read controller metadata and API documentation evidence; optionally inspect one SSID for missing fields |
 
 Automatic discovery keeps the existing tools and adds searchable API coverage. See [API discovery](docs/api-discovery.md) for source selection, write previews, read-only enforcement and pagination limits.
 
@@ -300,6 +303,8 @@ Controller requests share pacing across the public and internal APIs. GET/HEAD r
 `updateSsid` accepts partial basic-configuration fields and preserves required settings and nested security fields from the current SSID. Use `dryRun:true` to preview redacted changes. The default remains to apply. Inspect `verification.status`, `unexpectedChanges` and `unverifiedPreservedFields`; masked preserved values are identified explicitly. `written:"unknown"` means the write response was lost and the outcome was reconciled with reads without replaying the write. If the controller masks an existing WPA-Personal key, provide its actual value before applying a preserving update. Detected configuration drift stops the write; concurrent edits after the final read remain possible because conditional writes are not established.
 
 Some controller detail responses omit required update fields such as `mloEnable`. Supply those fields explicitly; the tool does not infer a disabled setting from missing data. If readback also omits a requested field, verification reports `unknown`. Guarded live validation confirmed preview behavior with an explicit MLO value; no SSID changes were applied.
+
+Switch-port tools provide previews, preflight checks and per-port configuration readback. PoE requires affirmative support evidence and an enabled override; explicit disruption risks require caller intent. See [switch safety](docs/switch-safety.md) for blockers, unknown evidence and supported settings. [Controller capabilities](docs/controller-capabilities.md) separates metadata, API documentation and one optional SSID sample from verified hardware support.
 
 Set `MCP_TOOL_PROFILE=read-only` to expose read tools and diagnostics while excluding writes and `genericApiCall`. The default `full` profile preserves the full tool catalogue. The profile controls exposed operations; controller credentials and permissions still determine API access.
 

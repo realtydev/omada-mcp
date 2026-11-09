@@ -47,6 +47,11 @@ export class DiscoveryOperations {
         return this.config.toolProfile === 'read-only' || policy.readOnly === true;
     }
 
+    /** Share provenance and structural eligibility without fetching a second specification. */
+    public async getCatalog(): Promise<OperationCatalog> {
+        return await this.loader.get();
+    }
+
     public async searchApiOperations(options: SearchApiOperationsOptions = {}, policy: DiscoveryPolicy = {}): Promise<unknown> {
         if (this.readOnly(policy) && options.method && options.method !== 'GET') throw new Error('Read-only discovery only exposes GET operations');
         return (await this.loader.get()).search({ ...options, readOnly: this.readOnly(policy) });

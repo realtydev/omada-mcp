@@ -3,18 +3,24 @@ import { z } from 'zod';
 
 import type { OmadaClient } from '../omadaClient/index.js';
 import { toToolResult, wrapToolHandler } from '../server/common.js';
+import { portWriteOptions, switchPortNameSchema, switchWriteOptionsSchema } from '../utils/switch-port-safety.js';
 
 const batchSetSwitchPortNameSchema = z.object({
+    ...switchWriteOptionsSchema.shape,
     siteId: z.string().min(1).optional(),
     switchMac: z.string().min(1, 'switchMac is required'),
     portNameList: z
         .array(
-            z.object({
-                port: z.number().int().min(1),
-                name: z.string().min(1).max(128),
-            })
+            z
+                .object({
+                    port: z.number().int().min(1),
+                    name: switchPortNameSchema,
+                })
+                .strict()
         )
-        .min(1, 'portNameList must contain at least one entry'),
+        .min(1, 'portNameList must contain at least one entry')
+        .max(32)
+        .refine((entries) => new Set(entries.map(({ port }) => port)).size === entries.length, 'Port targets must be unique'),
 });
 
 export function registerBatchSetSwitchPortNameTool(server: McpServer, client: OmadaClient): void {
@@ -27,8 +33,13 @@ export function registerBatchSetSwitchPortNameTool(server: McpServer, client: Om
                 destructiveHint: true,
             },
         },
-        wrapToolHandler('batchSetSwitchPortName', async ({ switchMac, portNameList, siteId }) =>
-            toToolResult(await client.batchSetSwitchPortName(switchMac, portNameList, siteId))
-        )
+        wrapToolHandler('batchSetSwitchPortName', async ({ switchMac, portNameList, siteId, dryRun, allowDisruption }) => {
+            const options = portWriteOptions(dryRun, allowDisruption);
+            return toToolResult(
+                await (options
+                    ? client.batchSetSwitchPortName(switchMac, portNameList, siteId, options)
+                    : client.batchSetSwitchPortName(switchMac, portNameList, siteId))
+            );
+        })
     );
 }

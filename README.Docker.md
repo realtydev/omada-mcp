@@ -4,6 +4,8 @@ A Model Context Protocol (MCP) server for TP-Link Omada network diagnostics and 
 
 > **Release:** The [v0.9.0 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.9.0) includes 97 tools, automatic API discovery and runtime client setup. `getServerInfo` identifies the running build.
 
+The current source adds controller capabilities and guarded switch-port workflows (98 tools). Build a local image to use these additions before the next published release; see [controller capabilities](docs/controller-capabilities.md) and [switch safety](docs/switch-safety.md).
+
 ## Runtime management
 
 Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned updates and rollback of client-managed stdio processes or a persistent local Docker service. It verifies actual running builds with `getServerInfo`, preserves credential files, and can adopt an existing Compose service. Setup can configure Codex, Cursor and Claude Desktop automatically; updates report client reload results and support optional desktop restarts.
@@ -78,7 +80,7 @@ The HTTP server will be available at `http://localhost:3000/mcp` (stream transpo
 ## Features
 
 - OAuth client-credentials authentication with automatic token refresh, plus web-session authentication for Fusion gateways
-- 97 tools for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
+- 98 tools in the current source for controller capabilities, telemetry and management of sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
 - Automatic API discovery: search, describe and execute documented JSON operations with live/bundled source information and write previews
 - Dedicated dashboard, topology and client/log diagnostics, with guarded DHCP, radio and log-notification workflows
 - Read-only profile enforced for dedicated tools and discovered operations
@@ -301,7 +303,7 @@ The AP diagnostics use the bundled `docs/openapi/03-device.json` operations `get
 | `deleteFirewallAcl`     | Delete a firewall ACL rule                                                                                               |
 | `updateSsid`            | Update an SSID's basic config (name, band, security, VLAN, PSK, etc.)                                                    |
 | `setSsidEnable`         | Enable or disable an SSID network-wide                                                                                   |
-| `updateSwitchPort`      | Update switch port config (profile, PoE, speed, STP)                                                                     |
+| `updateSwitchPort`      | Guarded profile or PoE update (one setting); unsupported generic settings are rejected                                   |
 | `updateClient`          | Update name, fixed IPv4 or rate limits through setting-specific endpoints; supports dry-run previews                     |
 | `setSwitchNetworks`     | Set switch VLAN trunking configuration                                                                                   |
 | `createRoute`           | Create a static route (internal web UI API only)                                                                         |
@@ -362,9 +364,10 @@ See [API discovery](docs/api-discovery.md) for live/bundled specification select
 
 ### Meta
 
-| Tool            | Description                                                                                        |
-| --------------- | -------------------------------------------------------------------------------------------------- |
-| `getServerInfo` | Report the package version, git commit, and build time this server process was actually built from |
+| Tool                        | Description                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `getServerInfo`             | Report the package version, git commit, and build time this server process was actually built from      |
+| `getControllerCapabilities` | Read controller metadata and API documentation evidence; optionally inspect one SSID for missing fields |
 
 Automatic discovery keeps the existing tools and adds searchable API coverage. See [API discovery](docs/api-discovery.md) for source selection, write previews, read-only enforcement and pagination limits.
 

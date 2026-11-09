@@ -3,11 +3,13 @@ import { z } from 'zod';
 
 import type { OmadaClient } from '../omadaClient/index.js';
 import { toToolResult, wrapToolHandler } from '../server/common.js';
+import { portWriteOptions, switchPortListSchema, switchWriteOptionsSchema } from '../utils/switch-port-safety.js';
 
 const batchSetSwitchPortPoeSchema = z.object({
+    ...switchWriteOptionsSchema.shape,
     siteId: z.string().min(1).optional(),
     switchMac: z.string().min(1, 'switchMac is required'),
-    portList: z.array(z.number().int().min(1)).min(1, 'portList must contain at least one port'),
+    portList: switchPortListSchema,
     poeMode: z.number().int().min(0).max(1).describe('1=on (802.3at/af), 0=off'),
 });
 
@@ -21,8 +23,13 @@ export function registerBatchSetSwitchPortPoeTool(server: McpServer, client: Oma
                 destructiveHint: true,
             },
         },
-        wrapToolHandler('batchSetSwitchPortPoe', async ({ switchMac, portList, poeMode, siteId }) =>
-            toToolResult(await client.batchSetSwitchPortPoe(switchMac, portList, poeMode, siteId))
-        )
+        wrapToolHandler('batchSetSwitchPortPoe', async ({ switchMac, portList, poeMode, siteId, dryRun, allowDisruption }) => {
+            const options = portWriteOptions(dryRun, allowDisruption);
+            return toToolResult(
+                await (options
+                    ? client.batchSetSwitchPortPoe(switchMac, portList, poeMode, siteId, options)
+                    : client.batchSetSwitchPortPoe(switchMac, portList, poeMode, siteId))
+            );
+        })
     );
 }

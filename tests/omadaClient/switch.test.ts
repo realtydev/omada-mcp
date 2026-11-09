@@ -12,11 +12,35 @@ describe('SwitchOperations', () => {
 
     beforeEach(() => {
         mockRequest = {
-            get: vi.fn(),
+            get: vi.fn().mockResolvedValue({
+                errorCode: 0,
+                result: {
+                    mac: 'D8-44-89-C3-00-04',
+                    portList: Array.from({ length: 4 }, (_, index) => ({
+                        port: index + 1,
+                        name: `Port ${index + 1}`,
+                        profileId: 'old-profile',
+                        profileOverrideEnable: true,
+                        poeMode: 0,
+                        lagPort: false,
+                        status: 1,
+                    })),
+                },
+            }),
+            request: vi.fn().mockResolvedValue({ errorCode: 0, result: {} }),
             post: vi.fn(),
             put: vi.fn(),
             delete: vi.fn(),
-            fetchPaginated: vi.fn(),
+            fetchPaginated: vi.fn().mockResolvedValue(
+                Array.from({ length: 4 }, (_, index) => ({
+                    switchMac: 'D8-44-89-C3-00-04',
+                    port: index + 1,
+                    supportPoe: true,
+                    configStack: false,
+                    configMlagPeerLink: false,
+                    configMlagDad: false,
+                }))
+            ),
             ensureSuccess: vi.fn((response: OmadaApiResponse<unknown>) => {
                 if (response.errorCode === 0) {
                     return response.result;
@@ -107,117 +131,24 @@ describe('SwitchOperations', () => {
         });
     });
 
-    describe('setSwitchPortProfile', () => {
-        it('sets a LAN profile on a single port', async () => {
-            vi.mocked(mockRequest.put).mockResolvedValue({ errorCode: 0, result: {} });
-
-            await switchOps.setSwitchPortProfile('D8-44-89-C3-00-04', 3, 'profile-1', 'site-123');
-
-            expect(mockRequest.put).toHaveBeenCalledWith('/openapi/v1/test-omadac/sites/site-123/switches/D8-44-89-C3-00-04/ports/3/profile', {
-                profileId: 'profile-1',
-            });
-        });
-    });
-
-    describe('setSwitchPortPoe', () => {
-        it('sets PoE mode on a single port', async () => {
-            vi.mocked(mockRequest.put).mockResolvedValue({ errorCode: 0, result: {} });
-
-            await switchOps.setSwitchPortPoe('D8-44-89-C3-00-04', 3, 1, 'site-123');
-
-            expect(mockRequest.put).toHaveBeenCalledWith('/openapi/v1/test-omadac/sites/site-123/switches/D8-44-89-C3-00-04/ports/3/poe-mode', {
-                poeMode: 1,
-            });
-        });
-    });
-
-    describe('setSwitchPortName', () => {
-        it('sets the name on a single port', async () => {
-            vi.mocked(mockRequest.put).mockResolvedValue({ errorCode: 0, result: {} });
-
-            await switchOps.setSwitchPortName('D8-44-89-C3-00-04', 3, 'Uplink', 'site-123');
-
-            expect(mockRequest.put).toHaveBeenCalledWith('/openapi/v1/test-omadac/sites/site-123/switches/D8-44-89-C3-00-04/ports/3/name', {
-                name: 'Uplink',
-            });
-        });
-    });
-
-    describe('setSwitchPortStatus', () => {
-        it('enables or disables a single port', async () => {
-            vi.mocked(mockRequest.put).mockResolvedValue({ errorCode: 0, result: {} });
-
-            await switchOps.setSwitchPortStatus('D8-44-89-C3-00-04', 3, 0, 'site-123');
-
-            expect(mockRequest.put).toHaveBeenCalledWith('/openapi/v1/test-omadac/sites/site-123/switches/D8-44-89-C3-00-04/ports/3/status', {
-                status: 0,
-            });
-        });
-    });
-
-    describe('setSwitchPortProfileOverride', () => {
-        it('enables or disables profile override on a single port', async () => {
-            vi.mocked(mockRequest.put).mockResolvedValue({ errorCode: 0, result: {} });
-
-            await switchOps.setSwitchPortProfileOverride('D8-44-89-C3-00-04', 3, true, 'site-123');
-
-            expect(mockRequest.put).toHaveBeenCalledWith(
-                '/openapi/v1/test-omadac/sites/site-123/switches/D8-44-89-C3-00-04/ports/3/profile-override',
-                { profileOverrideEnable: true }
-            );
-        });
-    });
-
-    describe('batchSetSwitchPortProfile', () => {
-        it('batch sets profile override on multiple ports', async () => {
-            vi.mocked(mockRequest.put).mockResolvedValue({ errorCode: 0, result: {} });
-
-            await switchOps.batchSetSwitchPortProfile('D8-44-89-C3-00-04', [1, 2, 3], false, 'site-123');
-
-            expect(mockRequest.put).toHaveBeenCalledWith(
-                '/openapi/v1/test-omadac/sites/site-123/switches/D8-44-89-C3-00-04/multi-ports/profile-override',
-                { portList: [1, 2, 3], profileOverrideEnable: false }
-            );
-        });
-    });
-
-    describe('batchSetSwitchPortPoe', () => {
-        it('batch sets PoE mode on multiple ports', async () => {
-            vi.mocked(mockRequest.put).mockResolvedValue({ errorCode: 0, result: {} });
-
-            await switchOps.batchSetSwitchPortPoe('D8-44-89-C3-00-04', [1, 2, 3], 1, 'site-123');
-
-            expect(mockRequest.put).toHaveBeenCalledWith('/openapi/v1/test-omadac/sites/site-123/switches/D8-44-89-C3-00-04/multi-ports/poe-mode', {
-                portList: [1, 2, 3],
-                poeMode: 1,
-            });
-        });
-    });
-
-    describe('batchSetSwitchPortStatus', () => {
-        it('batch enables or disables multiple ports', async () => {
-            vi.mocked(mockRequest.put).mockResolvedValue({ errorCode: 0, result: {} });
-
-            await switchOps.batchSetSwitchPortStatus('D8-44-89-C3-00-04', [1, 2, 3], 1, 'site-123');
-
-            expect(mockRequest.put).toHaveBeenCalledWith('/openapi/v1/test-omadac/sites/site-123/switches/D8-44-89-C3-00-04/multi-ports/status', {
-                portList: [1, 2, 3],
-                status: 1,
-            });
-        });
-    });
-
-    describe('batchSetSwitchPortName', () => {
-        it('batch sets names on multiple ports', async () => {
-            vi.mocked(mockRequest.put).mockResolvedValue({ errorCode: 0, result: {} });
-
-            const portNameList = [{ port: 1, name: 'Uplink' }];
-            await switchOps.batchSetSwitchPortName('D8-44-89-C3-00-04', portNameList, 'site-123');
-
-            expect(mockRequest.put).toHaveBeenCalledWith('/openapi/v1/test-omadac/sites/site-123/switches/D8-44-89-C3-00-04/multi-ports/name', {
-                portNameList,
-            });
-        });
+    it.each([
+        ['setSwitchPortProfile', [3, 'profile-1'], 'ports/3/profile', { profileId: 'profile-1' }],
+        ['setSwitchPortPoe', [3, 1], 'ports/3/poe-mode', { poeMode: 1 }],
+        ['setSwitchPortName', [3, 'Uplink'], 'ports/3/name', { name: 'Uplink' }],
+        ['setSwitchPortStatus', [3, 0], 'ports/3/status', { status: 0 }],
+        ['setSwitchPortProfileOverride', [3, false], 'ports/3/profile-override', { profileOverrideEnable: false }],
+        ['batchSetSwitchPortProfile', [[1, 2, 3], false], 'multi-ports/profile-override', { portList: [1, 2, 3], profileOverrideEnable: false }],
+        ['batchSetSwitchPortPoe', [[1, 2, 3], 1], 'multi-ports/poe-mode', { portList: [1, 2, 3], poeMode: 1 }],
+        ['batchSetSwitchPortStatus', [[1, 2, 3], 0], 'multi-ports/status', { portList: [1, 2, 3], status: 0 }],
+        ['batchSetSwitchPortName', [[{ port: 1, name: 'Uplink' }]], 'multi-ports/name', { portNameList: [{ port: 1, name: 'Uplink' }] }],
+    ])('uses the documented guarded endpoint for %s', async (method, args, suffix, data) => {
+        const invoke = switchOps[method as keyof SwitchOperations] as (...args: unknown[]) => Promise<unknown>;
+        await invoke.call(switchOps, 'D8-44-89-C3-00-04', ...(args as unknown[]), 'site-123');
+        expect(mockRequest.request).toHaveBeenCalledExactlyOnceWith(
+            { method: 'PUT', url: `/openapi/v1/test-omadac/sites/site-123/switches/D8-44-89-C3-00-04/${suffix}`, data },
+            false
+        );
+        expect(mockRequest.put).not.toHaveBeenCalled();
     });
 
     describe('startCableTest', () => {

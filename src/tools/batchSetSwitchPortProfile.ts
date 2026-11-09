@@ -3,11 +3,13 @@ import { z } from 'zod';
 
 import type { OmadaClient } from '../omadaClient/index.js';
 import { toToolResult, wrapToolHandler } from '../server/common.js';
+import { portWriteOptions, switchPortListSchema, switchWriteOptionsSchema } from '../utils/switch-port-safety.js';
 
 const batchSetSwitchPortProfileSchema = z.object({
+    ...switchWriteOptionsSchema.shape,
     siteId: z.string().min(1).optional(),
     switchMac: z.string().min(1, 'switchMac is required'),
-    portList: z.array(z.number().int().min(1)).min(1, 'portList must contain at least one port'),
+    portList: switchPortListSchema,
     profileOverrideEnable: z.boolean().describe('Enable or disable profile override on all specified ports'),
 });
 
@@ -21,8 +23,13 @@ export function registerBatchSetSwitchPortProfileTool(server: McpServer, client:
                 destructiveHint: true,
             },
         },
-        wrapToolHandler('batchSetSwitchPortProfile', async ({ switchMac, portList, profileOverrideEnable, siteId }) =>
-            toToolResult(await client.batchSetSwitchPortProfile(switchMac, portList, profileOverrideEnable, siteId))
-        )
+        wrapToolHandler('batchSetSwitchPortProfile', async ({ switchMac, portList, profileOverrideEnable, siteId, dryRun, allowDisruption }) => {
+            const options = portWriteOptions(dryRun, allowDisruption);
+            return toToolResult(
+                await (options
+                    ? client.batchSetSwitchPortProfile(switchMac, portList, profileOverrideEnable, siteId, options)
+                    : client.batchSetSwitchPortProfile(switchMac, portList, profileOverrideEnable, siteId))
+            );
+        })
     );
 }

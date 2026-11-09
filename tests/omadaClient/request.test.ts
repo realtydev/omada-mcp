@@ -515,6 +515,18 @@ describe('RequestHandler', () => {
     });
 
     describe('ensureSuccess', () => {
+        it('preserves the numeric controller code without attaching the response payload', async () => {
+            const { RequestHandler } = await import('../../src/omadaClient/request.js');
+            const handler = new RequestHandler(mockAxiosInstance as never, mockAuthManager as never);
+            try {
+                handler.ensureSuccess({ errorCode: -1600, msg: 'Unavailable', result: { privateData: 'not-attached' } });
+                expect.fail('Expected a controller rejection');
+            } catch (error) {
+                expect(error).toMatchObject({ message: 'Unavailable', errorCode: -1600 });
+                expect(error).not.toHaveProperty('response');
+                expect(error).not.toHaveProperty('result');
+            }
+        });
         it('should return result for successful response', async () => {
             const { RequestHandler } = await import('../../src/omadaClient/request.js');
 

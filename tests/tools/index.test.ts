@@ -25,6 +25,7 @@ describe('tools/index', () => {
                 'describeApiOperation',
                 'executeApiOperation',
                 // Read tools
+                'getControllerCapabilities',
                 'diagnoseClient',
                 'diagnoseLogs',
                 'listDhcpReservations',

@@ -58,7 +58,9 @@ export class InternalRequestHandler {
                 message: response.msg,
             });
             const detail = response.msg ? `: ${response.msg}` : '';
-            throw new Error(`Internal API request failed (errorCode: ${response.errorCode})${detail}`);
+            const error = new Error(`Internal API request failed (errorCode: ${response.errorCode})${detail}`);
+            if (Number.isSafeInteger(response.errorCode)) Object.assign(error, { errorCode: response.errorCode });
+            throw error;
         }
 
         return (response.result ?? ({} as T)) as T;

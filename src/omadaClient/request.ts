@@ -251,7 +251,9 @@ export class RequestHandler {
                 errorCode: response.errorCode,
                 message: response.msg,
             });
-            throw new Error(response.msg ?? 'Omada API request failed');
+            const error = new Error(response.msg ?? 'Omada API request failed');
+            if (Number.isSafeInteger(response.errorCode)) Object.assign(error, { errorCode: response.errorCode });
+            throw error;
         }
 
         return (response.result ?? ({} as T)) as T;

@@ -42,14 +42,15 @@ function setup(overrides: Record<string, unknown> = {}, schema: Record<string, u
 function writeSetup(
     bodySchema: Record<string, unknown> = { type: 'object', required: ['enabled'], properties: { enabled: { type: 'boolean' } } },
     path = `${BASE}/things`,
-    contentType = 'application/json'
+    contentType = 'application/json',
+    method: 'patch' | 'put' | 'delete' = 'patch'
 ) {
     const catalog = new OperationCatalog(
         {
             openapi: '3.0.1',
             paths: {
                 [path]: {
-                    patch: { operationId: 'modifyThing', requestBody: { required: true, content: { [contentType]: { schema: bodySchema } } } },
+                    [method]: { operationId: 'modifyThing', requestBody: { required: true, content: { [contentType]: { schema: bodySchema } } } },
                 },
             },
             components: { schemas: {} },
@@ -310,6 +311,40 @@ describe('discovered operation execution', () => {
         const params = { siteTemplateId: 'template-1', wlanId: 'wlan-1', ssidId: 'ssid-1' };
         expect(await run({ params, dryRun: false })).toMatchObject({ written: true, verified: false });
         expect(request.request).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+        ['ports/{port}/profile', 'setSwitchPortProfile'],
+        ['ports/{port}/poe-mode', 'setSwitchPortPoe'],
+        ['ports/{port}/name', 'setSwitchPortName'],
+        ['ports/{port}/status', 'setSwitchPortStatus'],
+        ['ports/{port}/profile-override', 'setSwitchPortProfileOverride'],
+        ['multi-ports/poe-mode', 'batchSetSwitchPortPoe'],
+        ['multi-ports/name', 'batchSetSwitchPortName'],
+        ['multi-ports/status', 'batchSetSwitchPortStatus'],
+        ['multi-ports/profile-override', 'batchSetSwitchPortProfile'],
+    ])('retains switch workflow safeguards for %s', async (suffix, tool) => {
+        const { request, run } = writeSetup(undefined, `${BASE}/switches/{switchMac}/${suffix}`, 'application/json', 'put');
+        const params = { switchMac: 'AA-BB-CC-DD-EE-FF', ...(suffix.includes('{port}') ? { port: '1' } : {}) };
+        expect(await run({ params })).toMatchObject({ dryRun: true, written: false, warning: expect.stringContaining(tool) });
+        await expect(run({ params, dryRun: false })).rejects.toThrow(`Use ${tool}`);
+        expect(request.request).not.toHaveBeenCalled();
+    });
+
+    it('does not redirect switch template or unrelated verb operations to site-only setters', async () => {
+        for (const [path, method] of [
+            ['/openapi/v1/{omadacId}/sitetemplates/{siteTemplateId}/switches/{switchMac}/ports/{port}/name', 'put'],
+            [`${BASE}/switches/{switchMac}/ports/{port}/name`, 'delete'],
+        ] as const) {
+            const { request, run } = writeSetup(undefined, path, 'application/json', method);
+            const params = {
+                switchMac: 'AA-BB-CC-DD-EE-FF',
+                port: '1',
+                ...(path.includes('{siteTemplateId}') ? { siteTemplateId: 'template' } : {}),
+            };
+            expect(await run({ params, dryRun: false })).toMatchObject({ written: true, verified: false });
+            expect(request.request).toHaveBeenCalledTimes(1);
+        }
     });
 
     it('does not accept malformed successful response envelopes', async () => {

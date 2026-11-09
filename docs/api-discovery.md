@@ -30,7 +30,9 @@ JSON execution validates declared required parameters, schema types, enums, rang
 
 GET executes normally. Writes default to a preview with `dryRun:true` and `written:false`; only an explicit `dryRun:false` sends a mutation. Previews do not claim that the controller will accept the request. Actual writes report `verified:false`, meaning no automatic read-back verification was performed. A successful response is not proof that hardware applied the setting. Errors preserve controller details and warn that a failed write may have applied; discovery does not replay uncertain writes.
 
-Use the existing dedicated tools where they provide stronger workflows. Radio configuration, DHCP reservation, SSID basic configuration and log-notification mutations can be previewed through discovery, but execution directs callers to their dedicated tools to preserve preflight checks, preservation, reconciliation and read-back verification.
+Use the existing dedicated tools where they provide stronger workflows. Radio configuration, DHCP reservation, SSID basic configuration, switch-port setting and log-notification mutations can be previewed through discovery, but execution directs callers to their dedicated tools to preserve preflight checks, preservation, reconciliation and read-back verification.
+
+`getControllerCapabilities` reads metadata and this same cached catalog, reporting documentation separately from observed support. See [controller capabilities](controller-capabilities.md) and [switch safety](switch-safety.md).
 
 `MCP_TOOL_PROFILE=read-only` exposes all three discovery tools but limits search, describe and execution to GET operations. Writes, including write previews, are rejected independently in the execution layer. Read-only means no mutations; controller permissions still govern access to returned information. Credentials in tool/request logs are redacted; tool results remain usable controller data.
 

@@ -97,7 +97,14 @@ try {
     await Promise.all([server.connect(st), protocolClient.connect(ct)]);
     const { tools } = await protocolClient.listTools();
     const registered = new Set(tools.map((tool) => tool.name));
-    const required = ['listDhcpReservations', 'getSiteTopology', 'getSiteDashboard', 'listVpnConnections', 'getGatewayWanSpeedTestResults'];
+    const required = [
+        'getControllerCapabilities',
+        'listDhcpReservations',
+        'getSiteTopology',
+        'getSiteDashboard',
+        'listVpnConnections',
+        'getGatewayWanSpeedTestResults',
+    ];
     await check('registered-read-tools', async () => {
         assert(
             required.every((name) => registered.has(name)),
@@ -105,6 +112,24 @@ try {
         );
         const info = await call('getServerInfo');
         return { tools: tools.length, commit: info.gitCommit, version: info.packageVersion };
+    });
+    await check('controller-capabilities', async () => {
+        const result = await call('getControllerCapabilities');
+        assert(result?.configuration && result?.controller && result?.catalog, 'Unexpected capability report');
+        assert(result.ssidEvidence?.status === 'not_requested', 'Default capabilities must not scan SSIDs');
+        if (result.catalog.status === 'ok') {
+            assert(
+                result.catalog.features.every((feature) => feature.controllerSupport === 'not_tested'),
+                'Documentation must not assert hardware support'
+            );
+        }
+        return {
+            collectionComplete: result.controller.status === 'ok' && result.catalog.status === 'ok',
+            controller: result.controller.status,
+            catalog: result.catalog.status,
+            ...(result.controller.status === 'ok' ? { mode: result.controller.mode } : {}),
+            ...(result.catalog.status === 'ok' ? { source: result.catalog.source, operations: result.catalog.operations.total } : {}),
+        };
     });
     const sites = await call('listSites');
     assert(Array.isArray(sites) && sites.length > 0, 'No accessible sites');

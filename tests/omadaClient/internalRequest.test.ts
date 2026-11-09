@@ -113,6 +113,18 @@ describe('InternalRequestHandler', () => {
     });
 
     describe('ensureSuccess', () => {
+        it('retains safe numeric controller codes for capability classification', async () => {
+            const { InternalRequestHandler } = await import('../../src/omadaClient/internalRequest.js');
+            const handler = new InternalRequestHandler(mockAxiosInstance as never, mockAuthManager as never, 'controller');
+            try {
+                handler.ensureSuccess({ errorCode: -1600, result: { privateData: 'not-attached' } });
+                expect.fail('Expected a controller rejection');
+            } catch (error) {
+                expect(error).toMatchObject({ errorCode: -1600 });
+                expect(error).not.toHaveProperty('response');
+                expect(error).not.toHaveProperty('result');
+            }
+        });
         it('should return the result when errorCode is 0', async () => {
             const { InternalRequestHandler } = await import('../../src/omadaClient/internalRequest.js');
             const handler = new InternalRequestHandler(mockAxiosInstance as never, mockAuthManager as never, 'test-omadac');

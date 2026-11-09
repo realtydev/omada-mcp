@@ -630,13 +630,10 @@ export class NetworkOperations {
     /**
      * Update a switch port configuration (v1 API).
      */
-    public async updateSwitchPort(switchMac: string, portId: string, data: Record<string, unknown>, siteId?: string): Promise<unknown> {
-        const resolvedSiteId = this.site.resolveSiteId(siteId);
-        const path = this.buildPath(
-            `/sites/${encodeURIComponent(resolvedSiteId)}/switches/${encodeURIComponent(switchMac)}/ports/${encodeURIComponent(portId)}`
+    public updateSwitchPort(_switchMac: string, _portId: string, _data: Record<string, unknown>, _siteId?: string): Promise<unknown> {
+        return Promise.reject(
+            new Error('Generic switch port PATCH is not a verified Open API operation. Use the guarded dedicated switch port tools.')
         );
-        const response = await this.request.request<OmadaApiResponse<unknown>>({ method: 'PATCH', url: path, data });
-        return this.request.ensureSuccess(response);
     }
 
     /**
