@@ -46,6 +46,7 @@ import { registerGetIpsSettingTool } from './getIpsSetting.js';
 import { registerGetLanNetworkListTool } from './getLanNetworkList.js';
 import { registerGetLanProfileListTool } from './getLanProfileList.js';
 import { registerGetPortForwardingStatusTool } from './getPortForwardingStatus.js';
+import { registerGetRfPlanningStatusTool } from './getRfPlanningStatus.js';
 import { registerGetServerInfoTool } from './getServerInfo.js';
 import { registerGetSiteDashboardTool } from './getSiteDashboard.js';
 import { registerGetSiteTopologyTool } from './getSiteTopology.js';
@@ -129,6 +130,7 @@ export function registerAllTools(
     registerRollbackNetworkChangeTool(server, client);
     // Read tools
     registerGetApSsidOverridesTool(server, client);
+    registerGetRfPlanningStatusTool(server, client);
     registerUpdateApSsidOverrideTool(server, client);
     registerGetControllerCapabilitiesTool(server, client);
     registerDiagnoseClientTool(server, client);

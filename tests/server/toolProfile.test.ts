@@ -67,6 +67,7 @@ describe('tool exposure profiles', () => {
         expect(tools.some((tool) => tool.name === 'genericApiCall')).toBe(false);
         for (const name of [
             'getApSsidOverrides',
+            'getRfPlanningStatus',
             'refreshApiCatalog',
             'getApRfScanResults',
             'getApAfcStatus',

@@ -26,12 +26,12 @@ Claude: (setApRadio dryRun=true → setApRadio) Done. Read back and verified.
 
 Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned updates and rollback of client-managed stdio processes or a persistent local Docker service. It verifies actual running builds with `getServerInfo`, preserves credential files, and can adopt an existing Compose service. Setup can configure Codex, Cursor and Claude Desktop automatically; updates report client reload results and support optional desktop restarts.
 
-Current source adds per-AP SSID override workflows (107 tools; 56 in read-only mode before category filtering). These additions await the next release. See [per-AP overrides](docs/ap-ssid-overrides.md).
+Current source adds per-AP SSID overrides and read-only RF planning workflows (108 tools; 57 in read-only mode before category filtering). These additions await the next release. See [per-AP overrides](docs/ap-ssid-overrides.md) and [RF planning](docs/rf-planning.md).
 
 ## Highlights
 
 - **Automatic API discovery.** `searchApiOperations` → `describeApiOperation` → `executeApiOperation`. Prefer the controller's live specification, with an explicit bundled fallback containing 1,676 indexed operations. Unsupported operations are identified; a catalogue entry does not prove device support. See [API discovery](docs/api-discovery.md).
-- **107 tools in the current source, including 56 in read-only mode before category filtering.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
+- **108 tools in the current source, including 57 in read-only mode before category filtering.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
 - **Traffic, RF and WAN diagnostics.** Bounded history and timestamped evidence distinguish missing metrics, partial results and truncation. See [network workflows](docs/network-workflows.md) and [diagnostic comparisons](docs/diagnostic-comparisons.md).
 - **MSP, OpenAPI 3.1 and files.** Explicit MSP scope, JSON Schema 2020 validation and opt-in bounded multipart uploads/binary downloads. See [file transfers](docs/file-transfers.md).
 - **Guarded configuration changes.** Discovered writes default to validated previews. Radio, DHCP, SSID, switch-port, rate-limit profile and log-notification writes retain dedicated safeguards. Eligible rate-limit, DHCP, AP radio and secret-free SSID changes include drift-checked rollback receipts. Other discovered writes explicitly report that they have not been verified by reading settings back.

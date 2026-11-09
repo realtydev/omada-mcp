@@ -64,6 +64,7 @@ import {
 } from './networkDiagnostics.js';
 import { RateLimitProfileOperations, type RateLimitProfileUpdate, type RateLimitProfileWriteResult } from './rateLimitProfile.js';
 import { type PaginationReadOptions, RequestHandler } from './request.js';
+import { type GetRfPlanningOptions, RfPlanningOperations } from './rfPlanning.js';
 import { SecurityOperations } from './security.js';
 import { SiteOperations } from './site.js';
 import { SwitchOperations } from './switch.js';
@@ -120,6 +121,7 @@ export class OmadaClient {
     private readonly logNotificationOps: LogNotificationOperations;
 
     private readonly apSsidOverrideOps: ApSsidOverrideOperations;
+    private readonly rfPlanningOps: RfPlanningOperations;
 
     private readonly apRadioOps: ApRadioOperations;
 
@@ -149,6 +151,7 @@ export class OmadaClient {
         this.monitorOps = new MonitorOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.logNotificationOps = new LogNotificationOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.apSsidOverrideOps = new ApSsidOverrideOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.rfPlanningOps = new RfPlanningOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.apRadioOps = new ApRadioOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this), options.omadacId);
         this.networkChangeOps = new NetworkChangeOperations(
             options.omadacId,
@@ -179,6 +182,9 @@ export class OmadaClient {
 
     public async getApSsidOverrides(apMac: string, siteId?: string): Promise<unknown> {
         return await this.apSsidOverrideOps.getApSsidOverrides(apMac, siteId);
+    }
+    public async getRfPlanningStatus(options: GetRfPlanningOptions = {}) {
+        return await this.rfPlanningOps.getRfPlanningStatus(options);
     }
 
     public async updateApSsidOverride(
