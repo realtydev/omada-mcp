@@ -7,6 +7,8 @@ import { toToolResult, wrapToolHandler } from '../server/common.js';
 const adoptDeviceSchema = z.object({
     siteId: z.string().min(1).optional(),
     deviceMac: z.string().min(1, 'deviceMac is required'),
+    username: z.string().min(1).max(64).optional().describe('Existing device account username, when required for adoption'),
+    password: z.string().min(1).max(64).optional().describe('Existing device account password, when required for adoption'),
 });
 
 export function registerAdoptDeviceTool(server: McpServer, client: OmadaClient): void {
@@ -19,6 +21,8 @@ export function registerAdoptDeviceTool(server: McpServer, client: OmadaClient):
                 destructiveHint: true,
             },
         },
-        wrapToolHandler('adoptDevice', async ({ deviceMac, siteId }) => toToolResult(await client.adoptDevice(deviceMac, siteId)))
+        wrapToolHandler('adoptDevice', async ({ deviceMac, siteId, username, password }) =>
+            toToolResult(await client.adoptDevice(deviceMac, siteId, { username, password }))
+        )
     );
 }

@@ -1,5 +1,3 @@
-import https from 'node:https';
-
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
 
 import type { EnvironmentConfig } from '../config.js';
@@ -44,9 +42,11 @@ import {
 } from './dhcpReservation.js';
 import { type DiagnoseClientResult, type DiagnoseLogsResult, DiagnosticsOperations } from './diagnostics.js';
 import { GenericOperations } from './generic.js';
+import { createControllerHttpOptions } from './httpOptions.js';
 import { InternalAuthManager } from './internalAuth.js';
 import { InternalRequestHandler } from './internalRequest.js';
 import { LogNotificationOperations } from './logNotification.js';
+import { MonitorOperations, type SiteDashboardOptions, type SiteDashboardResult } from './monitor.js';
 import { type ListVpnConnectionsOptions, MonitoringOperations } from './monitoring.js';
 import { NetworkOperations } from './network.js';
 import { RequestHandler } from './request.js';
@@ -83,6 +83,8 @@ export class OmadaClient {
 
     private readonly monitoringOps: MonitoringOperations;
 
+    private readonly monitorOps: MonitorOperations;
+
     private readonly actionOps: ActionOperations;
 
     private readonly genericOps: GenericOperations;
@@ -98,20 +100,7 @@ export class OmadaClient {
     constructor(options: OmadaClientOptions) {
         this.omadacId = options.omadacId;
 
-        const axiosOptions: AxiosRequestConfig = {
-            baseURL: options.baseUrl,
-            httpsAgent: new https.Agent({ rejectUnauthorized: options.strictSsl }),
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-            },
-        };
-
-        if (options.requestTimeout) {
-            axiosOptions.timeout = options.requestTimeout;
-        }
-
-        this.http = axios.create(axiosOptions);
+        this.http = axios.create(createControllerHttpOptions(options));
 
         // Initialize operation modules
         this.auth =
@@ -126,6 +115,7 @@ export class OmadaClient {
         this.networkOps = new NetworkOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.dhcpReservationOps = new DhcpReservationOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.monitoringOps = new MonitoringOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.monitorOps = new MonitorOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.logNotificationOps = new LogNotificationOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.apRadioOps = new ApRadioOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.actionOps = new ActionOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
@@ -146,6 +136,10 @@ export class OmadaClient {
     // Site operations
     public async listSites(): Promise<OmadaSiteSummary[]> {
         return await this.siteOps.listSites();
+    }
+
+    public async getSiteDashboard(options: SiteDashboardOptions = {}): Promise<SiteDashboardResult> {
+        return await this.monitorOps.getSiteDashboard(options);
     }
 
     // Device operations
@@ -372,8 +366,8 @@ export class OmadaClient {
         return await this.actionOps.rebootDevice(deviceMac, siteId);
     }
 
-    public async adoptDevice(deviceMac: string, siteId?: string): Promise<unknown> {
-        return await this.actionOps.adoptDevice(deviceMac, siteId);
+    public async adoptDevice(deviceMac: string, siteId?: string, credentials?: { username?: string; password?: string }): Promise<unknown> {
+        return await this.actionOps.adoptDevice(deviceMac, siteId, credentials);
     }
 
     public async blockClient(clientMac: string, siteId?: string): Promise<unknown> {
@@ -388,12 +382,20 @@ export class OmadaClient {
         return await this.actionOps.reconnectClient(clientMac, siteId);
     }
 
-    public async updateClient(clientMac: string, data: Record<string, unknown>, siteId?: string): Promise<unknown> {
-        return await this.actionOps.updateClient(clientMac, data, siteId);
+    public async updateClient(clientMac: string, data: Record<string, unknown>, siteId?: string, dryRun?: boolean): Promise<unknown> {
+        return await this.actionOps.updateClient(clientMac, data, siteId, dryRun);
     }
 
     public async setDeviceLed(deviceMac: string, ledSetting: number, siteId?: string): Promise<unknown> {
         return await this.actionOps.setDeviceLed(deviceMac, ledSetting, siteId);
+    }
+
+    public async locateDevice(deviceMac: string, enable: boolean, siteId?: string): Promise<unknown> {
+        return await this.actionOps.locateDevice(deviceMac, enable, siteId);
+    }
+
+    public async setSiteLed(enable: boolean, siteId?: string): Promise<unknown> {
+        return await this.actionOps.setSiteLed(enable, siteId);
     }
 
     public async setApRadio(

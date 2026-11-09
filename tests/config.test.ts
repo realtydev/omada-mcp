@@ -148,6 +148,15 @@ describe('config', () => {
             expect(config.strictSsl).toBe(false);
         });
 
+        it('accepts an optional private CA path with certificate verification enabled', () => {
+            expect(loadConfigFromEnv(mockEnv).caFile).toBeUndefined();
+            expect(loadConfigFromEnv({ ...mockEnv, OMADA_CA_FILE: '/certs/controller-ca.pem' }).caFile).toBe('/certs/controller-ca.pem');
+            expect(() => loadConfigFromEnv({ ...mockEnv, OMADA_CA_FILE: '  ' })).toThrow('OMADA_CA_FILE must be a non-empty path');
+            expect(() => loadConfigFromEnv({ ...mockEnv, OMADA_CA_FILE: '/certs/controller-ca.pem', OMADA_STRICT_SSL: 'false' })).toThrow(
+                'OMADA_CA_FILE requires OMADA_STRICT_SSL=true'
+            );
+        });
+
         it('should parse OMADA_TIMEOUT as number', () => {
             mockEnv.OMADA_TIMEOUT = '5000';
             const config = loadConfigFromEnv(mockEnv);

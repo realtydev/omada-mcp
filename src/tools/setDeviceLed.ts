@@ -14,7 +14,7 @@ export function registerSetDeviceLedTool(server: McpServer, client: OmadaClient)
     server.registerTool(
         'setDeviceLed',
         {
-            description: 'Set the LED on/off/site-default for a device by its MAC address.',
+            description: 'Unsupported by the Omada Open API. Use locateDevice to identify one device or setSiteLed for the entire site LED policy.',
             inputSchema: setDeviceLedSchema.strict(),
             annotations: {
                 destructiveHint: true,

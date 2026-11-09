@@ -3,27 +3,28 @@ import { z } from 'zod';
 
 import type { OmadaClient } from '../omadaClient/index.js';
 import { toToolResult, wrapToolHandler } from '../server/common.js';
+import { clientUpdateSchema } from '../utils/client-update-schema.js';
 
-const updateClientSchema = z.object({
+const updateClientSchema = clientUpdateSchema.safeExtend({
     siteId: z.string().min(1).optional(),
     clientMac: z.string().min(1, 'clientMac is required'),
-    name: z.string().optional().describe('Display name for the client'),
-    fixedIp: z.string().optional().describe('Static DHCP IP address'),
-    rateLimitEnable: z.boolean().optional().describe('Enable rate limiting'),
-    upLimit: z.number().int().optional().describe('Upload rate limit (kbps)'),
-    downLimit: z.number().int().optional().describe('Download rate limit (kbps)'),
+    dryRun: z.boolean().optional().describe('Validate and preview all requests without changing the client'),
 });
 
 export function registerUpdateClientTool(server: McpServer, client: OmadaClient): void {
     server.registerTool(
         'updateClient',
         {
-            description: 'Update client settings such as display name, static IP, and rate limits.',
+            description:
+                'Update client display name, fixed IPv4 address (empty disables), or rate limits. ' +
+                'Custom limits support kbps/Mbps units. Independent writes can partially succeed; use dryRun to preview first.',
             inputSchema: updateClientSchema.strict(),
             annotations: {
                 destructiveHint: true,
             },
         },
-        wrapToolHandler('updateClient', async ({ siteId, clientMac, ...data }) => toToolResult(await client.updateClient(clientMac, data, siteId)))
+        wrapToolHandler('updateClient', async ({ siteId, clientMac, dryRun, ...data }) =>
+            toToolResult(await client.updateClient(clientMac, data, siteId, dryRun))
+        )
     );
 }

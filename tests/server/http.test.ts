@@ -56,6 +56,21 @@ describe('server/http helpers', () => {
     });
 
     describe('sanitizePayload', () => {
+        it('preserves special JSON keys without changing the output prototype', () => {
+            const input = JSON.parse('{"__proto__":{"password":"hidden","safe":"value"},"constructor":"safe","nested":{"__proto__":"value"}}');
+            const sanitized = sanitizePayload(input) as Record<string, unknown>;
+            expect(Object.getPrototypeOf(sanitized)).toBeNull();
+            expect(Object.hasOwn(sanitized, '__proto__')).toBe(true);
+            expect(JSON.parse(JSON.stringify(sanitized))).toEqual(
+                JSON.parse('{"__proto__":{"password":"********","safe":"value"},"constructor":"safe","nested":{"__proto__":"value"}}')
+            );
+            expect(Object.getPrototypeOf(sanitized.nested)).toBeNull();
+            const headers = sanitizeHeaders(JSON.parse('{"__proto__":"value","Authorization":"secret"}'));
+            expect(Object.getPrototypeOf(headers)).toBeNull();
+            expect(Object.hasOwn(headers, '__proto__')).toBe(true);
+            expect(headers.Authorization).toBe('********');
+        });
+
         it('masks nested sensitive fields and strings', () => {
             const payload = {
                 token: 'abcd1234abcd1234',

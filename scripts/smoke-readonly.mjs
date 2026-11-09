@@ -97,7 +97,7 @@ try {
     await Promise.all([server.connect(st), protocolClient.connect(ct)]);
     const { tools } = await protocolClient.listTools();
     const registered = new Set(tools.map((tool) => tool.name));
-    const required = ['listDhcpReservations', 'getSiteTopology', 'listVpnConnections', 'getGatewayWanSpeedTestResults'];
+    const required = ['listDhcpReservations', 'getSiteTopology', 'getSiteDashboard', 'listVpnConnections', 'getGatewayWanSpeedTestResults'];
     await check('registered-read-tools', async () => {
         assert(
             required.every((name) => registered.has(name)),
@@ -115,6 +115,12 @@ try {
     const aps = devices.filter((device) => device.type === 'ap' && device.status === 1);
     const gateways = devices.filter((device) => device.type === 'gateway' && device.status === 1);
     emit({ inventory: { sites: sites.length, devices: devices.length, aps: aps.length, gateways: gateways.length } });
+    await check('site-dashboard', async () => {
+        const dashboard = await call('getSiteDashboard', { siteId });
+        assert(dashboard?.sections && typeof dashboard.collectionComplete === 'boolean', 'Unexpected dashboard result');
+        const sections = Object.fromEntries(Object.entries(dashboard.sections).map(([name, section]) => [name, section.status]));
+        return { collectionComplete: dashboard.collectionComplete, sections };
+    });
     await check('switch-ports', async () => {
         const ports = await call('listSwitchPorts', { siteId });
         assert(Array.isArray(ports), 'Unexpected port result');

@@ -51,6 +51,7 @@ const envSchema = z
         webUsername: z.string().min(1).optional(),
         webPassword: z.string().min(1).optional(),
         strictSsl: createBooleanStringSchema(true),
+        caFile: z.string().trim().min(1, 'OMADA_CA_FILE must be a non-empty path').optional(),
         requestTimeout: numericStringSchema,
 
         // MCP Generic Server Configuration
@@ -73,6 +74,10 @@ const envSchema = z
         httpNgrokAuthToken: z.string().optional(),
         httpSessionIdleTimeoutMs: boundedIntegerStringSchema(1_800_000, 2_147_483_647),
         httpMaxSessions: boundedIntegerStringSchema(100, 100_000),
+    })
+    .refine((data) => !data.caFile || data.strictSsl, {
+        message: 'OMADA_CA_FILE requires OMADA_STRICT_SSL=true',
+        path: ['caFile'],
     })
     .refine(
         (data) => {
@@ -135,6 +140,7 @@ export interface EnvironmentConfig {
     webUsername?: string;
     webPassword?: string;
     strictSsl: boolean;
+    caFile?: string;
     requestTimeout?: number;
 
     // MCP Generic Server Configuration
@@ -171,6 +177,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Environ
         webUsername: env.OMADA_WEB_USERNAME,
         webPassword: env.OMADA_WEB_PASSWORD,
         strictSsl: env.OMADA_STRICT_SSL,
+        caFile: env.OMADA_CA_FILE,
         requestTimeout: env.OMADA_TIMEOUT,
 
         // MCP Generic Server Configuration
@@ -226,6 +233,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Environ
         webUsername: parsed.data.webUsername,
         webPassword: parsed.data.webPassword,
         strictSsl: parsed.data.strictSsl,
+        caFile: parsed.data.caFile,
         requestTimeout: parsed.data.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT_MS,
 
         // MCP Generic Server Configuration
