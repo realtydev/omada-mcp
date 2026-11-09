@@ -259,6 +259,10 @@ export class ToolAccessPolicy {
     }
 
     public allowsTool(name: string, destructive = false): boolean {
+        if (name === 'diagnoseNetwork')
+            return (['devices', 'clients', 'wireless', 'switching', 'network', 'monitoring'] as const).every((category) =>
+                this.allowsCategory(category, false)
+            );
         if (name === 'rollbackNetworkChange')
             return ['clients', 'network', 'wireless'].some((category) => this.allowsCategory(category as ToolCategory, true));
         if (statusTools.has(name) || discoveryTools.has(name)) return true;

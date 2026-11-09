@@ -544,6 +544,16 @@ describe('NetworkOperations', () => {
             expect(mockRequest.get).toHaveBeenCalledTimes(100);
             expect(result.scanTruncated).toBe(true);
         });
+        it('honors a smaller diagnostic scan bound and does not claim completeness without counts', async () => {
+            vi.mocked(mockRequest.get).mockResolvedValue(pageOf([event('OSG_X')], 1_000_000));
+            const result = await networkOps.listEvents('site-123', 1, 200, 1, 2, undefined, undefined, 'OSG_', { maxPages: 4 });
+            expect(mockRequest.get).toHaveBeenCalledTimes(4);
+            expect(result.scanTruncated).toBe(true);
+            vi.mocked(mockRequest.get).mockClear();
+            vi.mocked(mockRequest.get).mockResolvedValue({ errorCode: 0, result: { data: [] } });
+            expect((await networkOps.listEvents('site-123', 1, 200, 1, 2, undefined, undefined, 'OSG_', { maxPages: 4 })).scanTruncated).toBe(true);
+            expect(mockRequest.get).toHaveBeenCalledTimes(1);
+        });
     });
 
     describe('listAlerts', () => {

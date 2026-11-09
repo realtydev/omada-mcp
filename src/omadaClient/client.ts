@@ -13,7 +13,7 @@ import type {
     PaginatedResult,
 } from '../types/index.js';
 
-import type { RequestHandler } from './request.js';
+import type { PaginationReadOptions, RequestHandler } from './request.js';
 import type { SiteOperations } from './site.js';
 
 const HISTORY_PAGE_SIZE = 1000;
@@ -35,9 +35,12 @@ export class ClientOperations {
     /**
      * List all clients in a site.
      */
-    public async listClients(siteId?: string): Promise<OmadaClientInfo[]> {
+    public async listClients(siteId?: string, readOptions?: PaginationReadOptions): Promise<OmadaClientInfo[]> {
         const resolvedSiteId = this.site.resolveSiteId(siteId);
-        return await this.request.fetchPaginated<OmadaClientInfo>(this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/clients`));
+        const path = this.buildPath(`/sites/${encodeURIComponent(resolvedSiteId)}/clients`);
+        return readOptions === undefined
+            ? await this.request.fetchPaginated<OmadaClientInfo>(path)
+            : await this.request.fetchPaginated<OmadaClientInfo>(path, {}, undefined, readOptions);
     }
 
     /**

@@ -51,6 +51,7 @@ describe('tools/index', () => {
                 'getApSsidOverrides',
                 'getRfPlanningStatus',
                 'getSwitchPortOverview',
+                'diagnoseNetwork',
                 'updateApSsidOverride',
                 'getApRadios',
                 'getApRfScanResults',

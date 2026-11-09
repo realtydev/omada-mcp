@@ -45,6 +45,23 @@ function setup(devices = [device(1)]) {
 }
 
 describe('Wi-Fi audit workflow', () => {
+    it.each([
+        ['157 / 5785MHz', 157, 5785],
+        ['36', 36, undefined],
+        ['157 / 5200MHz', undefined, undefined],
+        ['<script>', undefined, undefined],
+    ] as const)('qualifies controller operating channel %s', async (actualChannel, channel, frequency) => {
+        const { client, audit } = setup();
+        const value = radios();
+        value.radioStats.wp5g.actualChannel = actualChannel;
+        client.getApRadios.mockResolvedValue(value);
+        const result = await audit.diagnoseWifi();
+        const evidence = result.aps[0].radios;
+        if (evidence.status === 'ok' || evidence.status === 'partial') {
+            expect(evidence.data.radios[0].metrics.actualChannelNumber).toBe(channel);
+            expect(evidence.data.radios[0].metrics.frequencyMHz).toBe(frequency);
+        } else throw new Error('Radio evidence unavailable');
+    });
     beforeEach(() => {
         vi.useFakeTimers();
         vi.setSystemTime(NOW);

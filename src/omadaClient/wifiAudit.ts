@@ -64,6 +64,8 @@ interface RadioEvidence {
     configuration: RadioConfiguration;
     metrics: {
         actualChannel?: string;
+        actualChannelNumber?: number;
+        frequencyMHz?: number;
         channelWidth?: string;
         txUtilPercent?: number;
         rxUtilPercent?: number;
@@ -188,6 +190,21 @@ function radioEvidence(value: { radioConfig: unknown; radioStats: unknown }, sam
         const values = record(stats?.[`wp${band}`]);
         if (typeof values?.actualChannel === 'string' && values.actualChannel.length <= 32 && /^[\d, /-]+$/.test(values.actualChannel))
             metrics.actualChannel = values.actualChannel;
+        if (typeof values?.actualChannel === 'string' && values.actualChannel.length <= 32) {
+            const match = values.actualChannel.trim().match(/^(\d+)(?:\s*\/\s*(\d+)\s*MHz)?$/i);
+            if (match) {
+                const channel = Number(match[1]),
+                    frequency = match[2] === undefined ? undefined : Number(match[2]);
+                const expected = band === '2g' ? (channel === 14 ? 2484 : 2407 + 5 * channel) : (band === '6g' ? 5950 : 5000) + 5 * channel;
+                const allowed =
+                    band === '2g' ? channel >= 1 && channel <= 14 : band === '6g' ? channel >= 1 && channel <= 233 : channel >= 32 && channel <= 177;
+                if (allowed && (frequency === undefined || frequency === expected)) {
+                    metrics.actualChannel = values.actualChannel;
+                    metrics.actualChannelNumber = channel;
+                    if (frequency !== undefined) metrics.frequencyMHz = frequency;
+                }
+            }
+        }
         if (typeof values?.bandWidth === 'string' && values.bandWidth.length <= 32 && /^[\d,. /-]+(?:MHz)?$/i.test(values.bandWidth))
             metrics.channelWidth = values.bandWidth;
         for (const [source, target] of [
