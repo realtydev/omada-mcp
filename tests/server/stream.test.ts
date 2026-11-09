@@ -220,6 +220,49 @@ describe('Stream Server', () => {
     });
 
     describe('handleStreamRequest', () => {
+        it.each([undefined, 'application/json', '*/*', 'text/html,application/xhtml+xml'])(
+            'rejects GET without the required event-stream Accept before creating state: %s',
+            async (accept) => {
+                const getReq = {
+                    ...mockReq,
+                    method: 'GET',
+                    url: '/mcp?token=should-not-be-logged',
+                    headers: { ...mockReq.headers, accept, authorization: 'should-not-be-logged' },
+                } as unknown as IncomingMessage;
+                await expect(handleStreamRequest(mockClient, mockConfigStateful, getReq, mockRes)).resolves.toBeUndefined();
+                expect(mockRes.writeHead).toHaveBeenCalledExactlyOnceWith(406, { 'Content-Type': 'application/json' });
+                expect(mockRes.end).toHaveBeenCalledExactlyOnceWith(
+                    JSON.stringify({
+                        jsonrpc: '2.0',
+                        error: { code: -32000, message: 'Not Acceptable: Client must accept text/event-stream' },
+                        id: null,
+                    })
+                );
+                expect(createServer).not.toHaveBeenCalled();
+                expect(StreamableHTTPServerTransport).not.toHaveBeenCalled();
+                expect(logger.warn).toHaveBeenCalledExactlyOnceWith('Streamable HTTP request rejected', {
+                    reason: 'missing_event_stream_accept',
+                    method: 'GET',
+                    path: '/mcp',
+                });
+                expect(logger.info).not.toHaveBeenCalled();
+                expect(logger.error).not.toHaveBeenCalled();
+            }
+        );
+
+        it('does not call or reconnect an existing transport for an unacceptable GET', async () => {
+            const existingTransport = createStreamTransport(mockClient, mockConfigStateful);
+            vi.clearAllMocks();
+            const getReq = { ...mockReq, method: 'GET', headers: { accept: 'application/json' } } as unknown as IncomingMessage;
+            await handleStreamRequest(mockClient, mockConfigStateful, getReq, mockRes, undefined, existingTransport);
+            expect(existingTransport.transport.handleRequest).not.toHaveBeenCalled();
+            expect(existingTransport.server.connect).not.toHaveBeenCalled();
+            expect(existingTransport.server.close).not.toHaveBeenCalled();
+            expect(existingTransport.transport.close).not.toHaveBeenCalled();
+            expect(logger.warn).toHaveBeenCalledTimes(1);
+            expect(logger.error).not.toHaveBeenCalled();
+        });
+
         it('should handle stream request successfully without existing transport', async () => {
             await handleStreamRequest(mockClient, mockConfigStateless, mockReq, mockRes, undefined);
 
@@ -421,6 +464,7 @@ describe('Stream Server', () => {
             const getReq = {
                 ...mockReq,
                 method: 'GET',
+                headers: { ...mockReq.headers, accept: 'application/json, text/event-stream' },
             } as unknown as IncomingMessage;
 
             await handleStreamRequest(mockClient, mockConfigStateless, getReq, mockRes, undefined);
@@ -431,6 +475,10 @@ describe('Stream Server', () => {
                     method: 'GET',
                 })
             );
+            const transport = vi.mocked(StreamableHTTPServerTransport).mock.instances[0];
+            expect(transport.handleRequest).toHaveBeenCalledExactlyOnceWith(getReq, mockRes, undefined);
+            expect(mockRes.writeHead).not.toHaveBeenCalled();
+            expect(logger.warn).not.toHaveBeenCalled();
         });
 
         it('should handle DELETE requests', async () => {

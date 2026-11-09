@@ -76,7 +76,7 @@ The HTTP server will be available at `http://localhost:3000/mcp` (stream transpo
 ## Features
 
 - OAuth client-credentials authentication with automatic token refresh, plus web-session authentication for Fusion gateways
-- 94 tools for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
+- 97 tools for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
 - Generic Omada API invoker for advanced automation scenarios
 - Environment-driven configuration
 - Support for both stdio and HTTP transports
@@ -100,6 +100,7 @@ The MCP server reads its configuration from environment variables.
 | `OMADA_WEB_PASSWORD`  | Web mode   | -       | Omada web UI password                                                      |
 | `OMADA_STRICT_SSL`    | No         | `true`  | SSL certificate and hostname verification                                  |
 | `OMADA_CA_FILE`       | No         | —       | PEM CA bundle path inside the container; requires strict SSL               |
+| `OMADA_API_SPEC`      | No         | `auto`  | API discovery source: `auto`, `live`, or `bundled`                         |
 | `OMADA_TIMEOUT`       | No         | `30000` | Request timeout (ms)                                                       |
 
 For Fusion gateways that do not expose Platform Integration OAuth credentials, set `OMADA_AUTH_MODE=web` and provide `OMADA_WEB_USERNAME` / `OMADA_WEB_PASSWORD`. The server logs in through `/{omadacId}/api/v2/login` and uses that web session for OpenAPI requests.
@@ -344,15 +345,22 @@ DHCP writes support `dryRun`. Inspect `verification.status`: `verified` confirms
 
 ### Generic
 
-| Tool             | Description                                |
-| ---------------- | ------------------------------------------ |
-| `genericApiCall` | Invoke any Omada OpenAPI endpoint directly |
+| Tool                   | Description                                                             |
+| ---------------------- | ----------------------------------------------------------------------- |
+| `genericApiCall`       | Invoke any Omada OpenAPI endpoint directly                              |
+| `searchApiOperations`  | Search API operations by keyword, category or HTTP method               |
+| `describeApiOperation` | Inspect an operation’s parameters, schemas and limitations              |
+| `executeApiOperation`  | Execute validated discovered JSON operations; writes preview by default |
+
+See [API discovery](docs/api-discovery.md) for live/bundled specification selection and guarded execution.
 
 ### Meta
 
 | Tool            | Description                                                                                        |
 | --------------- | -------------------------------------------------------------------------------------------------- |
 | `getServerInfo` | Report the package version, git commit, and build time this server process was actually built from |
+
+Automatic discovery keeps the existing tools and adds searchable API coverage. See [API discovery](docs/api-discovery.md) for source selection, write previews, read-only enforcement and pagination limits.
 
 ## Reliability and tool exposure
 

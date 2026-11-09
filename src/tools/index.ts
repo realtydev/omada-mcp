@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-
+import type { ToolProfile } from '../config.js';
 import type { OmadaClient } from '../omadaClient/index.js';
 
 import { registerAdoptDeviceTool } from './adoptDevice.js';
@@ -19,8 +19,10 @@ import { registerDeleteFirewallAclTool } from './deleteFirewallAcl.js';
 import { registerDeleteLanNetworkTool } from './deleteLanNetwork.js';
 import { registerDeletePortForwardTool } from './deletePortForward.js';
 import { registerDeleteRouteTool } from './deleteRoute.js';
+import { registerDescribeApiOperationTool } from './describeApiOperation.js';
 import { registerDiagnoseClientTool } from './diagnoseClient.js';
 import { registerDiagnoseLogsTool } from './diagnoseLogs.js';
+import { registerExecuteApiOperationTool } from './executeApiOperation.js';
 import { registerGenericApiCallTool } from './genericApiCall.js';
 import { registerGetApAfcStatusTool } from './getApAfcStatus.js';
 import { registerGetApAvailableChannelsTool } from './getApAvailableChannels.js';
@@ -68,6 +70,7 @@ import { registerListVpnConnectionsTool } from './listVpnConnections.js';
 import { registerLocateDeviceTool } from './locateDevice.js';
 import { registerRebootDeviceTool } from './rebootDevice.js';
 import { registerReconnectClientTool } from './reconnectClient.js';
+import { registerSearchApiOperationsTool } from './searchApiOperations.js';
 import { registerSearchDevicesTool } from './searchDevices.js';
 import { registerSetApRadioTool } from './setApRadio.js';
 import { registerSetDeviceLedTool } from './setDeviceLed.js';
@@ -97,7 +100,11 @@ import { registerUpdateSsidTool } from './updateSsid.js';
 import { registerUpdateSwitchPortTool } from './updateSwitchPort.js';
 import { registerUpdateWanPortSettingTool } from './updateWanPortSetting.js';
 
-export function registerAllTools(server: McpServer, client: OmadaClient): void {
+export function registerAllTools(server: McpServer, client: OmadaClient, profile: ToolProfile = 'full'): void {
+    const discoveryPolicy = { readOnly: profile === 'read-only' };
+    registerSearchApiOperationsTool(server, client, discoveryPolicy);
+    registerDescribeApiOperationTool(server, client, discoveryPolicy);
+    registerExecuteApiOperationTool(server, client, discoveryPolicy);
     // Read tools
     registerDiagnoseClientTool(server, client);
     registerDiagnoseLogsTool(server, client);

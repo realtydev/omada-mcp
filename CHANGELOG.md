@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Automatic API discovery with `searchApiOperations`, `describeApiOperation`, and `executeApiOperation`, alongside existing tools. Live controller documentation is preferred; `OMADA_API_SPEC` selects automatic fallback, live-only or bundled mode.
+- Bounded schema descriptions and validated JSON execution, with independent read-only enforcement, default write previews, single-page results and explicit unverified-write status. Radio, DHCP and log-notification mutations retain their dedicated tools' safeguards.
+- Packaged API snapshot and repeatable `yarn smoke:discovery` read-only hardware checks.
+
 - `OMADA_CA_FILE` trusts a private PEM certificate bundle while retaining certificate and hostname verification.
 - `getSiteDashboard` collects bounded Wi-Fi, traffic, retry/drop, switch and PoE summaries, with explicit partial results.
 - `locateDevice` blinks a single device; `setSiteLed` explicitly controls LEDs across a site.
@@ -15,6 +19,9 @@ All notable changes to this project are documented here. The format follows [Kee
 - Release runtime archives with executable package bins and an archive/launcher MCP smoke check in CI.
 
 ### Fixed
+
+- Tool and request logs redact nested credentials, private keys and sensitive query values.
+- GET requests missing the MCP event-stream Accept header return the existing HTTP 406 response with one clear warning, without allocating a transport or emitting duplicate error stacks.
 
 - LAN profile updates use PATCH, and public gateway ACL operations use the documented Open API resources while preserving web API access.
 - Authenticated requests no longer follow redirects, and request logging preserves special JSON property names while masking secrets.

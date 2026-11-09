@@ -7,6 +7,7 @@ import { PACKAGE_VERSION } from '../generated/buildInfo.js';
 import type { OmadaClient } from '../omadaClient/index.js';
 import { registerAllTools } from '../tools/index.js';
 import { logger } from '../utils/logger.js';
+import { redactForLogs } from '../utils/redact.js';
 import { toolRegistrationServer } from './toolProfile.js';
 
 export const siteInputSchema = z.object({
@@ -43,7 +44,7 @@ export function toToolResult(value: unknown): CallToolResult {
 
 export function safeSerialize(value: unknown): string {
     try {
-        return JSON.stringify(value);
+        return JSON.stringify(redactForLogs(value));
     } catch {
         return '[unserializable]';
     }
@@ -188,7 +189,8 @@ export function createServer(client: OmadaClient, options: Pick<EnvironmentConfi
     });
 
     setupServerLogging(server);
-    registerAllTools(toolRegistrationServer(server, options.toolProfile ?? 'full'), client);
+    const profile = options.toolProfile ?? 'full';
+    registerAllTools(toolRegistrationServer(server, profile), client, profile);
 
     return server;
 }

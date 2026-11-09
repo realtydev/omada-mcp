@@ -3,6 +3,7 @@ import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosRequestHe
 
 import type { OmadaApiResponse, PaginatedResult } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { redactForLogs } from '../utils/redact.js';
 
 import type { RequestAuthManager } from './auth.js';
 
@@ -65,7 +66,7 @@ export class RequestHandler {
         logger.info('Omada request', {
             method,
             url,
-            params: requestConfig.params,
+            params: redactForLogs(requestConfig.params),
             siteId: requestConfig.params?.siteId ?? undefined,
         });
 
@@ -73,8 +74,8 @@ export class RequestHandler {
             method,
             url,
             headers: this.sanitizeHeaders(requestConfig.headers as AxiosRequestHeaders | undefined),
-            params: requestConfig.params ?? null,
-            data: this.sanitizePayload(requestConfig.data),
+            params: redactForLogs(requestConfig.params ?? null),
+            data: redactForLogs(this.sanitizePayload(requestConfig.data)),
         });
 
         try {
@@ -90,7 +91,7 @@ export class RequestHandler {
                 url,
                 status: response.status,
                 headers: this.sanitizeHeaders(response.headers as AxiosRequestHeaders | undefined),
-                data: this.sanitizePayload(response.data),
+                data: redactForLogs(this.sanitizePayload(response.data)),
             });
 
             // Check if the response data indicates an authentication error
@@ -122,7 +123,7 @@ export class RequestHandler {
                     url,
                     status: error.response.status,
                     headers: this.sanitizeHeaders(error.response.headers as AxiosRequestHeaders | undefined),
-                    data: this.sanitizePayload(error.response.data),
+                    data: redactForLogs(this.sanitizePayload(error.response.data)),
                 });
             }
 

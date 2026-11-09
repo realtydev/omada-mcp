@@ -48,7 +48,11 @@ describe('tool exposure profiles', () => {
         const { client } = await connect('read-only');
         const { tools } = await client.listTools();
         expect(tools.length).toBeGreaterThan(30);
-        expect(tools.every((tool) => /^(get|list|search|diagnose)[A-Z]/.test(tool.name))).toBe(true);
+        expect(
+            tools.every(
+                (tool) => /^(get|list|search|diagnose)[A-Z]/.test(tool.name) || ['describeApiOperation', 'executeApiOperation'].includes(tool.name)
+            )
+        ).toBe(true);
         expect(tools.every((tool) => tool.annotations?.readOnlyHint === true && tool.annotations?.destructiveHint === false)).toBe(true);
         expect(tools.filter((tool) => MUTATING.test(tool.name))).toEqual([]);
         expect(tools.some((tool) => tool.name === 'genericApiCall')).toBe(false);

@@ -35,5 +35,6 @@ RUN corepack enable
 COPY package.json yarn.lock .yarnrc.yml ./
 RUN yarn workspaces focus --production
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/docs/openapi/00-all.json ./docs/openapi/00-all.json
 USER node
 CMD ["node", "dist/index.js"]

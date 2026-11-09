@@ -25,6 +25,13 @@ describe('config', () => {
     });
 
     describe('loadConfigFromEnv', () => {
+        it('defaults and validates API specification selection', () => {
+            expect(loadConfigFromEnv(mockEnv).apiSpec).toBe('auto');
+            for (const mode of ['auto', 'live', 'bundled']) {
+                expect(loadConfigFromEnv({ ...mockEnv, OMADA_API_SPEC: mode }).apiSpec).toBe(mode);
+            }
+            expect(() => loadConfigFromEnv({ ...mockEnv, OMADA_API_SPEC: 'https://external.invalid/spec' })).toThrow('Invalid environment');
+        });
         it('should load valid configuration with required fields only', () => {
             const config = loadConfigFromEnv(mockEnv);
 
@@ -405,6 +412,8 @@ describe('config', () => {
                 webUsername: undefined,
                 webPassword: undefined,
                 strictSsl: false,
+                caFile: undefined,
+                apiSpec: 'auto',
                 requestTimeout: 10000,
                 logLevel: 'debug',
                 logFormat: 'json',

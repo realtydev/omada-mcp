@@ -131,7 +131,7 @@ describe('server/common', () => {
             const obj: { self?: unknown } = {};
             obj.self = obj;
 
-            expect(safeSerialize(obj)).toBe('[unserializable]');
+            expect(safeSerialize(obj)).toContain('[circular]');
         });
     });
 

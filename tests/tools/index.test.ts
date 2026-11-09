@@ -21,6 +21,9 @@ describe('tools/index', () => {
 
             // Verify registerTool was called for each tool
             const expectedTools = [
+                'searchApiOperations',
+                'describeApiOperation',
+                'executeApiOperation',
                 // Read tools
                 'diagnoseClient',
                 'diagnoseLogs',

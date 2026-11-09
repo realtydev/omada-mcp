@@ -26,7 +26,7 @@ Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned
 
 ## Highlights
 
-- **94 tools, read and write.** Full CRUD for LAN networks/VLANs, LAN profiles, firewall ACLs, static routes, port forwarding, SSIDs, and switch ports (single and batch), plus device and client actions.
+- **97 tools, read and write.** Full CRUD for LAN networks/VLANs, LAN profiles, firewall ACLs, static routes, port forwarding, SSIDs, and switch ports (single and batch), plus device and client actions.
 - **Safe by design.** Every write tool is annotated `destructiveHint`, rejects unknown fields instead of silently dropping them, and the riskiest ones (`setApRadio`, `setLogNotifications`) support dry runs and verify the result by reading it back.
 - **Two API surfaces.** The official Omada Open API, plus the controller's internal web UI API for features the Open API doesn't expose (ACLs, routes, port forwarding on OC200).
 - **Three auth modes.** Open API OAuth client credentials, Fusion gateway web-session auth, and optional web UI credentials for internal-API tools.
@@ -130,6 +130,7 @@ Endpoints: `http://localhost:3000/mcp` (Streamable HTTP) or `/sse` (SSE), with `
 | `OMADA_WEB_PASSWORD`  | Web mode   | -       | Omada web UI password                                                      |
 | `OMADA_STRICT_SSL`    | No         | `true`  | SSL certificate and hostname verification                                  |
 | `OMADA_CA_FILE`       | No         | —       | PEM CA file/bundle added to default trust; requires strict SSL             |
+| `OMADA_API_SPEC`      | No         | `auto`  | API discovery source: `auto`, `live`, or `bundled`                         |
 | `OMADA_TIMEOUT`       | No         | `30000` | Request timeout (ms)                                                       |
 
 For Fusion gateways that do not expose Platform Integration OAuth credentials, set `OMADA_AUTH_MODE=web` and provide `OMADA_WEB_USERNAME` / `OMADA_WEB_PASSWORD`. The server logs in through `/{omadacId}/api/v2/login` and uses that web session for OpenAPI requests.
@@ -271,15 +272,20 @@ DHCP writes support `dryRun`. Inspect `verification.status`: `verified` confirms
 
 ### Generic
 
-| Tool             | Description                                |
-| ---------------- | ------------------------------------------ |
-| `genericApiCall` | Invoke any Omada OpenAPI endpoint directly |
+| Tool                   | Description                                                             |
+| ---------------------- | ----------------------------------------------------------------------- |
+| `genericApiCall`       | Invoke any Omada OpenAPI endpoint directly                              |
+| `searchApiOperations`  | Search API operations by keyword, category or HTTP method               |
+| `describeApiOperation` | Inspect an operation’s parameters, schemas and limitations              |
+| `executeApiOperation`  | Execute validated discovered JSON operations; writes preview by default |
 
 ### Meta
 
 | Tool            | Description                                                                                        |
 | --------------- | -------------------------------------------------------------------------------------------------- |
 | `getServerInfo` | Report the package version, git commit, and build time this server process was actually built from |
+
+Automatic discovery keeps the existing tools and adds searchable API coverage. See [API discovery](docs/api-discovery.md) for source selection, write previews, read-only enforcement and pagination limits.
 
 ## Reliability and tool exposure
 
