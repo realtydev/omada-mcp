@@ -2,7 +2,7 @@
 
 # Omada MCP
 
-**Talk to your TP-Link Omada network.** A Model Context Protocol server that lets Claude, Cursor, and any MCP client read _and change_ your Omada SDN controller: sites, gateways, switches, access points, clients, VLANs, firewall, Wi-Fi, routing, and WAN.
+**Discover, diagnose, and manage your TP-Link Omada network.** A Model Context Protocol server for Claude, Cursor, and other MCP clients. Search the controller's API, inspect operation schemas, and execute validated requests alongside dedicated tools for network diagnostics and configuration. Manage local stdio and Docker installations with the runtime CLI.
 
 [![CI](https://github.com/realtydev/omada-mcp/actions/workflows/pull-requests.yml/badge.svg)](https://github.com/realtydev/omada-mcp/actions/workflows/pull-requests.yml)
 [![Release](https://img.shields.io/github/v/release/realtydev/omada-mcp?sort=semver)](https://github.com/realtydev/omada-mcp/releases)
@@ -11,6 +11,8 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 </div>
+
+> **Release availability:** Automatic API discovery is merged on `main` and awaits the next release. This README describes `main` (97 tools); the published [v0.8.0 release](https://github.com/realtydev/omada-mcp/releases/tag/v0.8.0) has 94 tools, plus the runtime CLI, dashboard and guarded configuration workflows. Build from source below to use discovery now. Use `getServerInfo` to confirm the running build.
 
 ```text
 You:    Why is the guest SSID slow on the upstairs AP?
@@ -26,10 +28,12 @@ Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned
 
 ## Highlights
 
-- **97 tools, read and write.** Full CRUD for LAN networks/VLANs, LAN profiles, firewall ACLs, static routes, port forwarding, SSIDs, and switch ports (single and batch), plus device and client actions.
-- **Safe by design.** Every write tool is annotated `destructiveHint`, rejects unknown fields instead of silently dropping them, and the riskiest ones (`setApRadio`, `setLogNotifications`) support dry runs and verify the result by reading it back.
+- **Automatic API discovery.** `searchApiOperations` → `describeApiOperation` → `executeApiOperation`. Prefer the controller's live specification, with an explicit bundled fallback containing 1,676 indexed operations. Unsupported operations are identified; a catalogue entry does not prove device support. See [API discovery](docs/api-discovery.md).
+- **97 tools on main, including 49 in read-only mode.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
+- **Guarded configuration changes.** Discovered writes default to validated previews. Radio, DHCP and log-notification writes retain their dedicated preservation and read-back checks. Other discovered writes explicitly report that they have not been verified by reading settings back.
+- **Explicit read-only access.** `MCP_TOOL_PROFILE=read-only` blocks writes, including discovered operations. Controller permissions still govern which data is accessible.
 - **Two API surfaces.** The official Omada Open API, plus the controller's internal web UI API for features the Open API doesn't expose (ACLs, routes, port forwarding on OC200).
-- **Three auth modes.** Open API OAuth client credentials, Fusion gateway web-session auth, and optional web UI credentials for internal-API tools.
+- **OAuth and web authentication.** Open API client credentials or Fusion gateway web-session auth, with optional web UI credentials for internal-API tools. Private controller CAs are supported without disabling TLS verification.
 - **stdio or HTTP.** Streamable HTTP and SSE transports, health checks, CORS, and optional ngrok tunnelling.
 - **WAN failover guard.** An optional companion process that fixes Omada's Link Backup not failing over when a cable modem hands out a private fallback lease. See [docs/wan-guard.md](docs/wan-guard.md).
 - **Know what's running.** `getServerInfo` reports the exact version and git commit of the running server.
@@ -109,7 +113,7 @@ corepack enable && yarn install && yarn build
 ```bash
 docker run -d --env-file .env \
   -e MCP_SERVER_USE_HTTP=true -e MCP_HTTP_BIND_ADDR=0.0.0.0 \
-  -p 3000:3000 ghcr.io/realtydev/omada-mcp:latest
+  -p 127.0.0.1:3000:3000 ghcr.io/realtydev/omada-mcp:latest
 ```
 
 Endpoints: `http://localhost:3000/mcp` (Streamable HTTP) or `/sse` (SSE), with `/healthz` for health checks. See [README.Docker.md](README.Docker.md) for every HTTP option.
