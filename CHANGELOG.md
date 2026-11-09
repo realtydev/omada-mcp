@@ -11,6 +11,9 @@ All notable changes to this project are documented here. The format follows [Kee
 - `locateDevice` blinks a single device; `setSiteLed` explicitly controls LEDs across a site.
 - Weekly CI reruns dependency auditing and validation even when the repository has no new commits.
 
+- Focused `omada-runtime` CLI: setup, doctor, status, exact-version updates and rollback for client-managed stdio and persistent local Docker services, including adoption of existing Compose deployments.
+- Release runtime archives with executable package bins and an archive/launcher MCP smoke check in CI.
+
 ### Fixed
 
 - LAN profile updates use PATCH, and public gateway ACL operations use the documented Open API resources while preserving web API access.
@@ -18,6 +21,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Client writes use setting-specific endpoints, validate all inputs before mutations, preserve unchanged rate-limit/IP settings and support previews. Partial write failures identify completed settings without automatically replaying mutations.
 - Device adoption supports device credentials and firmware upgrades use the documented start endpoints.
 - The deprecated `setDeviceLed` tool now reports unsupported instead of calling an undocumented endpoint; choose single-device locating or site-wide LED control explicitly.
+- Executable shebang for the `omada-mcp` package bin. Managed stdio launches use the selected credential file without working-directory dotenv overrides.
 
 ## [0.7.0] - 2026-11-08
 

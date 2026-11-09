@@ -2,6 +2,10 @@
 
 A Model Context Protocol (MCP) server that exposes TP-Link Omada controller APIs to AI copilots and automation workflows. This Docker image provides an easy way to run the MCP server with support for both stdio and HTTP transports.
 
+## Runtime management
+
+Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned updates and rollback of client-managed stdio processes or a persistent local Docker service. It verifies actual running builds with `getServerInfo`, preserves credential files, and can adopt an existing Compose service.
+
 ## Quick Start
 
 ### Using with Claude Desktop (stdio)

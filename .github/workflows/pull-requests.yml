@@ -51,6 +51,9 @@ jobs:
             - name: Build project
               run: yarn build
 
+            - name: Verify packaged executables
+              run: yarn test:package
+
             - name: Check code style
               run: yarn check
 
