@@ -63,6 +63,7 @@ describe('tool exposure profiles', () => {
         expect(tools.filter((tool) => MUTATING.test(tool.name))).toEqual([]);
         expect(tools.some((tool) => tool.name === 'genericApiCall')).toBe(false);
         for (const name of [
+            'getApSsidOverrides',
             'getApRfScanResults',
             'getApAfcStatus',
             'getControllerCapabilities',

@@ -47,6 +47,8 @@ describe('tools/index', () => {
                 'listClients',
                 'getDevice',
                 'getGatewayWanStatus',
+                'getApSsidOverrides',
+                'updateApSsidOverride',
                 'getApRadios',
                 'getApRfScanResults',
                 'getApAfcStatus',

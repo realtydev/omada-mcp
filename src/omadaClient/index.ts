@@ -32,6 +32,7 @@ import type { SwitchWriteOptions } from '../utils/switch-port-safety.js';
 
 import { ActionOperations } from './action.js';
 import { ApRadioOperations } from './apRadio.js';
+import { ApSsidOverrideOperations, type ApSsidOverrideUpdate } from './apSsidOverride.js';
 import { AuthManager, type RequestAuthManager, WebAuthManager } from './auth.js';
 import { type ControllerCapabilitiesResult, ControllerCapabilityOperations, type GetControllerCapabilitiesOptions } from './capabilities.js';
 import { ClientOperations } from './client.js';
@@ -121,6 +122,8 @@ export class OmadaClient {
 
     private readonly logNotificationOps: LogNotificationOperations;
 
+    private readonly apSsidOverrideOps: ApSsidOverrideOperations;
+
     private readonly apRadioOps: ApRadioOperations;
 
     private readonly omadacId: string;
@@ -148,6 +151,7 @@ export class OmadaClient {
         this.monitoringOps = new MonitoringOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.monitorOps = new MonitorOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.logNotificationOps = new LogNotificationOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.apSsidOverrideOps = new ApSsidOverrideOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.apRadioOps = new ApRadioOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.actionOps = new ActionOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.genericOps = new GenericOperations(this.request, this.buildOmadaPath.bind(this), this.accessPolicy);
@@ -161,11 +165,26 @@ export class OmadaClient {
         if (options.webUsername && options.webPassword) {
             const internalAuth = new InternalAuthManager(this.http, options.webUsername, options.webPassword, options.omadacId);
             const internalReq = new InternalRequestHandler(this.http, internalAuth, options.omadacId);
+            this.apSsidOverrideOps.setInternalRequest(internalReq);
             this.networkOps.setInternalRequest(internalReq);
             this.monitoringOps.setInternalRequest(internalReq);
             logger.info('Internal web UI API enabled for ACL management');
         }
         return createClientPolicyProxy(this, this.accessPolicy);
+    }
+
+    public async getApSsidOverrides(apMac: string, siteId?: string): Promise<unknown> {
+        return await this.apSsidOverrideOps.getApSsidOverrides(apMac, siteId);
+    }
+
+    public async updateApSsidOverride(
+        apMac: string,
+        ssidEntryId: number,
+        settings: ApSsidOverrideUpdate,
+        siteId?: string,
+        dryRun = true
+    ): Promise<unknown> {
+        return await this.apSsidOverrideOps.updateApSsidOverride(apMac, ssidEntryId, settings, siteId, dryRun);
     }
 
     public getToolAccessPolicy(): ToolAccessPolicy {

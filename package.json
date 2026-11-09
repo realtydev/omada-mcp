@@ -19,6 +19,7 @@
         "docs/controller-capabilities.md",
         "docs/switch-safety.md",
         "docs/wifi-audit.md",
+        "docs/ap-ssid-overrides.md",
         "docs/scoped-tools.md",
         "docs/openapi/00-all.json",
         "LICENSE"
