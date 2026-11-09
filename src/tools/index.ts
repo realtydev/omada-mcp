@@ -23,7 +23,7 @@ import { registerDescribeApiOperationTool } from './describeApiOperation.js';
 import { registerDiagnoseClientTool } from './diagnoseClient.js';
 import { registerDiagnoseLogsTool } from './diagnoseLogs.js';
 import { registerDiagnoseWanTool } from './diagnoseWan.js';
-import { registerDiagnoseWifiTool } from './diagnoseWifi.js';
+import { registerGetWifiHistoryTool } from './getWifiHistory.js';
 import { registerExecuteApiOperationTool } from './executeApiOperation.js';
 import { registerGenericApiCallTool } from './genericApiCall.js';
 import { registerGetApAfcStatusTool } from './getApAfcStatus.js';
@@ -112,7 +112,7 @@ export function registerAllTools(server: McpServer, client: OmadaClient, profile
     registerDescribeApiOperationTool(server, client, discoveryPolicy);
     registerExecuteApiOperationTool(server, client, discoveryPolicy);
     registerGetTrafficHistoryTool(server, client);
-    registerDiagnoseWifiTool(server, client);
+    registerGetWifiHistoryTool(server, client);
     registerDiagnoseWanTool(server, client);
     registerUpdateRateLimitProfileTool(server, client);
     registerRollbackNetworkChangeTool(server, client);

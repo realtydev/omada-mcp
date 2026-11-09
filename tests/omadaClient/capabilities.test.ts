@@ -19,13 +19,14 @@ const snapshot = {
     pskSetting: { securityKey: 'private-wireless-password' },
 };
 
-function setup(metadata: unknown = { controllerVer: '6.3.0.45', apiVer: '3', configured: true, mspMode: false }) {
+function setup(metadata: unknown = { controllerVer: '6.3.0.45', apiVer: '3', configured: true, mspMode: false }, mspId?: string) {
     const http = {
         defaults: { timeout: 30_000 },
         request: vi.fn().mockResolvedValue({ status: 200, data: { errorCode: 0, result: metadata } }),
     };
     const config = {
         authMode: 'oauth' as const,
+        mspId,
         requestTimeout: 15_000,
         webUsername: 'private-user',
         webPassword: 'private-web-password',
@@ -84,13 +85,29 @@ describe('controller capability evidence', () => {
         expect(http.request.mock.calls[0][0]).not.toHaveProperty('headers');
     });
 
-    it('identifies explicit MSP mode while keeping routing unimplemented', async () => {
+    it('identifies explicit MSP mode and reports missing scope configuration without inferring an ID', async () => {
         const { service } = setup({ controllerVer: '6.1.0', mspMode: true });
         expect((await service.getControllerCapabilities()).controller).toMatchObject({
             mode: 'msp',
-            mspRouting: 'unsupported',
+            mspRouting: 'not_configured',
             limitations: expect.arrayContaining([expect.stringContaining('not automatically rewritten')]),
         });
+    });
+
+    it('reports configured MSP routing separately from tested controller support and does not reveal the identifier', async () => {
+        const { service } = setup({ controllerVer: '6.1.0', mspMode: true }, 'private-msp-id');
+        const report = await service.getControllerCapabilities();
+        expect(report.controller).toMatchObject({
+            mode: 'msp',
+            mspRouting: 'configured',
+            limitations: expect.arrayContaining([expect.stringContaining('have not been tested')]),
+        });
+        expect(report.catalog).toMatchObject({
+            features: expect.arrayContaining([
+                expect.objectContaining({ feature: 'mspSiteListing', structurallyExecutable: 1, controllerSupport: 'not_tested' }),
+            ]),
+        });
+        expect(JSON.stringify(report)).not.toContain('private-msp-id');
     });
 
     it.each([undefined, null, 0, 'false', 'true'])('does not infer classic mode from mspMode=%s', async (mspMode) => {
@@ -123,13 +140,13 @@ describe('controller capability evidence', () => {
             source: 'bundled',
             fallback: true,
             loadedAt: expect.any(Number),
-            operations: { total: 4, structurallyExecutable: 2, unsupported: 2, getOperations: 3, nonGetOperations: 1 },
-            unsupportedReasons: [{ reason: 'unsupported_path_scope', operations: 2 }],
+            operations: { total: 4, structurallyExecutable: 3, unsupported: 1, getOperations: 3, nonGetOperations: 1 },
+            unsupportedReasons: [{ reason: 'unsupported_path_scope', operations: 1 }],
             features: expect.arrayContaining([
                 expect.objectContaining({
                     feature: 'mspSiteListing',
                     advertisement: 'bundled_documented',
-                    structurallyExecutable: 0,
+                    structurallyExecutable: 1,
                     controllerSupport: 'not_tested',
                 }),
                 expect.objectContaining({ feature: 'healthAndHistory', apiVersions: ['v3'], controllerSupport: 'not_tested' }),

@@ -57,7 +57,7 @@ import {
     NetworkDiagnosticsOperations,
     type NetworkDiagnosticsResult,
     type WanDiagnosticOptions,
-    type WifiDiagnosticOptions,
+    type WifiHistoryOptions,
 } from './networkDiagnostics.js';
 import {
     type NetworkChangeReceipt,
@@ -619,8 +619,8 @@ export class OmadaClient {
     public async getTrafficHistory(options: NetworkDiagnosticOptions = {}): Promise<NetworkDiagnosticsResult> {
         return await this.networkDiagnosticsOps.getTrafficHistory(options);
     }
-    public async diagnoseWifi(options: WifiDiagnosticOptions = {}): Promise<NetworkDiagnosticsResult> {
-        return await this.networkDiagnosticsOps.diagnoseWifi(options);
+    public async getWifiHistory(options: WifiHistoryOptions = {}): Promise<NetworkDiagnosticsResult> {
+        return await this.networkDiagnosticsOps.getWifiHistory(options);
     }
     public async diagnoseWan(options: WanDiagnosticOptions): Promise<NetworkDiagnosticsResult> {
         return await this.networkDiagnosticsOps.diagnoseWan(options);

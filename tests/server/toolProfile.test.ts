@@ -19,7 +19,7 @@ describe('tool exposure profiles', () => {
         const api = {
             listSites: vi.fn().mockResolvedValue([{ id: 'test-site' }]),
             getTrafficHistory: vi.fn().mockResolvedValue({ sections: { traffic: { status: 'ok' } } }),
-            diagnoseWifi: vi.fn().mockResolvedValue({ sections: { channels: { status: 'partial' } } }),
+            getWifiHistory: vi.fn().mockResolvedValue({ sections: { channels: { status: 'partial' } } }),
             diagnoseWan: vi.fn().mockResolvedValue({ sections: { status: { status: 'ok' } } }),
             updateRateLimitProfile: vi.fn(),
             rollbackNetworkChange: vi.fn(),
@@ -67,7 +67,7 @@ describe('tool exposure profiles', () => {
             'getApAfcStatus',
             'getControllerCapabilities',
             'getTrafficHistory',
-            'diagnoseWifi',
+            'getWifiHistory',
             'diagnoseWan',
             'listDhcpReservations',
             'getSiteTopology',
@@ -115,7 +115,7 @@ describe('tool exposure profiles', () => {
         const { api, client } = await connect('read-only');
         const cases = [
             ['getTrafficHistory', { siteId: 'site', maxSamples: 3 }],
-            ['diagnoseWifi', { siteId: 'site', apMac: 'AA-BB-CC-DD-EE-FF' }],
+            ['getWifiHistory', { siteId: 'site', apMac: 'AA-BB-CC-DD-EE-FF' }],
             ['diagnoseWan', { siteId: 'site', gatewayMac: 'AA-BB-CC-DD-EE-FF' }],
         ] as const;
         for (const [name, arguments_] of cases) {

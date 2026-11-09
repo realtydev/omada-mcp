@@ -3,7 +3,7 @@
 ## Traffic, RF and WAN evidence
 
 - `getTrafficHistory` returns timestamped AP and switch traffic samples.
-- `diagnoseWifi` collects channel usage, interference and retry/drop histories. Supply `apMac` to include that AP's mesh evidence.
+- `getWifiHistory` collects channel usage, interference and retry/drop histories. Supply `apMac` to include that AP's mesh evidence.
 - `diagnoseWan` takes `gatewayMac` and combines current WAN status, ISP history and gateway health.
 
 All three accept `siteId`, epoch-second `start`/`end` windows up to 24 hours, and `maxSamples` (default 144, maximum 1,000). The default window is one hour. Time-series limits are explicit; device and channel inventories are bounded separately. Results include capture times, the requested window, per-section status, missing evidence, truncation and `collectionComplete`. These tools do not start RF scans, speed tests or configuration changes.

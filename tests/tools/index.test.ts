@@ -23,7 +23,7 @@ describe('tools/index', () => {
             const expectedTools = [
                 'searchApiOperations',
                 'getTrafficHistory',
-                'diagnoseWifi',
+                'getWifiHistory',
                 'diagnoseWan',
                 'updateRateLimitProfile',
                 'rollbackNetworkChange',

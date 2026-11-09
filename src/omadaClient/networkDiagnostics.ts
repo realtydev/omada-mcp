@@ -55,7 +55,7 @@ export interface NetworkDiagnosticOptions {
     end?: number;
     maxSamples?: number;
 }
-export interface WifiDiagnosticOptions extends NetworkDiagnosticOptions {
+export interface WifiHistoryOptions extends NetworkDiagnosticOptions {
     apMac?: string;
 }
 export interface WanDiagnosticOptions extends NetworkDiagnosticOptions {
@@ -287,7 +287,7 @@ export class NetworkDiagnosticsOperations {
         ]);
     }
 
-    public async diagnoseWifi(options: WifiDiagnosticOptions = {}): Promise<NetworkDiagnosticsResult> {
+    public async getWifiHistory(options: WifiHistoryOptions = {}): Promise<NetworkDiagnosticsResult> {
         if (options.apMac !== undefined) validateMac(options.apMac, 'apMac');
         const context = this.window(options);
         const timed = { start: context.start, end: context.end };

@@ -102,7 +102,7 @@ describe('bounded network diagnostic workflows', () => {
                   }
                 : payloads[url.split('/').at(-1) ?? ''],
         }));
-        const result = await operations.diagnoseWifi();
+        const result = await operations.getWifiHistory();
         expect(result.sections.channels).toMatchObject({
             status: 'partial',
             data: {
@@ -125,7 +125,7 @@ describe('bounded network diagnostic workflows', () => {
                   }
                 : payloads[url.split('/').at(-1) ?? ''],
         }));
-        expect((await operations.diagnoseWifi()).sections.channels).toMatchObject({
+        expect((await operations.getWifiHistory()).sections.channels).toMatchObject({
             status: 'partial',
             data: { channels2g: [{ channelUtilization: null, metricsAvailable: false }] },
         });
@@ -155,7 +155,7 @@ describe('bounded network diagnostic workflows', () => {
     });
     it('collects current RF snapshots plus timed retry/drop histories without scan requests', async () => {
         const { operations, request } = setup();
-        const result = await operations.diagnoseWifi({ apMac: MAC, start: TIME - 60, end: TIME });
+        const result = await operations.getWifiHistory({ apMac: MAC, start: TIME - 60, end: TIME });
         expect(result.collectionComplete).toBe(true);
         expect(Object.keys(result.sections)).toEqual(['channels', 'interference', 'wirelessRates', 'mesh']);
         expect(request.request).toHaveBeenCalledTimes(4);
@@ -175,7 +175,7 @@ describe('bounded network diagnostic workflows', () => {
             errorCode: 0,
             result: url.endsWith('channels') ? { '2g channel stat': [] } : payloads[url.split('/').at(-1) ?? ''],
         }));
-        const result = await operations.diagnoseWifi();
+        const result = await operations.getWifiHistory();
         expect(result.sections.channels).toMatchObject({
             status: 'partial',
             data: { '2g channel stat': [] },
@@ -191,7 +191,7 @@ describe('bounded network diagnostic workflows', () => {
             if (url.endsWith('top-interference')) throw new Error('HTTP 403');
             return { errorCode: 0, result: payloads[url.split('/').at(-1) ?? ''] };
         });
-        const result = await operations.diagnoseWifi();
+        const result = await operations.getWifiHistory();
         expect(result.sections.interference).toMatchObject({ status: 'error', message: 'HTTP 403' });
         expect(result.sections.channels.status).toBe('ok');
         expect(result.collectionComplete).toBe(false);
@@ -204,7 +204,7 @@ describe('bounded network diagnostic workflows', () => {
                 ? { retryEaps: [{ apMac: MAC, avg: 1, dropouts: [] }], droppedEaps: [] }
                 : payloads[url.split('/').at(-1) ?? ''],
         }));
-        expect((await operations.diagnoseWifi()).sections.wirelessRates.status).toBe('unavailable');
+        expect((await operations.getWifiHistory()).sections.wirelessRates.status).toBe('unavailable');
     });
     it('collects current WAN status, health and bounded site ISP histories without mutations', async () => {
         const { operations, request } = setup();
@@ -263,12 +263,12 @@ describe('bounded network diagnostic workflows', () => {
             errorCode: 0,
             result: url.endsWith('statistics') ? { wirelessLinked: false, wirelessUplink: {} } : payloads[url.split('/').at(-1) ?? ''],
         }));
-        expect((await operations.diagnoseWifi({ apMac: MAC })).sections.mesh).toMatchObject({ status: 'ok', data: { wirelessLinked: false } });
+        expect((await operations.getWifiHistory({ apMac: MAC })).sections.mesh).toMatchObject({ status: 'ok', data: { wirelessLinked: false } });
     });
     it('rejects invalid device identifiers before controller access', async () => {
         const { request, operations } = setup();
         await expect(operations.diagnoseWan({ gatewayMac: '../gateway' })).rejects.toThrow('MAC');
-        await expect(operations.diagnoseWifi({ apMac: '../ap' })).rejects.toThrow('MAC');
+        await expect(operations.getWifiHistory({ apMac: '../ap' })).rejects.toThrow('MAC');
         expect(request.request).not.toHaveBeenCalled();
     });
     it('preserves true empty histories as complete', async () => {

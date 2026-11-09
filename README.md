@@ -14,7 +14,6 @@
 
 > **Release:** [v0.10.0](https://github.com/realtydev/omada-mcp/releases/tag/v0.10.0) includes 103 tools, automatic API discovery, richer diagnostics and verified profile rollback. Use `getServerInfo` to confirm the running build.
 
-
 ```text
 You:    Why is the guest SSID slow on the upstairs AP?
 Claude: (getApRadios → listClientsActivity → getSsidDetail)
@@ -179,7 +178,7 @@ For Fusion gateways that do not expose Platform Integration OAuth credentials, s
 | `getSiteTopology`               | Controller-discovered topology, uplinks and link speeds; requires web UI credentials                                                                                |
 | `getSiteDashboard`              | Wi-Fi, traffic, wireless retry/drop averages, switch and PoE summaries with explicit partial results                                                                |
 | `getTrafficHistory`             | Bounded timestamped AP/switch traffic history                                                                                                                       |
-| `diagnoseWifi`                  | Channel, interference, retry/drop and optional mesh evidence                                                                                                        |
+| `getWifiHistory`                  | Channel, interference, retry/drop and optional mesh evidence                                                                                                        |
 | `diagnoseWan`                   | Gateway WAN status, ISP history and health evidence                                                                                                                 |
 | `listVpnConnections`            | Paginated tunnel/IPsec or protocol-filtered site-to-site, server and client VPN status                                                                              |
 | `getGatewayWanSpeedTestResults` | Read saved gateway WAN speed-test results without starting a test                                                                                                   |
@@ -234,9 +233,9 @@ The AP diagnostics use the bundled `docs/openapi/03-device.json` operations `get
 | `createFirewallAcl`      | Create a firewall ACL rule                                                                                               |
 | `updateFirewallAcl`      | Update a firewall ACL rule                                                                                               |
 | `deleteFirewallAcl`      | Delete a firewall ACL rule                                                                                               |
-| `updateSsid`             | Preserve SSID settings with typed partial updates, redacted previews and read-back verification                                                    |
+| `updateSsid`             | Preserve SSID settings with typed partial updates, redacted previews and read-back verification                          |
 | `setSsidEnable`          | Enable or disable an SSID network-wide                                                                                   |
-| `updateSwitchPort`       | Guarded profile or PoE update (one setting); unsupported generic settings are rejected                                                                     |
+| `updateSwitchPort`       | Guarded profile or PoE update (one setting); unsupported generic settings are rejected                                   |
 | `updateClient`           | Update name, fixed IPv4 or rate limits through setting-specific endpoints; supports dry-run previews                     |
 | `updateRateLimitProfile` | Partial profile updates with previews, preservation, read-back verification and rollback receipts                        |
 | `rollbackNetworkChange`  | Restore a verified rate-limit profile change after checking for drift                                                    |

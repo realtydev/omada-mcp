@@ -4,9 +4,9 @@ import type { OmadaClient } from '../omadaClient/index.js';
 import { toToolResult, wrapToolHandler } from '../server/common.js';
 import { networkDiagnosticSchema } from './getTrafficHistory.js';
 
-export function registerDiagnoseWifiTool(server: McpServer, client: OmadaClient): void {
+export function registerGetWifiHistoryTool(server: McpServer, client: OmadaClient): void {
     server.registerTool(
-        'diagnoseWifi',
+        'getWifiHistory',
         {
             description:
                 'Collect channel distribution, interference and timestamped retry/drop evidence. Optional apMac adds mesh evidence. Reports missing bands, partial results and truncation; never starts scans or changes radios.',
@@ -20,6 +20,6 @@ export function registerDiagnoseWifiTool(server: McpServer, client: OmadaClient)
                 .strict(),
             annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
         },
-        wrapToolHandler('diagnoseWifi', async (options) => toToolResult(await client.diagnoseWifi(options)))
+        wrapToolHandler('getWifiHistory', async (options) => toToolResult(await client.getWifiHistory(options)))
     );
 }
