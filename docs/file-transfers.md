@@ -14,7 +14,7 @@ For Docker, mount the directory at `/transfers`, make it accessible to the conta
 
 1. Stage the file inside the configured directory.
 2. Search and describe the operation. Only declared binary multipart fields are accepted.
-3. Pass `files`, mapping field names to basenames, and `body` for other multipart fields. For example, `{"operationId":"uploadPortalPic","files":{"file":"picture.png"}}`.
+3. Pass `files`, mapping field names to basenames, and `body` for other multipart fields. For example, `{"operationId":"uploadPortalPic","params":{"type":"logo"},"files":{"file":"picture.png"}}`.
 4. Inspect the default preview. Set `dryRun:false` explicitly to upload.
 
 A preview reports field names, filenames and sizes without sending file contents. Declared arrays of binary files accept filename arrays. Ordinary object fields are sent as JSON parts. Explicit non-default multipart encoding metadata remains unsupported and is rejected rather than silently changing its meaning. The operation's own controller effects still apply; uploading firmware or changing a certificate is not a harmless test.
