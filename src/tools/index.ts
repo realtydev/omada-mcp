@@ -33,6 +33,7 @@ import { registerGetApRfScanResultsTool } from './getApRfScanResults.js';
 import { registerGetCableTestResultsTool } from './getCableTestResults.js';
 import { registerGetClientTool } from './getClient.js';
 import { registerGetClientHistoryTool } from './getClientHistory.js';
+import { registerGetControllerCapabilitiesTool } from './getControllerCapabilities.js';
 import { registerGetDeviceTool } from './getDevice.js';
 import { registerGetFirewallSettingTool } from './getFirewallSetting.js';
 import { registerGetFirmwareDetailsTool } from './getFirmwareDetails.js';
@@ -116,6 +117,7 @@ export function registerAllTools(server: McpServer, client: OmadaClient, profile
     registerUpdateRateLimitProfileTool(server, client);
     registerRollbackNetworkChangeTool(server, client);
     // Read tools
+    registerGetControllerCapabilitiesTool(server, client);
     registerDiagnoseClientTool(server, client);
     registerDiagnoseLogsTool(server, client);
     registerListDhcpReservationsTool(server, client);

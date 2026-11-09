@@ -10,7 +10,7 @@ const expired = Buffer.from(JSON.stringify({ errorCode: -44106, msg: 'Token expi
 const file = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0, 255]);
 
 function fixture() {
-    const http = { request: vi.fn() };
+    const http = { defaults: {}, request: vi.fn() };
     const auth = { mode: 'oauth', getAuthHeaders: vi.fn().mockResolvedValueOnce(oldHeaders).mockResolvedValue(newHeaders), clearToken: vi.fn() };
     const handler = new RequestHandler(http as unknown as AxiosInstance, auth as unknown as RequestAuthManager);
     return { http, auth, handler };

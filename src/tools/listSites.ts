@@ -10,7 +10,8 @@ export function registerListSitesTool(server: McpServer, client: OmadaClient): v
     server.registerTool(
         'listSites',
         {
-            description: 'List all sites configured on the Omada controller.',
+            description:
+                'List accessible sites and their IDs. Call this first when OMADA_SITE_ID is not configured; pass a returned site ID to site-scoped tools.',
             inputSchema: emptySchema.shape,
         },
         wrapToolHandler('listSites', async () => toToolResult(await client.listSites()))

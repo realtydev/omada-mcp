@@ -27,10 +27,12 @@ import type {
 } from '../types/index.js';
 
 import { logger } from '../utils/logger.js';
+import type { SwitchWriteOptions } from '../utils/switch-port-safety.js';
 
 import { ActionOperations } from './action.js';
 import { ApRadioOperations } from './apRadio.js';
 import { AuthManager, type RequestAuthManager, WebAuthManager } from './auth.js';
+import { type ControllerCapabilitiesResult, ControllerCapabilityOperations, type GetControllerCapabilitiesOptions } from './capabilities.js';
 import { ClientOperations } from './client.js';
 import { DeviceOperations } from './device.js';
 import {
@@ -107,6 +109,8 @@ export class OmadaClient {
 
     private readonly discoveryOps: DiscoveryOperations;
 
+    private readonly capabilityOps: ControllerCapabilityOperations;
+
     private readonly switchOps: SwitchOperations;
 
     private readonly logNotificationOps: LogNotificationOperations;
@@ -141,6 +145,7 @@ export class OmadaClient {
         this.actionOps = new ActionOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.genericOps = new GenericOperations(this.request, this.buildOmadaPath.bind(this));
         this.discoveryOps = new DiscoveryOperations(this.request, this.http, options);
+        this.capabilityOps = new ControllerCapabilityOperations(this.http, this.discoveryOps, options, this);
         this.switchOps = new SwitchOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.diagnosticsOps = new DiagnosticsOperations(this);
 
@@ -157,6 +162,10 @@ export class OmadaClient {
     // Site operations
     public async listSites(): Promise<OmadaSiteSummary[]> {
         return await this.siteOps.listSites();
+    }
+
+    public async getControllerCapabilities(options: GetControllerCapabilitiesOptions = {}): Promise<ControllerCapabilitiesResult> {
+        return await this.capabilityOps.getControllerCapabilities(options);
     }
 
     public async getSiteDashboard(options: SiteDashboardOptions = {}): Promise<SiteDashboardResult> {
@@ -293,8 +302,8 @@ export class OmadaClient {
     }
 
     // Network write operations
-    public async updateSsid(wlanId: string, ssidId: string, data: Record<string, unknown>, siteId?: string): Promise<unknown> {
-        return await this.networkOps.updateSsid(wlanId, ssidId, data, siteId);
+    public async updateSsid(wlanId: string, ssidId: string, data: Record<string, unknown>, siteId?: string, dryRun = false): Promise<unknown> {
+        return await this.networkOps.updateSsid(wlanId, ssidId, data, siteId, dryRun);
     }
 
     public async setSsidEnable(ssidId: string, enable: boolean, siteId?: string): Promise<unknown> {
@@ -446,8 +455,14 @@ export class OmadaClient {
     }
 
     // Network read/write operations (switch ports, firewall ACLs, routes)
-    public async updateSwitchPort(switchMac: string, portId: string, data: Record<string, unknown>, siteId?: string): Promise<unknown> {
-        return await this.networkOps.updateSwitchPort(switchMac, portId, data, siteId);
+    public async updateSwitchPort(
+        switchMac: string,
+        portId: string,
+        data: Record<string, unknown>,
+        siteId?: string,
+        options?: SwitchWriteOptions
+    ): Promise<unknown> {
+        return await this.switchOps.updateSwitchPort(switchMac, portId, data, siteId, options);
     }
 
     public async listFirewallAcls(siteId?: string): Promise<unknown> {
@@ -507,40 +522,81 @@ export class OmadaClient {
         return await this.switchOps.listSwitchPorts(switchMac, siteId);
     }
 
-    public async setSwitchPortProfile(switchMac: string, port: number, profileId: string, siteId?: string): Promise<unknown> {
-        return await this.switchOps.setSwitchPortProfile(switchMac, port, profileId, siteId);
+    public async setSwitchPortProfile(
+        switchMac: string,
+        port: number,
+        profileId: string,
+        siteId?: string,
+        options?: SwitchWriteOptions
+    ): Promise<unknown> {
+        return await this.switchOps.setSwitchPortProfile(switchMac, port, profileId, siteId, options);
     }
 
-    public async setSwitchPortPoe(switchMac: string, port: number, poeMode: number, siteId?: string): Promise<unknown> {
-        return await this.switchOps.setSwitchPortPoe(switchMac, port, poeMode, siteId);
+    public async setSwitchPortPoe(switchMac: string, port: number, poeMode: number, siteId?: string, options?: SwitchWriteOptions): Promise<unknown> {
+        return await this.switchOps.setSwitchPortPoe(switchMac, port, poeMode, siteId, options);
     }
 
-    public async setSwitchPortName(switchMac: string, port: number, name: string, siteId?: string): Promise<unknown> {
-        return await this.switchOps.setSwitchPortName(switchMac, port, name, siteId);
+    public async setSwitchPortName(switchMac: string, port: number, name: string, siteId?: string, options?: SwitchWriteOptions): Promise<unknown> {
+        return await this.switchOps.setSwitchPortName(switchMac, port, name, siteId, options);
     }
 
-    public async setSwitchPortStatus(switchMac: string, port: number, status: number, siteId?: string): Promise<unknown> {
-        return await this.switchOps.setSwitchPortStatus(switchMac, port, status, siteId);
+    public async setSwitchPortStatus(
+        switchMac: string,
+        port: number,
+        status: number,
+        siteId?: string,
+        options?: SwitchWriteOptions
+    ): Promise<unknown> {
+        return await this.switchOps.setSwitchPortStatus(switchMac, port, status, siteId, options);
     }
 
-    public async setSwitchPortProfileOverride(switchMac: string, port: number, profileOverrideEnable: boolean, siteId?: string): Promise<unknown> {
-        return await this.switchOps.setSwitchPortProfileOverride(switchMac, port, profileOverrideEnable, siteId);
+    public async setSwitchPortProfileOverride(
+        switchMac: string,
+        port: number,
+        profileOverrideEnable: boolean,
+        siteId?: string,
+        options?: SwitchWriteOptions
+    ): Promise<unknown> {
+        return await this.switchOps.setSwitchPortProfileOverride(switchMac, port, profileOverrideEnable, siteId, options);
     }
 
-    public async batchSetSwitchPortProfile(switchMac: string, portList: number[], profileOverrideEnable: boolean, siteId?: string): Promise<unknown> {
-        return await this.switchOps.batchSetSwitchPortProfile(switchMac, portList, profileOverrideEnable, siteId);
+    public async batchSetSwitchPortProfile(
+        switchMac: string,
+        portList: number[],
+        profileOverrideEnable: boolean,
+        siteId?: string,
+        options?: SwitchWriteOptions
+    ): Promise<unknown> {
+        return await this.switchOps.batchSetSwitchPortProfile(switchMac, portList, profileOverrideEnable, siteId, options);
     }
 
-    public async batchSetSwitchPortPoe(switchMac: string, portList: number[], poeMode: number, siteId?: string): Promise<unknown> {
-        return await this.switchOps.batchSetSwitchPortPoe(switchMac, portList, poeMode, siteId);
+    public async batchSetSwitchPortPoe(
+        switchMac: string,
+        portList: number[],
+        poeMode: number,
+        siteId?: string,
+        options?: SwitchWriteOptions
+    ): Promise<unknown> {
+        return await this.switchOps.batchSetSwitchPortPoe(switchMac, portList, poeMode, siteId, options);
     }
 
-    public async batchSetSwitchPortStatus(switchMac: string, portList: number[], status: number, siteId?: string): Promise<unknown> {
-        return await this.switchOps.batchSetSwitchPortStatus(switchMac, portList, status, siteId);
+    public async batchSetSwitchPortStatus(
+        switchMac: string,
+        portList: number[],
+        status: number,
+        siteId?: string,
+        options?: SwitchWriteOptions
+    ): Promise<unknown> {
+        return await this.switchOps.batchSetSwitchPortStatus(switchMac, portList, status, siteId, options);
     }
 
-    public async batchSetSwitchPortName(switchMac: string, portNameList: Array<{ port: number; name: string }>, siteId?: string): Promise<unknown> {
-        return await this.switchOps.batchSetSwitchPortName(switchMac, portNameList, siteId);
+    public async batchSetSwitchPortName(
+        switchMac: string,
+        portNameList: Array<{ port: number; name: string }>,
+        siteId?: string,
+        options?: SwitchWriteOptions
+    ): Promise<unknown> {
+        return await this.switchOps.batchSetSwitchPortName(switchMac, portNameList, siteId, options);
     }
 
     public async startCableTest(switchMac: string, siteId?: string): Promise<unknown> {

@@ -233,6 +233,19 @@ describe('config', () => {
             expect(config.httpPort).toBe(8080);
         });
 
+        it.each(['3000ms', '3000.5', '0x100', 'Infinity', '', ' ', '0', '-1', '2147483648'])(
+            'rejects malformed or out-of-range timeouts and ports: %s',
+            (value) => {
+                expect(() => loadConfigFromEnv({ ...mockEnv, OMADA_TIMEOUT: value })).toThrow('Invalid environment configuration');
+                expect(() => loadConfigFromEnv({ ...mockEnv, MCP_HTTP_PORT: value })).toThrow('Invalid environment configuration');
+            }
+        );
+
+        it('rejects ports outside the TCP range while allowing longer request timeouts', () => {
+            expect(() => loadConfigFromEnv({ ...mockEnv, MCP_HTTP_PORT: '65536' })).toThrow('Invalid environment configuration');
+            expect(loadConfigFromEnv({ ...mockEnv, OMADA_TIMEOUT: '65536' }).requestTimeout).toBe(65536);
+        });
+
         it('should accept valid http transports', () => {
             mockEnv.MCP_HTTP_TRANSPORT = 'stream';
             let config = loadConfigFromEnv(mockEnv);

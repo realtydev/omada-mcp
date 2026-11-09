@@ -3,8 +3,10 @@ import { z } from 'zod';
 
 import type { OmadaClient } from '../omadaClient/index.js';
 import { toToolResult, wrapToolHandler } from '../server/common.js';
+import { portWriteOptions, switchWriteOptionsSchema } from '../utils/switch-port-safety.js';
 
 const setSwitchPortPoeSchema = z.object({
+    ...switchWriteOptionsSchema.shape,
     siteId: z.string().min(1).optional(),
     switchMac: z.string().min(1, 'switchMac is required'),
     port: z.number().int().min(1, 'port number is required'),
@@ -21,8 +23,13 @@ export function registerSetSwitchPortPoeTool(server: McpServer, client: OmadaCli
                 destructiveHint: true,
             },
         },
-        wrapToolHandler('setSwitchPortPoe', async ({ switchMac, port, poeMode, siteId }) =>
-            toToolResult(await client.setSwitchPortPoe(switchMac, port, poeMode, siteId))
-        )
+        wrapToolHandler('setSwitchPortPoe', async ({ switchMac, port, poeMode, siteId, dryRun, allowDisruption }) => {
+            const options = portWriteOptions(dryRun, allowDisruption);
+            return toToolResult(
+                await (options
+                    ? client.setSwitchPortPoe(switchMac, port, poeMode, siteId, options)
+                    : client.setSwitchPortPoe(switchMac, port, poeMode, siteId))
+            );
+        })
     );
 }

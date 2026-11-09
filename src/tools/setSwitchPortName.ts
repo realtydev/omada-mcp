@@ -3,12 +3,14 @@ import { z } from 'zod';
 
 import type { OmadaClient } from '../omadaClient/index.js';
 import { toToolResult, wrapToolHandler } from '../server/common.js';
+import { portWriteOptions, switchPortNameSchema, switchWriteOptionsSchema } from '../utils/switch-port-safety.js';
 
 const setSwitchPortNameSchema = z.object({
+    ...switchWriteOptionsSchema.shape,
     siteId: z.string().min(1).optional(),
     switchMac: z.string().min(1, 'switchMac is required'),
     port: z.number().int().min(1, 'port number is required'),
-    name: z.string().min(1).max(128, 'name must be 1-128 characters'),
+    name: switchPortNameSchema,
 });
 
 export function registerSetSwitchPortNameTool(server: McpServer, client: OmadaClient): void {
@@ -21,8 +23,13 @@ export function registerSetSwitchPortNameTool(server: McpServer, client: OmadaCl
                 destructiveHint: true,
             },
         },
-        wrapToolHandler('setSwitchPortName', async ({ switchMac, port, name, siteId }) =>
-            toToolResult(await client.setSwitchPortName(switchMac, port, name, siteId))
-        )
+        wrapToolHandler('setSwitchPortName', async ({ switchMac, port, name, siteId, dryRun, allowDisruption }) => {
+            const options = portWriteOptions(dryRun, allowDisruption);
+            return toToolResult(
+                await (options
+                    ? client.setSwitchPortName(switchMac, port, name, siteId, options)
+                    : client.setSwitchPortName(switchMac, port, name, siteId))
+            );
+        })
     );
 }

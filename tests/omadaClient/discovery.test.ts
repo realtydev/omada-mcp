@@ -29,8 +29,8 @@ describe('discovery client policy and loading', () => {
     it('loads lazily without changing startup and caches one catalogue across methods', async () => {
         const { service, request, http, fetch } = setup();
         expect(fetch).not.toHaveBeenCalled();
-        const results = await Promise.all([service.searchApiOperations(), service.describeApiOperation('sites')]);
-        expect(results).toHaveLength(2);
+        const results = await Promise.all([service.searchApiOperations(), service.describeApiOperation('sites'), service.getCatalog()]);
+        expect(results).toHaveLength(3);
         expect(fetch).toHaveBeenCalledTimes(1);
         expect(http.get).not.toHaveBeenCalled();
         expect(request.request).not.toHaveBeenCalled();

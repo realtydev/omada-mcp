@@ -7,7 +7,7 @@ import type { ToolProfile } from '../../src/config.js';
 import { createServer } from '../../src/server/common.js';
 import { toolRegistrationServer } from '../../src/server/toolProfile.js';
 
-const MUTATING = /^(create|update|delete|set|batch|start|reboot|adopt|block|unblock|reconnect)/;
+const MUTATING = /^(create|update|delete|set|batch|start|reboot|adopt|block|unblock|reconnect|rollback)/;
 
 describe('tool exposure profiles', () => {
     const closers: Array<() => Promise<void>> = [];
@@ -18,6 +18,12 @@ describe('tool exposure profiles', () => {
     async function connect(profile?: ToolProfile) {
         const api = {
             listSites: vi.fn().mockResolvedValue([{ id: 'test-site' }]),
+            getTrafficHistory: vi.fn().mockResolvedValue({ sections: { traffic: { status: 'ok' } } }),
+            diagnoseWifi: vi.fn().mockResolvedValue({ sections: { channels: { status: 'partial' } } }),
+            diagnoseWan: vi.fn().mockResolvedValue({ sections: { status: { status: 'ok' } } }),
+            updateRateLimitProfile: vi.fn(),
+            rollbackNetworkChange: vi.fn(),
+            getControllerCapabilities: vi.fn().mockResolvedValue({ controller: { status: 'ok', mode: 'classic' } }),
             rebootDevice: vi.fn(),
             genericApiCall: vi.fn(),
             deleteDhcpReservation: vi.fn(),
@@ -59,6 +65,10 @@ describe('tool exposure profiles', () => {
         for (const name of [
             'getApRfScanResults',
             'getApAfcStatus',
+            'getControllerCapabilities',
+            'getTrafficHistory',
+            'diagnoseWifi',
+            'diagnoseWan',
             'listDhcpReservations',
             'getSiteTopology',
             'getSiteDashboard',
@@ -72,17 +82,58 @@ describe('tool exposure profiles', () => {
         expect(result.content).toEqual([{ type: 'text', text: JSON.stringify([{ id: 'test-site' }], null, 2) }]);
     });
 
-    it.each(['rebootDevice', 'deleteDhcpReservation', 'genericApiCall'] as const)('cannot invoke excluded %s through MCP', async (name) => {
+    it.each(['rebootDevice', 'deleteDhcpReservation', 'genericApiCall', 'updateRateLimitProfile', 'rollbackNetworkChange'] as const)(
+        'cannot invoke excluded %s through MCP',
+        async (name) => {
+            const { api, client } = await connect('read-only');
+            const validArguments = {
+                rebootDevice: { deviceMac: 'AA-BB-CC-DD-EE-FF' },
+                deleteDhcpReservation: { mac: 'AA-BB-CC-DD-EE-FF' },
+                genericApiCall: { method: 'POST', path: '/sites/test-site/cmd/reboot' },
+                updateRateLimitProfile: { profileId: 'profile', settings: { name: 'Changed' }, dryRun: false },
+                rollbackNetworkChange: {
+                    receipt: {
+                        version: 1,
+                        resource: 'rate-limit-profile',
+                        controllerId: 'controller',
+                        siteId: 'site',
+                        profileId: 'profile',
+                        before: { name: 'Before', upLimitEnable: false, downLimitEnable: false },
+                        applied: { name: 'After', upLimitEnable: false, downLimitEnable: false },
+                    },
+                    dryRun: false,
+                },
+            };
+            const result = await client.callTool({ name, arguments: validArguments[name] });
+            expect(result.isError).toBe(true);
+            expect(result.content).toEqual([expect.objectContaining({ text: expect.stringContaining(`Tool ${name} not found`) })]);
+            expect(api[name]).not.toHaveBeenCalled();
+        }
+    );
+
+    it('can invoke every new diagnostic through the read-only profile', async () => {
         const { api, client } = await connect('read-only');
-        const validArguments = {
-            rebootDevice: { deviceMac: 'AA-BB-CC-DD-EE-FF' },
-            deleteDhcpReservation: { mac: 'AA-BB-CC-DD-EE-FF' },
-            genericApiCall: { method: 'POST', path: '/sites/test-site/cmd/reboot' },
-        };
-        const result = await client.callTool({ name, arguments: validArguments[name] });
-        expect(result.isError).toBe(true);
-        expect(result.content).toEqual([expect.objectContaining({ text: expect.stringContaining(`Tool ${name} not found`) })]);
-        expect(api[name]).not.toHaveBeenCalled();
+        const cases = [
+            ['getTrafficHistory', { siteId: 'site', maxSamples: 3 }],
+            ['diagnoseWifi', { siteId: 'site', apMac: 'AA-BB-CC-DD-EE-FF' }],
+            ['diagnoseWan', { siteId: 'site', gatewayMac: 'AA-BB-CC-DD-EE-FF' }],
+        ] as const;
+        for (const [name, arguments_] of cases) {
+            const result = await client.callTool({ name, arguments: arguments_ });
+            expect(result.isError).toBeFalsy();
+            expect(api[name]).toHaveBeenCalledExactlyOnceWith(arguments_);
+        }
+        expect(api.updateRateLimitProfile).not.toHaveBeenCalled();
+        expect(api.rollbackNetworkChange).not.toHaveBeenCalled();
+    });
+
+    it('can collect explicit capability evidence through the read-only profile', async () => {
+        const { api, client } = await connect('read-only');
+        const options = { siteId: 'site', wlanId: 'wlan', ssidId: 'ssid' };
+        const result = await client.callTool({ name: 'getControllerCapabilities', arguments: options });
+        expect(result.isError).toBeFalsy();
+        expect(api.getControllerCapabilities).toHaveBeenCalledExactlyOnceWith(options);
+        expect(result.content).toEqual([{ type: 'text', text: JSON.stringify({ controller: { status: 'ok', mode: 'classic' } }, null, 2) }]);
     });
 
     it('fails closed on unknown naming families and destructive reads while retaining SDK this', () => {

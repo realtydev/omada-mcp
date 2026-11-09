@@ -329,7 +329,7 @@ describe('Switch Port Tools', () => {
             const mockClient = { updateSwitchPort: vi.fn().mockResolvedValue({}) };
             const mockServer = {
                 registerTool: vi.fn((_, _schema, handler) =>
-                    handler({ siteId: 'test-site', switchMac: '00:11:22:33:44:55', portId: 'port-1', poe: true, linkSpeed: 1000 }, {})
+                    handler({ siteId: 'test-site', switchMac: '00:11:22:33:44:55', portId: '1', poe: true }, {})
                 ),
             };
 
@@ -340,7 +340,7 @@ describe('Switch Port Tools', () => {
                 expect.objectContaining({ description: expect.any(String) }),
                 expect.any(Function)
             );
-            expect(mockClient.updateSwitchPort).toHaveBeenCalledWith('00:11:22:33:44:55', 'port-1', { poe: true, linkSpeed: 1000 }, 'test-site');
+            expect(mockClient.updateSwitchPort).toHaveBeenCalledWith('00:11:22:33:44:55', '1', { poe: true }, 'test-site');
         });
     });
 });

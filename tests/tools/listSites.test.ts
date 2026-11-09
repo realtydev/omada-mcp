@@ -41,7 +41,7 @@ describe('tools/listSites', () => {
             expect(mockServer.registerTool).toHaveBeenCalledWith(
                 'listSites',
                 {
-                    description: 'List all sites configured on the Omada controller.',
+                    description: expect.stringContaining('OMADA_SITE_ID'),
                     inputSchema: {},
                 },
                 expect.any(Function)

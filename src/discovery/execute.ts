@@ -342,6 +342,30 @@ function preferredWriteTool(operation: ApiOperation): string | undefined {
     if (/\/aps\/\{[^}]+\}\/radio-config$/.test(operation.path)) return 'setApRadio';
     if (/\/site\/log-notification$/.test(operation.path)) return 'setLogNotifications';
     if (operation.method === 'PUT' && /\/rate-limit-profile\/\{[^}]+\}$/.test(operation.path)) return 'updateRateLimitProfile';
+    if (/\/sites\/\{[^}]+\}\/wireless-network\/wlans\/\{[^}]+\}\/ssids\/\{[^}]+\}\/update-basic-config$/.test(operation.path)) return 'updateSsid';
+    const switchPort =
+        /\/sites\/\{[^}]+\}\/switches\/\{[^}]+\}\/(ports\/\{[^}]+\}|multi-ports)\/(profile|poe-mode|name|status|profile-override)$/.exec(
+            operation.path
+        );
+    if (switchPort && operation.method === 'PUT') {
+        const single: Record<string, string> = {
+            profile: 'setSwitchPortProfile',
+            'poe-mode': 'setSwitchPortPoe',
+            name: 'setSwitchPortName',
+            status: 'setSwitchPortStatus',
+            'profile-override': 'setSwitchPortProfileOverride',
+        };
+        const batch: Record<string, string> = {
+            'poe-mode': 'batchSetSwitchPortPoe',
+            name: 'batchSetSwitchPortName',
+            status: 'batchSetSwitchPortStatus',
+            'profile-override': 'batchSetSwitchPortProfile',
+        };
+        return (switchPort[1] === 'multi-ports' ? batch : single)[switchPort[2]];
+    }
+    if (operation.method === 'PATCH' && /\/sites\/\{[^}]+\}\/switches\/\{[^}]+\}\/ports\/\{[^}]+\}$/.test(operation.path)) {
+        return 'updateSwitchPort';
+    }
     if (/\/setting\/service\/dhcp(?:\/\{[^}]+\})?$/.test(operation.path)) {
         if (operation.method === 'POST') return 'createDhcpReservation';
         if (operation.method === 'DELETE') return 'deleteDhcpReservation';

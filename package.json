@@ -1,6 +1,6 @@
 {
     "name": "@realtydev/omada-mcp",
-    "version": "0.9.0",
+    "version": "0.10.0",
     "description": "Full read/write Model Context Protocol server for TP-Link Omada SDN controllers — sites, devices, clients, VLANs, firewall, switch ports, Wi-Fi and WAN",
     "type": "module",
     "main": "dist/index.js",
@@ -16,6 +16,8 @@
         "docs/api-discovery.md",
         "docs/network-workflows.md",
         "docs/file-transfers.md",
+        "docs/controller-capabilities.md",
+        "docs/switch-safety.md",
         "docs/openapi/00-all.json",
         "LICENSE"
     ],
@@ -59,6 +61,7 @@
         "test:package": "node scripts/check-package.mjs",
         "smoke:readonly": "node scripts/smoke-readonly.mjs",
         "smoke:discovery": "node scripts/smoke-discovery.mjs",
+        "api:refresh": "node scripts/refresh-openapi.mjs",
         "dev": "yarn generate:build-info && tsx src/index.ts",
         "wan-guard": "node dist/wanGuard.js",
         "start": "node dist/index.js",

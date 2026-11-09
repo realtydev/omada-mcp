@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-09
+
 ### Added
 
 - Bounded traffic-history, RF and WAN diagnostic workflows with timestamped evidence, explicit missing metrics and truncation.
@@ -11,16 +13,23 @@ All notable changes to this project are documented here. The format follows [Kee
 - Explicit MSP route scope and separate optional OAuth principal configuration.
 - OpenAPI 3.1 execution with JSON Schema 2020 validation while preserving OpenAPI 3.0 behavior.
 - Bounded multipart uploads and binary downloads under an operator-controlled transfer directory, with default write previews, exclusive file creation and integrity metadata.
+- `getControllerCapabilities` reports controller version/mode, configured surfaces, shared catalog evidence and optional missing-field checks for one SSID, separating documentation from verified hardware support.
+- Switch-port previews, target/prerequisite checks, explicit disruption-risk handling and per-port configuration verification across single and batch tools. Uncertain mutations are reconciled without replay.
 
 ### Fixed
 
 - Controller 6.3 traffic/channel/WAN health shapes and rate-limit profile ID aliases are handled without inventing missing evidence.
 - Binary API authentication errors retain bounded renewal, and logs describe binary/multipart payloads without enumerating file contents.
+- Generic switch port PATCH calls are replaced by documented profile/PoE setters; unsupported settings are rejected before requests.
+- Controller error envelopes retain safe numeric rejection codes for capability classification.
 
 ## [0.9.0] - 2026-11-08
 
 ### Added
 
+- Semantic bundled-API comparison with `yarn api:refresh --source <file-or-https-url>`, including referenced-schema changes, source hashes and explicit atomic adoption.
+- Discovery search recognizes network synonyms and camel-case terms while retaining exact-ID ranking and execution filters.
+- Partial typed SSID configuration with preservation, redacted previews, no-op detection and read-back verification; discovery sends actual basic-config writes to the dedicated workflow.
 - Execa-backed runtime commands with bounded output, process cleanup and redacted errors.
 - Automatic runtime setup for Codex, Cursor and Claude Desktop, with native client configuration mappings, private backups and explicit replacement of conflicting Omada entries.
 - Registered-client refresh after verified updates and rollbacks, a reconnect command, supported Codex reload requests and optional graceful desktop restarts on macOS. Refresh results identify remaining manual actions separately from runtime readiness.
@@ -30,6 +39,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- Bootstrap/configuration errors stay on stderr before transport logging is initialized. Timeout and port settings reject trailing junk, fractions and out-of-range values.
+- Public/internal controller request pacing, bounded transient-read retries, permission-aware authentication renewal and a short rejected-credential cooldown.
+- Request-scoped redaction masks credentials echoed in controller error messages as well as sensitive payload fields.
 - Tool and request logs redact nested credentials, private keys and sensitive query values.
 - GET requests missing the MCP event-stream Accept header return the existing HTTP 406 response with one clear warning, without allocating a transport or emitting duplicate error stacks.
 

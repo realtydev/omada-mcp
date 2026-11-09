@@ -2,7 +2,8 @@
 
 A Model Context Protocol (MCP) server for TP-Link Omada network diagnostics and configuration, with stdio and HTTP transports and a runtime CLI for managed Docker setup, updates and rollback.
 
-> **Release:** The [v0.9.0 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.9.0) includes 97 tools, automatic API discovery and runtime client setup. `getServerInfo` identifies the running build.
+> **Release:** The [v0.10.0 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.10.0) includes 103 tools, automatic API discovery, richer diagnostics and verified profile rollback. `getServerInfo` identifies the running build.
+
 
 ## Runtime management
 
@@ -78,7 +79,7 @@ The HTTP server will be available at `http://localhost:3000/mcp` (stream transpo
 ## Features
 
 - OAuth client-credentials authentication with automatic token refresh, plus web-session authentication for Fusion gateways
-- 102 tools on main for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
+- 103 tools for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
 - Automatic API discovery: search, describe and execute documented JSON operations with live/bundled source information and write previews
 - Dedicated dashboard, topology and client/log diagnostics, with guarded DHCP, radio and log-notification workflows
 - Read-only profile enforced for dedicated tools and discovered operations
@@ -306,9 +307,9 @@ The AP diagnostics use the bundled `docs/openapi/03-device.json` operations `get
 | `createFirewallAcl`      | Create a firewall ACL rule                                                                                               |
 | `updateFirewallAcl`      | Update a firewall ACL rule                                                                                               |
 | `deleteFirewallAcl`      | Delete a firewall ACL rule                                                                                               |
-| `updateSsid`             | Update an SSID's basic config (name, band, security, VLAN, PSK, etc.)                                                    |
+| `updateSsid`             | Preserve SSID settings with typed partial updates, redacted previews and read-back verification                                                    |
 | `setSsidEnable`          | Enable or disable an SSID network-wide                                                                                   |
-| `updateSwitchPort`       | Update switch port config (profile, PoE, speed, STP)                                                                     |
+| `updateSwitchPort`       | Guarded profile or PoE update (one setting); unsupported generic settings are rejected                                                                     |
 | `updateClient`           | Update name, fixed IPv4 or rate limits through setting-specific endpoints; supports dry-run previews                     |
 | `updateRateLimitProfile` | Partial profile updates with previews, preservation, read-back verification and rollback receipts                        |
 | `rollbackNetworkChange`  | Restore a verified rate-limit profile change after checking for drift                                                    |
@@ -373,9 +374,10 @@ See [network workflows](docs/network-workflows.md) for diagnostics and verified 
 
 ### Meta
 
-| Tool            | Description                                                                                        |
-| --------------- | -------------------------------------------------------------------------------------------------- |
-| `getServerInfo` | Report the package version, git commit, and build time this server process was actually built from |
+| Tool                        | Description                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `getServerInfo`             | Report the package version, git commit, and build time this server process was actually built from      |
+| `getControllerCapabilities` | Read controller metadata and API documentation evidence; optionally inspect one SSID for missing fields |
 
 Automatic discovery keeps the existing tools and adds searchable API coverage. See [API discovery](docs/api-discovery.md) for source selection, write previews, read-only enforcement and pagination limits.
 

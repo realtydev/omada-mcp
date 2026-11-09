@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
-import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosRequestHeaders } from 'axios';
+import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
 
 import type { OmadaApiResponse, PaginatedResult } from '../types/index.js';
 import { logger } from '../utils/logger.js';
-import { redactForLogs } from '../utils/redact.js';
+import { createRequestRedactor, redactedRequestError } from '../utils/redact.js';
 
 import type { RequestAuthManager } from './auth.js';
+import { controllerRequest, remainingTimeout, requestDeadline, waitFor } from './transport.js';
 
 const DEFAULT_PAGE_SIZE = 200;
 const MAX_PAGINATION_PAGES = 1000;
@@ -74,8 +75,9 @@ export class RequestHandler {
     /**
      * Make an arbitrary HTTP request to the Omada API.
      */
-    public async request<T>(config: AxiosRequestConfig, retry = true): Promise<T> {
-        const authHeaders = await this.auth.getAuthHeaders();
+    public async request<T>(config: AxiosRequestConfig, retry = true, deadline: number | null = requestDeadline(this.http, config)): Promise<T> {
+        remainingTimeout(config, deadline);
+        const authHeaders = await waitFor(this.auth.getAuthHeaders(), config, deadline);
 
         const requestConfig: AxiosRequestConfig = {
             ...config,
@@ -85,37 +87,38 @@ export class RequestHandler {
             },
         };
 
+        const redact = createRequestRedactor(requestConfig.data, requestConfig.params, requestConfig.headers);
         const method = (requestConfig.method ?? 'GET').toUpperCase();
         const url = requestConfig.url ?? 'unknown-url';
         logger.info('Omada request', {
             method,
-            url,
-            params: redactForLogs(requestConfig.params),
-            siteId: requestConfig.params?.siteId ?? undefined,
+            url: redact(url),
+            params: redact(requestConfig.params),
+            siteId: redact(requestConfig.params?.siteId ?? undefined),
         });
 
         logger.debug('Omada request details', {
             method,
-            url,
-            headers: this.sanitizeHeaders(requestConfig.headers as AxiosRequestHeaders | undefined),
-            params: redactForLogs(requestConfig.params ?? null),
-            data: redactForLogs(this.sanitizePayload(requestConfig.data)),
+            url: redact(url),
+            headers: redact(requestConfig.headers),
+            params: redact(requestConfig.params ?? null),
+            data: redact(requestConfig.data),
         });
 
         try {
-            const response = await this.http.request<T>(requestConfig);
+            const response = await controllerRequest<T>(this.http, requestConfig, retry, deadline);
             logger.info('Omada response', {
                 method,
-                url,
+                url: redact(url),
                 status: response.status,
             });
 
             logger.debug('Omada response payload', {
                 method,
-                url,
+                url: redact(url),
                 status: response.status,
-                headers: this.sanitizeHeaders(response.headers as AxiosRequestHeaders | undefined),
-                data: redactForLogs(this.sanitizePayload(response.data)),
+                headers: redact(response.headers),
+                data: redact(response.data),
             });
 
             // Check if the response data indicates an authentication error
@@ -129,48 +132,52 @@ export class RequestHandler {
             if (retry && (this.isAuthErrorCode(errorCode) || (!binaryResponse && this.isExpiredAuthMessage(errorMsg)))) {
                 logger.warn('Omada authentication error in response, retrying with fresh token', {
                     method,
-                    url,
+                    url: redact(url),
                     errorCode,
-                    message: binaryResponse ? 'Controller reported expired authentication during a binary response' : errorMsg,
+                    message: binaryResponse ? 'Controller reported expired authentication during a binary response' : redact(errorMsg),
                 });
                 this.auth.clearToken(authHeaders);
-                return this.request<T>(config, false);
+                return this.request<T>(config, false, deadline);
             }
 
-            return response.data;
+            return !binaryResponse && typeof errorCode === 'number' && errorCode !== 0 ? (redact(response.data) as T) : response.data;
         } catch (error) {
             logger.error('Omada request failed', {
                 method,
-                url,
-                message: error instanceof Error ? error.message : String(error),
+                url: redact(url),
+                message: redact(error instanceof Error ? error.message : String(error)),
             });
 
             if (axios.isAxiosError(error) && error.response) {
                 logger.debug('Omada error response payload', {
                     method,
-                    url,
+                    url: redact(url),
                     status: error.response.status,
-                    headers: this.sanitizeHeaders(error.response.headers as AxiosRequestHeaders | undefined),
-                    data: redactForLogs(this.sanitizePayload(error.response.data)),
+                    headers: redact(error.response.headers),
+                    data: redact(error.response.data),
                 });
             }
 
             if (!axios.isAxiosError(error)) {
-                throw error;
+                throw this.toDetailedError(method, url, error, redact);
             }
 
             const status = error.response?.status;
-            const errorCode = authenticationEnvelope(
+            const envelope = authenticationEnvelope(
                 error.response?.data,
                 error.response?.headers?.['content-type'] ?? error.response?.headers?.['Content-Type']
-            )?.errorCode;
-
-            if (retry && (status === 401 || status === 403 || this.isAuthErrorCode(errorCode))) {
+            );
+            const errorCode = envelope?.errorCode;
+            const errorMsg = envelope?.msg;
+            if (
+                retry &&
+                (status === 401 || this.isAuthErrorCode(errorCode) || (!isByteResponse(error.response?.data) && this.isExpiredAuthMessage(errorMsg)))
+            ) {
                 this.auth.clearToken(authHeaders);
-                return this.request<T>(config, false);
+                return this.request<T>(config, false, deadline);
             }
 
-            throw this.toDetailedError(method, url, error);
+            throw this.toDetailedError(method, url, error, redact);
         }
     }
 
@@ -179,16 +186,16 @@ export class RequestHandler {
      * request that failed at the HTTP level, instead of losing that detail behind axios's generic
      * "Request failed with status code N" message.
      */
-    private toDetailedError(method: string, url: string, error: unknown): Error {
+    private toDetailedError(method: string, url: string, error: unknown, redact: (value: unknown) => unknown): Error {
         if (!axios.isAxiosError(error) || !error.response) {
-            return error instanceof Error ? error : new Error(String(error));
+            return redactedRequestError(error, redact);
         }
 
         const status = error.response.status;
         const body = error.response.data as { msg?: string; errorCode?: number } | undefined;
-        const detail = body?.msg ?? this.safeStringifyBody(error.response.data) ?? error.message;
+        const detail = redact(body?.msg ?? this.safeStringifyBody(redact(error.response.data)) ?? error.message);
         const errorCodePart = body?.errorCode !== undefined ? ` (errorCode: ${body.errorCode})` : '';
-        return new Error(`Omada API request failed: ${method} ${url} (HTTP ${status})${errorCodePart} - ${detail}`);
+        return redactedRequestError(error, redact, `Omada API request failed: ${method} ${url} (HTTP ${status})${errorCodePart} - ${detail}`, status);
     }
 
     /**
@@ -278,7 +285,9 @@ export class RequestHandler {
                 errorCode: response.errorCode,
                 message: response.msg,
             });
-            throw new Error(response.msg ?? 'Omada API request failed');
+            const error = new Error(response.msg ?? 'Omada API request failed');
+            if (Number.isSafeInteger(response.errorCode)) Object.assign(error, { errorCode: response.errorCode });
+            throw error;
         }
 
         return (response.result ?? ({} as T)) as T;
@@ -312,81 +321,5 @@ export class RequestHandler {
             (this.auth.mode === 'web' &&
                 (lowerMsg.includes('session expired') || lowerMsg.includes('session has expired') || lowerMsg.includes('not logged in')))
         );
-    }
-
-    /**
-     * Sanitize HTTP headers for logging, masking sensitive values.
-     */
-    private sanitizeHeaders(headers: AxiosRequestHeaders | undefined): Record<string, unknown> | undefined {
-        if (!headers) {
-            return undefined;
-        }
-
-        const sanitized: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(headers)) {
-            sanitized[key] = this.isSensitiveKey(key) ? this.maskValue(value) : value;
-        }
-
-        return sanitized;
-    }
-
-    /**
-     * Sanitize a payload for logging, masking sensitive values.
-     */
-    private sanitizePayload(payload: unknown): unknown {
-        if (payload instanceof ArrayBuffer || ArrayBuffer.isView(payload)) return { binary: true, byteLength: payload.byteLength };
-        if (payload instanceof FormData) return { multipart: true };
-        if (!payload || typeof payload !== 'object') {
-            return payload;
-        }
-
-        if (Array.isArray(payload)) {
-            return payload.map((item) => this.sanitizePayload(item));
-        }
-
-        const sanitized: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(payload)) {
-            sanitized[key] = this.isSensitiveKey(key) ? this.maskValue(value) : this.sanitizePayload(value);
-        }
-
-        return sanitized;
-    }
-
-    /**
-     * Check if a key name indicates sensitive data.
-     */
-    private isSensitiveKey(key: string): boolean {
-        const normalized = key.toLowerCase();
-        return (
-            normalized.includes('authorization') ||
-            normalized.includes('token') ||
-            normalized.includes('secret') ||
-            normalized.includes('password') ||
-            normalized.includes('cookie') ||
-            normalized.includes('csrf') ||
-            normalized.includes('client_id')
-        );
-    }
-
-    /**
-     * Mask a sensitive value for logging.
-     */
-    private maskValue(value: unknown): unknown {
-        if (typeof value === 'string') {
-            if (value.length <= 8) {
-                return '********';
-            }
-            return `${value.slice(0, 4)}…${value.slice(-4)}`;
-        }
-
-        if (Array.isArray(value)) {
-            return value.map(() => '********');
-        }
-
-        if (typeof value === 'object' && value !== null) {
-            return '[masked-object]';
-        }
-
-        return '********';
     }
 }
