@@ -60,3 +60,32 @@ Preview with `{"clientMac":"AA-BB-CC-DD-EE-FF","enable":true,"aps":["AA-BB-CC-DD
 Enabling a changed lock requires a wireless, unblocked client and selected APs that are present, connected and explicitly report `supportLockToAp:true`. Missing or contradictory evidence stops the operation. Unlocking does not require the previous AP to remain online. Unchanged settings are no-ops. Execution rereads client state to reject drift, sends one POST without retry, then verifies reported lock settings with bounded reads. Lost acknowledgement remains `written:"unknown"`; missing readback is `unknown`, not success.
 
 Lock changes can disconnect the client and limit roaming. Verified configuration does not prove association, radio coverage or reachability. AP availability can change after preflight. Single-client and batch discovery/raw AP-lock writes are directed to the guarded setter. Live AP locking has not been exercised.
+
+## PoE scheduling
+
+Use `searchApiOperations` and `describeApiOperation` to inspect `getPoeScheduleList`, `createPoeSchedule`, `modifyPoeSchedule` and `deletePoeSchedule`. Writes reuse `executeApiOperation` and its existing managed-resource executor; no new tool wrappers are registered. Schedules use `switching` scope. Create/update execution requires `switching:rw,network:r`, because the referenced time-range inventory uses network read permission. Deletion and disable-only updates need `switching:rw` only.
+
+First inspect `getTimeRangeList` and `getPoePortsList`. Select an existing time-range `profileId` and the exact device MACs and `poePort.poePortIds` reported by the controller. Existing discovery operations can manage time-range profiles separately; this workflow does not create or edit them implicitly.
+
+Example `executeApiOperation` preview:
+
+```json
+{
+    "operationId": "createPoeSchedule",
+    "params": { "siteId": "your-site-id" },
+    "body": {
+        "name": "Office power",
+        "status": false,
+        "turnOnTime": "existing-time-range-id",
+        "poePortsMap": { "AA-BB-CC-DD-EE-01": [1, 2] }
+    }
+}
+```
+
+`status:false` creates a disabled schedule. Set it to `true` to enable scheduling, and explicitly set `dryRun:false` to submit a reviewed request. Updating uses the same required configuration with `params.poeScheduleId`; omitting a device/port from the map removes that assignment. Delete supplies `poeScheduleId` without a body. GET listing requires `page` and `pageSize`.
+
+Previews validate schema, site consistency, nonempty time-range IDs and bounded unique device/port selections without HTTP. Execution verifies the time-range reference and explicit PoE capability for every selected port, refuses cross-site or ambiguous evidence, checks the complete schedule inventory for duplicate names and drift, and sends one mutation. It conservatively refuses assigning a port to two enabled schedules, even when their time windows appear disjoint. Disabled schedules may share ports. No-op updates and already-absent deletes do not write; deletion and disable-only updates can recover schedules whose device/profile references are no longer available. A disable-only update changes only `status` to `false`; it retains drift detection and readback without checking those references. Changing targets, time range or other fields still requires reference validation.
+
+Readback compares the entire target map, normalizing MAC notation and port ordering. Unexpected device assignments, missing fields or changed sibling schedules cannot yield verified success. Inventories and target selections are bounded to 1,000 records/ports; schedules use the existing ten-page collection limit. Known optional writable fields are preserved; execution metadata such as `nextExecute` is not written back. Raw or unsupported-version schedule mutations cannot bypass this workflow.
+
+PoE schedule changes can interrupt power to attached APs, phones and cameras. The controller's time-range profile, site timezone and DST settings determine execution; the MCP server does not convert local times or run its own timer. Verification proves reported configuration only, not that power switched at the scheduled time. Concurrent edits or capability changes after preflight remain possible. Live scheduling has not been tested.

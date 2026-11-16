@@ -391,7 +391,7 @@ function preferredWriteTool(operation: ApiOperation, body: unknown): string | un
     if (/\/sites\/\{[^}]+\}\/clients\/\{[^}]+\}\/lock-to-ap$/.test(operation.path)) return 'setClientApLock';
     if (/\/sites\/\{[^}]+\}\/clients\/config$/.test(operation.path) && object(body) && Object.hasOwn(body, 'lockToAp')) return 'setClientApLock';
     if (isManagedResourceWrite(operation.method, operation.path) && !managedResource(operation))
-        return 'the canonical v1 SSID/WLAN or policy-routing operation through executeApiOperation';
+        return 'the canonical v1 SSID/WLAN, policy-routing or PoE-scheduling operation through executeApiOperation';
     if (operation.method === 'PATCH' && /\/aps\/\{[^}]+\}\/override$/.test(operation.path)) return 'updateApSsidOverride';
     if (/\/aps\/\{[^}]+\}\/radio-config$/.test(operation.path)) return 'setApRadio';
     if (/\/site\/log-notification$/.test(operation.path)) return 'setLogNotifications';
@@ -539,7 +539,7 @@ export async function executeDiscoveredOperation(
     const query = queryParameters(operation, params, catalog);
     const dryRun = options.dryRun ?? mutation;
     const resource = managedResource(operation);
-    if (resource) validateManagedInput(resource.kind, operation.method, options.body);
+    if (resource) validateManagedInput(resource.kind, operation.method, options.body, params.siteId);
     if (isManagedBackup(operation)) backupSites(operation, options.body);
     if (isMdnsWrite(operation)) validateMdnsInput(operation.method, options.body);
     const preferredTool = preferredWriteTool(operation, options.body);
@@ -556,6 +556,12 @@ export async function executeDiscoveredOperation(
             written: false,
             request: { method: operation.method, path, query, ...(options.body === undefined ? {} : { body: redactForLogs(options.body) }) },
             ...(transfer?.preview === undefined ? {} : { transfer: transfer.preview }),
+            ...(resource?.kind === 'poe-schedule'
+                ? {
+                      warning:
+                          'PoE schedule changes can interrupt power. This schema-only preview does not inspect devices or time ranges; controller scheduling uses the referenced profile and site clock.',
+                  }
+                : {}),
             ...(unsupportedStackWrite
                 ? { warning: unsupportedStackWrite }
                 : preferredTool

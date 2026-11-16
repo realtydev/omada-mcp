@@ -177,6 +177,7 @@ export function categoryForPath(path: string): ToolCategory | undefined {
     if (site) route = `/${site[1] ?? ''}`;
     if (site && /^\/profiles\/bonjour-service(?:\/[^/]+)?$/.test(route)) return 'network';
     if (site && /^\/profiles\/groups(?:\/[^/]+)?$/.test(route)) return 'network';
+    if (site && route === '/time-range-profiles') return 'network';
     if (/^\/gateways\/[^/]+\/config\/advanced(?:\/|$)/.test(route)) return undefined;
     if (/^\/gateways\/[^/]+\/config\/(?:wlans|radios)(?:\/|$)/.test(route)) return 'wireless';
     if (
@@ -209,7 +210,7 @@ export function categoryForPath(path: string): ToolCategory | undefined {
     if (route === '/lockToAp/aps') return 'wireless';
     if (/^\/(?:rate-limit-profiles?|clients|monitor-client)(?:\/|$)/.test(route)) return 'clients';
     if (
-        /^\/(?:switches|stacks?|cable-test|lan-profiles|poe-ports|port-status-ports|switch-support|switch-oui-rules|lan-switch-setting)(?:\/|$)/.test(
+        /^\/(?:switches|stacks?|cable-test|lan-profiles|poe-ports|poe-schedules|port-status-ports|switch-support|switch-oui-rules|lan-switch-setting)(?:\/|$)/.test(
             route
         )
     )

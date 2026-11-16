@@ -56,3 +56,5 @@ Controller 6.3.0.45 validation confirmed denied discovery and generic writes sto
 `getClientApplicationTraffic` is a clients read command; its fixed DPI/taxonomy reads are dependencies of that selected-client report. Canonical site Bonjour profile reads use network scope for mDNS reference preflight; this does not grant site-template or controller-global profile access. DNS receipt restoration requires `network:rw`, including for the state-reading rollback preview.
 
 Compact mode applies the same restrictions to search, descriptions and dispatch. The new managed backup and SSID/WLAN/policy-route workflows require both read and write permission for their category. See [managed workflows](managed-workflows.md).
+
+PoE schedule operations use `switching` scope. Managed create/update requires `switching:rw,network:r` for schedule/PoE-port and time-range reads; delete and disable-only updates require `switching:rw`. Time-range profile listing uses `network:r`.

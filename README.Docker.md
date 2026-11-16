@@ -412,3 +412,5 @@ Want to help improve this project? Contributions are welcome! Visit our GitHub r
 This project is licensed under the [MIT License](https://github.com/realtydev/omada-mcp/blob/main/LICENSE).
 
 Use `getSiteDashboard({includePoePorts:true})` for bounded port PoE detail and reported switch headroom. [PoE reporting](docs/poe-reporting.md) explains source coverage and missing readings; [session recovery](docs/session-recovery.md) describes safe-read renewal and write refusal.
+
+PoE schedule creation, updates and deletion reuse `executeApiOperation`, with preview defaults, time-range/port checks and configuration readback. See [PoE scheduling](docs/managed-workflows.md#poe-scheduling) for operation IDs, scopes and examples.

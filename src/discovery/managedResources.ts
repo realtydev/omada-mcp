@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { RequestHandler } from '../omadaClient/request.js';
 import { createRequestRedactor, redactedRequestError } from '../utils/redact.js';
 import { completeSsidSchema, ssidUpdateSchema } from '../utils/ssid-update-schema.js';
+import { normalizeMac, validateSwitchMac } from '../utils/switch-port-safety.js';
 import { verifyWrite } from '../utils/write-verification.js';
 import type { ApiOperation } from './catalog.js';
 
@@ -9,8 +10,9 @@ const SITE = '/openapi/v1/{omadacId}/sites/{siteId}';
 export const WLAN_PATH = `${SITE}/wireless-network/wlans`;
 export const SSID_PATH = `${WLAN_PATH}/{wlanId}/ssids`;
 export const POLICY_ROUTE_PATH = `${SITE}/routing/policy-routings`;
+const POE_SCHEDULE_PATH = `${SITE}/poe-schedules`;
 type Row = Record<string, unknown> & { id: string };
-export type ResourceKind = 'wlan' | 'ssid' | 'policy-route';
+export type ResourceKind = 'wlan' | 'ssid' | 'policy-route' | 'poe-schedule';
 export type ResourceRead = (path: string, params?: Record<string, unknown>) => Promise<unknown>;
 
 export function managedResource(
@@ -20,6 +22,7 @@ export function managedResource(
         ['wlan', WLAN_PATH, 'wlanId', 'PATCH'],
         ['ssid', SSID_PATH, 'ssidId', ''],
         ['policy-route', POLICY_ROUTE_PATH, 'policyRoutingId', 'PUT'],
+        ['poe-schedule', POE_SCHEDULE_PATH, 'poeScheduleId', 'PUT'],
     ] as const) {
         if (
             (operation.method === 'POST' && operation.path === listPath) ||
@@ -34,7 +37,8 @@ export function managedResource(
 export function isManagedResourceWrite(method: string, path: string): boolean {
     return (
         method !== 'GET' &&
-        (/\/sites\/[^/]+\/routing\/policy-routings(?:\/[^/]+)?$/.test(path) ||
+        (/\/sites\/[^/]+\/poe-schedules(?:\/[^/]+)?\/?$/.test(path) ||
+            /\/sites\/[^/]+\/routing\/policy-routings(?:\/[^/]+)?$/.test(path) ||
             /\/sites\/[^/]+\/wireless-network\/wlans(?:\/[^/]+)?$/.test(path) ||
             /\/sites\/[^/]+\/wireless-network\/(?:wlans\/[^/]+\/)?ssids(?:\/[^/]+)?$/.test(path))
     );
@@ -82,13 +86,40 @@ export async function readResourceRows(readPage: (page: number) => Promise<unkno
     throw new Error('Resource inventory exceeds ten pages');
 }
 
-export function validateManagedInput(kind: ResourceKind, method: string, body: unknown): void {
+function poePorts(value: unknown): Record<string, number[]> {
+    if (!object(value) || !Object.keys(value).length || Object.keys(value).length > 1000)
+        throw new Error('PoE schedule requires a bounded, nonempty device-to-port map');
+    const ports: Record<string, number[]> = {};
+    let count = 0;
+    for (const [mac, selected] of Object.entries(value)) {
+        validateSwitchMac(mac);
+        const key = normalizeMac(mac);
+        if (Object.hasOwn(ports, key)) throw new Error('PoE schedule contains duplicate device MAC identities');
+        if (
+            !Array.isArray(selected) ||
+            !selected.length ||
+            selected.some((port) => !Number.isSafeInteger(port) || port < 1 || port > 65535) ||
+            new Set(selected).size !== selected.length
+        )
+            throw new Error('PoE schedule ports must be nonempty, unique positive port numbers');
+        count += selected.length;
+        if (count > 1000) throw new Error('PoE schedule exceeds 1000 selected ports');
+        ports[key] = [...selected].sort((a, b) => a - b);
+    }
+    return ports;
+}
+
+export function validateManagedInput(kind: ResourceKind, method: string, body: unknown, siteId?: unknown): void {
     if (method === 'DELETE') return;
     if (!object(body)) throw new Error('Resource configuration is required');
     if (kind === 'ssid') {
         completeSsidSchema.parse(Object.fromEntries(Object.entries(body).filter(([key]) => Object.hasOwn(ssidUpdateSchema.shape, key))));
     } else if (kind === 'wlan' && method === 'POST' && body.clone !== false) {
         throw new Error('Verified WLAN creation requires clone:false; cloning SSIDs is not supported by this workflow');
+    } else if (kind === 'poe-schedule') {
+        if (typeof body.turnOnTime !== 'string' || !body.turnOnTime.trim()) throw new Error('PoE schedule requires a time-range profile ID');
+        if (body.siteId !== undefined && body.siteId !== siteId) throw new Error('PoE schedule body must match the selected site');
+        poePorts(body.poePortsMap);
     } else if (kind === 'policy-route') {
         for (const key of ['sourceIds', 'destinationIds', 'protocols']) {
             const values = body[key];
@@ -137,7 +168,12 @@ export async function executeManagedWrite(input: {
     const { kind, listPath, idParam } = resource;
     const method = operation.method;
     const id = method === 'POST' ? undefined : String(params[idParam]);
-    const readRows = () => readResourceRows((page) => read(listPath, { ...params, page, pageSize: 100 }), [idParam]);
+    const readRows = async () => {
+        const rows = await readResourceRows((page) => read(listPath, { ...params, page, pageSize: 100 }), [idParam]);
+        if (kind === 'poe-schedule' && rows.some((row) => row.siteId !== undefined && row.siteId !== params.siteId))
+            throw new Error('PoE schedule inventory identifies another site');
+        return rows;
+    };
     const before = await readRows(),
         current = before.find((row) => row.id === id);
     const noOp = () => ({
@@ -149,14 +185,18 @@ export async function executeManagedWrite(input: {
     if (method !== 'POST' && !current) throw new Error('Resource target does not exist');
     const config = (row: Record<string, unknown>) =>
         Object.fromEntries(input.fields.filter((key) => row[key] !== undefined).map((key) => [key, row[key]]));
+    const comparable = (value: Record<string, unknown>) =>
+        kind === 'poe-schedule' && value.poePortsMap !== undefined
+            ? { ...value, poePortsMap: Object.entries(poePorts(value.poePortsMap)).sort(([a], [b]) => a.localeCompare(b)) }
+            : value;
     const desired = method === 'DELETE' ? undefined : { ...(current ? config(current) : {}), ...(object(input.body) ? input.body : {}) };
     if (desired) {
         validateBody(desired);
-        validateManagedInput(kind, method, desired);
+        validateManagedInput(kind, method, desired, params.siteId);
         if (typeof desired.name !== 'string' || !desired.name) throw new Error('Resource name is required');
         if (before.some((row) => row.id !== id && String(row.name).toLowerCase() === String(desired.name).toLowerCase()))
             throw new Error('Resource name already exists');
-        if (current && subset(current, desired, false)) return noOp();
+        if (current && subset(comparable(current), comparable(desired), false)) return noOp();
     }
     if (kind === 'ssid') {
         const groups = await readResourceRows(() => read(WLAN_PATH, params), ['wlanId']);
@@ -176,11 +216,57 @@ export async function executeManagedWrite(input: {
                 throw new Error(`Policy route ${side} references an unavailable network/group`);
         }
     }
+    const disablePoeOnly =
+        kind === 'poe-schedule' &&
+        current &&
+        desired?.status === false &&
+        isDeepStrictEqual(comparable({ ...config(current), status: false }), comparable(desired));
+    if (kind === 'poe-schedule' && desired && !disablePoeOnly) {
+        const profiles = await readResourceRows(() => read(`${SITE}/time-range-profiles`, params), ['profileId']);
+        if (!profiles.some((profile) => profile.id === desired.turnOnTime)) throw new Error('PoE schedule time-range profile does not exist');
+        const selected = poePorts(desired.poePortsMap);
+        const devices = await read(`${SITE}/poe-ports`, params);
+        if (!Array.isArray(devices) || devices.length > 1000) throw new Error('PoE-capable device inventory is unavailable or exceeds its bound');
+        const seen = new Set<string>();
+        for (const device of devices) {
+            if (!object(device) || typeof device.mac !== 'string') throw new Error('PoE device identity is missing');
+            validateSwitchMac(device.mac);
+            const mac = normalizeMac(device.mac);
+            if (seen.has(mac)) throw new Error('PoE device identity is ambiguous');
+            seen.add(mac);
+            if (!Object.hasOwn(selected, mac)) continue;
+            if ((device.site !== undefined && device.site !== params.siteId) || !['switch', 'gateway'].includes(String(device.type)))
+                throw new Error('PoE target device has an unqualified site or type');
+            const supported = object(device.poePort) ? device.poePort.poePortIds : undefined;
+            if (
+                !Array.isArray(supported) ||
+                supported.length > 1000 ||
+                supported.some((port) => !Number.isSafeInteger(port) || port < 1) ||
+                new Set(supported).size !== supported.length ||
+                selected[mac].some((port) => !supported.includes(port))
+            )
+                throw new Error('Every selected port must have explicit PoE support in the controller inventory');
+        }
+        if (Object.keys(selected).some((mac) => !seen.has(mac))) throw new Error('PoE schedule targets an unavailable device');
+        if (desired.status === true) {
+            for (const row of before.filter((row) => row.id !== id)) {
+                if (typeof row.status !== 'boolean') throw new Error('Existing PoE schedule status is unknown');
+                if (!row.status) continue;
+                const assigned = poePorts(row.poePortsMap);
+                if (Object.entries(selected).some(([mac, ports]) => ports.some((port) => assigned[mac]?.includes(port))))
+                    throw new Error('A selected port already belongs to another enabled PoE schedule');
+            }
+        }
+    }
     const same = (a: Row[], b: Row[]) =>
         a.length === b.length &&
         a.every((row) => {
             const other = b.find((candidate) => candidate.id === row.id);
-            return other !== undefined && isDeepStrictEqual(config(row), config(other)) && (kind !== 'wlan' || row.primary === other.primary);
+            return (
+                other !== undefined &&
+                isDeepStrictEqual(comparable(config(row)), comparable(config(other))) &&
+                (kind !== 'wlan' || row.primary === other.primary)
+            );
         });
     if (!same(before, await readRows())) throw new Error('Resource configuration changed during preflight; no write was sent');
     const redact = createRequestRedactor(input.body, desired);
@@ -220,7 +306,7 @@ export async function executeManagedWrite(input: {
                 .map(([key, child]) => [key, readable(child, `${prefix}${key}.`)])
         );
     }
-    const expected = readable(kind === 'wlan' && desired ? { name: desired.name } : desired);
+    const expected = readable(kind === 'wlan' && desired ? { name: desired.name } : desired ? comparable(desired) : undefined);
     const verification = await verifyWrite(
         async () => {
             const rows = await readRows();
@@ -251,7 +337,7 @@ export async function executeManagedWrite(input: {
                 return false;
             if (method === 'DELETE') return !observed;
             if (!observed || (method === 'POST' && ackId !== undefined && ackId !== observed.id)) return false;
-            return subset(detail ?? observed, expected);
+            return subset(kind === 'poe-schedule' ? comparable(observed) : (detail ?? observed), expected);
         }
     );
     const verified = verification.status === 'verified' && notVerifiedFields.length === 0;

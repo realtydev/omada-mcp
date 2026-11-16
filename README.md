@@ -427,3 +427,5 @@ Maintained by [realtydev](https://github.com/realtydev).
 Read-only qualification for additional controllers is documented in [compatibility validation](docs/compatibility-validation.md). Missing MSP/Fusion hardware remains explicitly untested.
 
 Use `getSiteDashboard({includePoePorts:true})` for bounded port PoE detail and reported switch headroom. [PoE reporting](docs/poe-reporting.md) explains source coverage and missing readings; [session recovery](docs/session-recovery.md) describes safe-read renewal and write refusal.
+
+PoE schedule creation, updates and deletion reuse `executeApiOperation`, with preview defaults, time-range/port checks and configuration readback. See [PoE scheduling](docs/managed-workflows.md#poe-scheduling) for operation IDs, scopes and examples.
