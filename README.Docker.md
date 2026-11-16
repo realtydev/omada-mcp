@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server for TP-Link Omada network diagnostics and configuration, with stdio and HTTP transports and a runtime CLI for managed Docker setup, updates and rollback.
 
-> **Release:** The [v0.13.0 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.13.0) includes 111 tools, a refreshed discovery catalog, native health/LLDP evidence and wireless security diagnostics. `getServerInfo` identifies the running build.
+> **Release:** The [v0.14.0 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.14.0) includes 112 tools, verified DNS/mDNS management, eligible DNS rollback and per-client application-traffic reporting. `getServerInfo` identifies the running build.
 
 ## Runtime management
 
@@ -78,7 +78,7 @@ The HTTP server will be available at `http://localhost:3000/mcp` (stream transpo
 ## Features
 
 - OAuth client-credentials authentication with automatic token refresh, plus web-session authentication for Fusion gateways
-- 111 tools for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
+- 112 tools for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
 - Automatic API discovery: search, describe and execute documented JSON operations with live/bundled source information and write previews
 - Dedicated dashboard, topology and client/log diagnostics, with guarded DHCP, radio and log-notification workflows
 - Read-only profile enforced for dedicated tools and discovered operations
@@ -261,6 +261,7 @@ If an intermediary strips the `Mcp-Session-Id` header, set `MCP_SERVER_STATEFUL=
 | `diagnoseSecurity`              | Saved rogue-AP and WIDS detections plus site-local threat evidence, with explicit source failures and bounded collection                                            |
 | `diagnoseLogs`                  | Combine bounded alert/event samples for an explicit time window, preserving failures and truncation                                                                 |
 | `diagnoseWifi`                  | Audit bounded Wi-Fi evidence and compare portable radio-configuration snapshots, with explicit missing/stale data                                                   |
+| `getClientApplicationTraffic`   | Read one client’s application traffic, DPI availability and bounded application metadata; missing data stays explicit                                               |
 | `getClientHistory`              | A client's association sessions over a time range, optionally with roams between APs                                                                                |
 | `getClient`                     | Get details for a specific client                                                                                                                                   |
 | `getSwitchStackDetail`          | Get switch stack configuration and status                                                                                                                           |

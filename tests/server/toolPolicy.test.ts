@@ -98,6 +98,23 @@ describe('scoped tool policy', () => {
         expect(switching.allowsOperation('GET', `${PREFIX}/switches/{switchMac}/lldp-neighbors`)).toBe(true);
     });
 
+    it('scopes per-client application traffic as client data and DNS restoration as network read/write', () => {
+        const clients = new ToolAccessPolicy('full', 'clients:r');
+        expect(clients.allowsTool('getClientApplicationTraffic')).toBe(true);
+        expect(clients.allowsOperation('GET', `${PREFIX}/dashboard/specificClientInfo/{clientMac}`)).toBe(true);
+        expect(new ToolAccessPolicy('full', 'monitoring:r').allowsTool('getClientApplicationTraffic')).toBe(false);
+        expect(new ToolAccessPolicy('full', 'monitoring:r').allowsOperation('GET', `${PREFIX}/dashboard/specificClientInfo/{clientMac}`)).toBe(false);
+        expect(categoryForPath(`${PREFIX}/profiles/bonjour-service`)).toBe('network');
+        expect(categoryForPath(`${PREFIX}/profiles/bonjour-service/{id}`)).toBe('network');
+        expect(categoryForPath('/openapi/v1/{omadacId}/sitetemplates/{siteTemplateId}/profiles/bonjour-service')).toBeUndefined();
+        expect(categoryForPath('/openapi/v1/{omadacId}/profiles/bonjour-service')).toBeUndefined();
+        for (const resource of ['lan-dns', 'mdns-rule']) {
+            expect(() => new ToolAccessPolicy('full', 'network:rw').assertTool('rollbackNetworkChange', { resource })).not.toThrow();
+            for (const categories of ['network:r', 'network:w', 'clients:rw', 'all:r'])
+                expect(() => new ToolAccessPolicy('full', categories).assertTool('rollbackNetworkChange', { resource })).toThrow();
+        }
+    });
+
     it.each([
         ['POST', '/multi-devices/start-rolling-upgrade'],
         ['POST', '/multi-devices/start-manually-upgrade'],

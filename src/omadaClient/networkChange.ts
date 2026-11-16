@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
-
 import { dhcpReservationConfigSchema, reservationMacSchema } from '../utils/dhcp-reservation-schema.js';
+import { type DnsChangeReceipt, dnsChangeReceiptSchema, lanDnsChangeReceiptSchema, mdnsChangeReceiptSchema } from '../utils/dns-change-schema.js';
 import { completeSsidSchema, mergeSsidConfig, ssidRecord } from '../utils/ssid-update-schema.js';
 import type { ApRadioOperations } from './apRadio.js';
 import type { DhcpReservationOperations } from './dhcpReservation.js';
@@ -127,6 +127,8 @@ export const networkChangeReceiptSchema = z.discriminatedUnion('resource', [
     dhcpChangeReceiptSchema,
     ssidChangeReceiptSchema,
     apRadioChangeReceiptSchema,
+    lanDnsChangeReceiptSchema,
+    mdnsChangeReceiptSchema,
 ]);
 export type NetworkChangeReceipt = z.infer<typeof networkChangeReceiptSchema>;
 
@@ -182,7 +184,8 @@ export class NetworkChangeOperations {
         private readonly rates: Pick<RateLimitProfileOperations, 'rollbackNetworkChange'>,
         private readonly network: Pick<NetworkOperations, 'rollbackSsidChange'>,
         private readonly dhcp: Pick<DhcpReservationOperations, 'rollbackDhcpChange'>,
-        private readonly radios: Pick<ApRadioOperations, 'rollbackApRadioChange'>
+        private readonly radios: Pick<ApRadioOperations, 'rollbackApRadioChange'>,
+        private readonly dns?: { rollbackDnsChange(receipt: DnsChangeReceipt, dryRun?: boolean): Promise<unknown> }
     ) {}
     public async rollbackNetworkChange(receipt: NetworkChangeReceipt, dryRun = true): Promise<unknown> {
         const parsed = networkChangeReceiptSchema.parse(receipt);
@@ -195,6 +198,10 @@ export class NetworkChangeOperations {
                 return await this.network.rollbackSsidChange(parsed, dryRun);
             case 'dhcp-reservation':
                 return await this.dhcp.rollbackDhcpChange(parsed, dryRun);
+            case 'lan-dns':
+            case 'mdns-rule':
+                if (!this.dns) throw new Error('DNS rollback is not configured');
+                return await this.dns.rollbackDnsChange(dnsChangeReceiptSchema.parse(parsed), dryRun);
             case 'ap-radio':
                 return await this.radios.rollbackApRadioChange(parsed, dryRun);
         }

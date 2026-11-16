@@ -4,10 +4,17 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-16
+
 ### Added
 
-- Selected discovered LAN DNS create/update/delete workflows now provide bounded preflight, preservation of omitted known fields including TTL, no-op and drift checks, and explicit read-back verification. Lost acknowledgements remain uncertain without mutation replay; array and paginated response contracts have regression coverage.
-- Validation follows the selected AP power-saving contract: newer schemas require documented modes and standard-mode triggers, while legacy snapshots retain their existing requirements. Custom DNS TTL is bounded and required when enabled.
+- Verified canonical mDNS and LAN DNS create/update/delete through existing API discovery, with preserving updates, bounded complete evidence, conflicts, preflight drift checks, no-op detection and read-back after one mutation.
+- Eligible caller-held DNS rollback receipts extend the existing rollback workflow, with controller/site/resource checks, drift refusal and verified restoration.
+- Per-client application-traffic reads combine explicitly selected client/window evidence, DPI availability and bounded application metadata. Missing counters and disabled DPI remain explicit; undocumented units are not converted to rates or totals.
+
+### Fixed
+
+- LAN DNS request dependencies retain custom TTL and schema-specific AP power-saving validation from the preceding verified-DNS change.
 
 ## [0.13.0] - 2026-11-16
 

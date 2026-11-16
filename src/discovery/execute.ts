@@ -5,8 +5,18 @@ import _addFormats, { type FormatsPlugin } from 'ajv-formats';
 
 import type { RequestHandler } from '../omadaClient/request.js';
 import type { ToolAccessPolicy } from '../server/toolPolicy.js';
+import type { DnsChangeReceipt } from '../utils/dns-change-schema.js';
 import type { ApiOperation, ApiParameter, OperationCatalog } from './catalog.js';
 import { executeLanDnsWrite, isLanDnsWrite, LAN_DNS_PATH, type LanDnsWriteResult } from './lanDns.js';
+import {
+    executeMdnsWrite,
+    isMdnsWrite,
+    MDNS_NETWORKS_PATH,
+    MDNS_PATH,
+    MDNS_PROFILES_PATH,
+    validateMdnsInput,
+    validateMdnsReferences,
+} from './mdns.js';
 import { validateWriteRequirements } from './requirements.js';
 import { prepareTransfer } from './transfer.js';
 
@@ -44,6 +54,8 @@ export interface DiscoveredExecutionResult {
     warning?: string;
     transfer?: unknown;
     verification?: LanDnsWriteResult['verification'];
+    rollbackReceipt?: DnsChangeReceipt;
+    rollbackUnavailable?: string;
 }
 
 type InputValidator = (input: unknown) => { valid: boolean; errorMessage?: string };
@@ -193,6 +205,30 @@ function validationSchema(operation: ApiOperation, catalog: OperationCatalog): S
         // This vendor Java-octal ASCII pattern has the same meaning with JSON Schema Unicode escapes.
         if (result.pattern === '^[\\041-\\0176]$|^[\\041-\\0176][\\040-\\0176]{0,126}[\\041-\\0176]$') {
             result.pattern = '^[\\x21-\\x7e]$|^[\\x21-\\x7e][\\x20-\\x7e]{0,126}[\\x21-\\x7e]$';
+        }
+        // The exact legacy class treats '-' literally; curated mDNS checks additionally enforce valid VLAN ranges.
+        if (isMdnsWrite(operation) && result.pattern === '^[\\d|\\d-\\d]+(,[\\d|\\d-\\d]+)*$') {
+            result.pattern = '^[0-9|\\-]+(,[0-9|\\-]+)*$';
+        }
+        // OC200 reads/writes confirm these exact vendor item lengths incorrectly repeat the array counts.
+        if (isLanDnsWrite(operation) && object(result.properties) && result.properties.lanNetworkIds && result.properties.domain) {
+            for (const [field, count, length] of [
+                ['aliases', 7, 253],
+                ['ipv6Addresses', 32, 45],
+                ['dnsServers', 2, 45],
+            ] as const) {
+                const array = result.properties[field];
+                if (
+                    object(array) &&
+                    array.type === 'array' &&
+                    array.maxItems === count &&
+                    object(array.items) &&
+                    array.items.type === 'string' &&
+                    array.items.maxLength === count &&
+                    array.items.minLength === 0
+                )
+                    array.items.maxLength = length;
+            }
         }
         if (typeof value.$ref === 'string') result.$ref = `#/components/schemas/${referenceName(value.$ref)}`;
         for (const bound of ['Minimum', 'Maximum']) {
@@ -492,6 +528,7 @@ export async function executeDiscoveredOperation(
     if (/[{}]/.test(path)) throw new Error('Operation path contains malformed template parameters.');
     const query = queryParameters(operation, params, catalog);
     const dryRun = options.dryRun ?? mutation;
+    if (isMdnsWrite(operation)) validateMdnsInput(operation.method, options.body);
     const preferredTool = preferredWriteTool(operation);
     const unsupportedStackWrite =
         mutation &&
@@ -515,12 +552,14 @@ export async function executeDiscoveredOperation(
     }
     if (unsupportedStackWrite) throw new Error(unsupportedStackWrite);
     if (preferredTool) throw new Error(`Use ${preferredTool} for this write to preserve its preflight and read-back verification.`);
-    if (isLanDnsWrite(operation)) {
+    if (isLanDnsWrite(operation) || isMdnsWrite(operation)) {
+        const mdns = isMdnsWrite(operation);
+        const label = mdns ? 'mDNS' : 'LAN DNS';
         if (transfer || Object.keys(query).length)
-            throw new Error('LAN DNS read-back supports JSON configuration without transfer or query overrides');
-        const readOperation = catalog.operations.find((entry) => entry.method === 'GET' && entry.path === LAN_DNS_PATH);
+            throw new Error(`${label} read-back supports JSON configuration without transfer or query overrides`);
+        const readOperation = catalog.operations.find((entry) => entry.method === 'GET' && entry.path === (mdns ? MDNS_PATH : LAN_DNS_PATH));
         if (!readOperation || readOperation.unsupportedReason)
-            throw new Error('LAN DNS read-back requires a supported list operation in this catalog');
+            throw new Error(`${label} read-back requires a supported list operation in this catalog`);
         context.accessPolicy?.assertOperation('GET', readOperation.path);
         const readPage = async (page: number): Promise<unknown> => {
             const result = await executeDiscoveredOperation(
@@ -534,13 +573,54 @@ export async function executeDiscoveredOperation(
             );
             return result.result;
         };
-        const result = await executeLanDnsWrite(request, operation.method, path, params.dnsId, options.body, readPage, (body) => {
+        const validateBody = (body: Record<string, unknown>) => {
             if (Buffer.byteLength(JSON.stringify({ params, body })) > MAX_REQUEST_BYTES)
-                throw new Error('Preserved LAN DNS configuration exceeds the 1 MiB execution limit');
+                throw new Error(`Preserved ${label} configuration exceeds the 1 MiB execution limit`);
             validate(operation, catalog, { params, body });
             if (operation.requestBody) rejectUnknownBodyFields(operation.requestBody.schema, body, catalog);
             validateWriteRequirements(operation, body, operation.requestBody ? resolve(operation.requestBody.schema, catalog.document) : undefined);
-        });
+        };
+        const scope = { controllerId: context.omadacId, siteId: String(params.siteId) };
+        const readReference = async (referencePath: string, page?: number): Promise<unknown> => {
+            const reference = catalog.operations.find((entry) => entry.method === 'GET' && entry.path === referencePath);
+            if (!reference || reference.unsupportedReason) throw new Error('mDNS reference list operation is unavailable in this catalog');
+            const response = await executeDiscoveredOperation(
+                catalog,
+                request,
+                {
+                    operationId: reference.operationId,
+                    params: { siteId: params.siteId, ...(page === undefined ? {} : { page, pageSize: 100 }) },
+                },
+                context
+            );
+            return response.result;
+        };
+        const result = mdns
+            ? await executeMdnsWrite(request, operation.method, path, params.mdnsId, options.body, readPage, validateBody, { scope }, (desired) =>
+                  validateMdnsReferences(
+                      desired,
+                      () => readReference(MDNS_PROFILES_PATH),
+                      (page) => readReference(MDNS_NETWORKS_PATH, page)
+                  )
+              )
+            : await executeLanDnsWrite(request, operation.method, path, params.dnsId, options.body, readPage, validateBody, { scope });
+        if (result.rollbackReceipt?.before) {
+            try {
+                const restore = catalog.operations.find((entry) => entry.method === 'POST' && entry.path === (mdns ? MDNS_PATH : LAN_DNS_PATH));
+                if (!restore || restore.unsupportedReason) throw new Error('Restoration contract is unavailable');
+                const restoreParams = Object.fromEntries(
+                    restore.parameters.filter((entry) => entry.in === 'path').map((entry) => [entry.name, params[entry.name]])
+                );
+                const before = result.rollbackReceipt.before;
+                validate(restore, catalog, { params: restoreParams, body: before });
+                if (restore.requestBody) rejectUnknownBodyFields(restore.requestBody.schema, before, catalog);
+                validateWriteRequirements(restore, before, restore.requestBody ? resolve(restore.requestBody.schema, catalog.document) : undefined);
+                if (mdns) validateMdnsInput('POST', before);
+            } catch {
+                delete result.rollbackReceipt;
+                result.rollbackUnavailable = 'Prior configuration cannot be restored through the supported create contract.';
+            }
+        }
         return { ...metadata, ...result, dryRun: false, request: { method: operation.method, path, query } };
     }
     try {

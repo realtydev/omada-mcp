@@ -51,3 +51,5 @@ Controller 6.3.0.45 validation confirmed denied discovery and generic writes sto
 `rollbackNetworkChange` follows the receipt resource: `clients:w` for rate-limit profiles, `network:w` for DHCP reservations, and `wireless:w` for SSID/AP radio changes. Listing the shared tool does not grant authority over another category; both server and configured-client checks enforce the resource at invocation.
 
 `diagnoseSecurity` requires `security:r`. Native health and incident reads use `monitoring`; switch LLDP reads use `switching`. Incident status changes and deletions remain mutations and are denied by read-only scopes. Existing composite client/network diagnostics retain their documented command-scope permission model.
+
+`getClientApplicationTraffic` is a clients read command; its fixed DPI/taxonomy reads are dependencies of that selected-client report. Canonical site Bonjour profile reads use network scope for mDNS reference preflight; this does not grant site-template or controller-global profile access. DNS receipt restoration requires `network:rw`, including for the state-reading rollback preview.

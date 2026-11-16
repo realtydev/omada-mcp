@@ -212,3 +212,70 @@ describe('curated discovered write requirements', () => {
         });
     });
 });
+
+describe('LAN DNS address trust boundary', () => {
+    it.each([
+        { ipAddresses: ['not-an-ip'] },
+        { ipAddresses: ['256.1.2.3'] },
+        { ipAddresses: ['192.0.2.1/24'] },
+        { ipAddresses: [], ipv6Addresses: ['not-ipv6'] },
+        { ipAddresses: [], ipv6Addresses: ['fe80::1%eth0'] },
+        { type: 2, dnsServers: ['x'] },
+        { type: 2, dnsServers: ['resolver.invalid'] },
+        { domain: 'bad_name.invalid' },
+        { aliases: ['not-a-qualified-name'] },
+        { type: 1, cname: 'bad_target.invalid' },
+    ])('rejects invalid address configuration before requests %j', async (settings) => {
+        const operation = catalog.get('createLanDns')!;
+        expect(() => validateWriteRequirements(operation, { ...dns, ...settings })).toThrow('write requirements');
+        const request = { request: vi.fn() };
+        await expect(
+            executeDiscoveredOperation(
+                catalog,
+                request as unknown as RequestHandler,
+                { operationId: 'createLanDns', body: { ...dns, ...settings }, dryRun: false },
+                context
+            )
+        ).rejects.toThrow();
+        expect(request.request).not.toHaveBeenCalled();
+    });
+    it('accepts hardware-qualified array items without weakening unknown vendor constraints', async () => {
+        const operation = catalog.get('createLanDns')!;
+        for (const config of [
+            { ...dns },
+            { ...dns, ipAddresses: [], ipv6Addresses: ['2001:db8::1'] },
+            { ...dns, type: 2, dnsServers: ['192.0.2.53'], lanNetworkIds: undefined },
+            { ...dns, type: 2, dnsServers: ['2001:db8::53'], lanNetworkIds: undefined },
+        ])
+            expect(() => validateWriteRequirements(operation, config)).not.toThrow();
+        const request = { request: vi.fn() };
+        for (const config of [
+            { ...dns, type: 2, dnsServers: ['192.0.2.53'], lanNetworkIds: undefined },
+            { ...dns, ipAddresses: [], ipv6Addresses: ['2001:db8:1111:2222:3333:4444:5555:6666'] },
+            { ...dns, aliases: ['long-hardware-qualification-alias.invalid'] },
+        ])
+            await expect(
+                executeDiscoveredOperation(
+                    catalog,
+                    request as unknown as RequestHandler,
+                    { operationId: 'createLanDns', body: JSON.parse(JSON.stringify(config)), dryRun: true },
+                    context
+                )
+            ).resolves.toMatchObject({ written: false, dryRun: true });
+        const changed = structuredClone(document);
+        changed.components.schemas.LanDnsOpenApiVO.properties.dnsServers.items.maxLength = 3;
+        await expect(
+            executeDiscoveredOperation(
+                new OperationCatalog(changed, 'live'),
+                request as unknown as RequestHandler,
+                {
+                    operationId: 'createLanDns',
+                    body: JSON.parse(JSON.stringify({ ...dns, type: 2, dnsServers: ['192.0.2.53'], lanNetworkIds: undefined })),
+                    dryRun: true,
+                },
+                context
+            )
+        ).rejects.toThrow('must NOT have more than 3 characters');
+        expect(request.request).not.toHaveBeenCalled();
+    });
+});

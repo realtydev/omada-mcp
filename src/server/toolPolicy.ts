@@ -29,6 +29,7 @@ const groups: Record<ToolCategory, readonly string[]> = {
         'locateDevice',
     ],
     clients: [
+        'getClientApplicationTraffic',
         'listClients',
         'getClient',
         'listMostActiveClients',
@@ -168,6 +169,7 @@ export function categoryForPath(path: string): ToolCategory | undefined {
     if (route === '/sites') return 'system';
     const site = /^\/sites\/[^/]+(?:\/(.*))?$/.exec(route);
     if (site) route = `/${site[1] ?? ''}`;
+    if (site && /^\/profiles\/bonjour-service(?:\/[^/]+)?$/.test(route)) return 'network';
     if (/^\/gateways\/[^/]+\/config\/advanced(?:\/|$)/.test(route)) return undefined;
     if (/^\/gateways\/[^/]+\/config\/(?:wlans|radios)(?:\/|$)/.test(route)) return 'wireless';
     if (
@@ -183,7 +185,11 @@ export function categoryForPath(path: string): ToolCategory | undefined {
     )
         return 'maintenance';
     if (/\/gateways\/[^/]+\/speedTestResult$/.test(route)) return 'monitoring';
-    if (/^\/dashboard\/(?:active-clients|client-activity)(?:\/|$)/.test(route) || /^\/insight\/past-connection(?:\/|$)/.test(route)) return 'clients';
+    if (
+        /^\/dashboard\/(?:active-clients|client-activity|specificClientInfo)(?:\/|$)/.test(route) ||
+        /^\/insight\/past-connection(?:\/|$)/.test(route)
+    )
+        return 'clients';
     if (/^\/insight\/port-forwarding(?:\/|$)/.test(route)) return 'network';
     if (/^\/anomaly\/incidents?(?:\/|$)/.test(route)) return 'monitoring';
     if (
@@ -290,9 +296,13 @@ export class ToolAccessPolicy {
                 'dhcp-reservation': 'network',
                 'ssid-basic': 'wireless',
                 'ap-radio': 'wireless',
+                'lan-dns': 'network',
+                'mdns-rule': 'network',
             };
             if (typeof resource !== 'string' || !this.allowsCategory(categories[resource], true))
                 throw new Error('Rollback resource is not permitted by the configured tool policy.');
+            if (['lan-dns', 'mdns-rule'].includes(String(resource)) && !this.allowsCategory('network', false))
+                throw new Error('DNS rollback requires network read and write permission.');
         }
         if (!this.allowsTool(name, destructive)) throw new Error(`Tool ${name} is not permitted by the configured tool policy.`);
         if (

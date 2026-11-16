@@ -9,7 +9,7 @@ export function registerRollbackNetworkChangeTool(server: McpServer, client: Oma
         'rollbackNetworkChange',
         {
             description:
-                'Preview or restore a verified rate-limit profile, DHCP reservation, AP radio or secret-free SSID basic change using its caller-held receipt. Refuses rollback when current settings drifted from the applied snapshot, and verifies restored settings after one write. Receipts are validated configuration data, not authorization tokens. SSID rollback supports complete open/enterprise basic configurations only; password-bearing changes never issue a receipt.',
+                'Preview or restore an eligible verified LAN DNS, mDNS rule, rate-limit profile, DHCP reservation, AP radio or secret-free SSID basic change using its caller-held receipt. Refuses rollback when current settings drifted from the applied snapshot, and verifies restored settings after one write. DNS restoration requires network read and write permission. Receipts are validated configuration data, not authorization tokens. SSID rollback supports complete open/enterprise basic configurations only; password-bearing changes never issue a receipt.',
             inputSchema: z.object({ receipt: networkChangeReceiptSchema, dryRun: z.boolean().optional().default(true) }).strict(),
             annotations: { destructiveHint: true },
         },

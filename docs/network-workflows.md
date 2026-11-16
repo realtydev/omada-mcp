@@ -37,3 +37,7 @@ Log-notification workflows retain their existing behavior. Discovery still direc
 Live OC200 / Controller 6.3.0.45 validation covers traffic history, RF and WAN evidence. An unassigned test profile was changed, read back, checked for drift refusal, restored using a receipt in a new client, and deleted with removal verified. No test profile was assigned to a client or device. MSP and OpenAPI 3.1 are covered by controlled protocol/schema fixtures; the available controller is not an MSP account or a 3.1 specification source.
 
 Extended rollback validation used a disabled, unassigned DHCP fixture: create/update/delete receipts, a fresh-client preview and restoration, drift refusal, same-MAC replacement refusal, and repeat no-ops all passed. Cleanup verified the original seven reservations were unchanged. AP radio and secret-free SSID mutation/rollback paths are protocol-fixture tested; no active AP or SSID settings were changed for validation.
+
+## DNS and mDNS restoration
+
+Eligible verified LAN DNS and mDNS rule changes now issue caller-held receipts accepted by the same `rollbackNetworkChange` tool. DNS restoration requires network read and write permission, defaults to a preview, checks applied configuration and row identity, and verifies one restoration write. See [DNS rollback](dns-rollback.md) and [mDNS management](mdns-management.md).

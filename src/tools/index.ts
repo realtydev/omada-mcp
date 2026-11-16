@@ -36,6 +36,7 @@ import { registerGetApRfScanResultsTool } from './getApRfScanResults.js';
 import { registerGetApSsidOverridesTool } from './getApSsidOverrides.js';
 import { registerGetCableTestResultsTool } from './getCableTestResults.js';
 import { registerGetClientTool } from './getClient.js';
+import { registerGetClientApplicationTrafficTool } from './getClientApplicationTraffic.js';
 import { registerGetClientHistoryTool } from './getClientHistory.js';
 import { registerGetControllerCapabilitiesTool } from './getControllerCapabilities.js';
 import { registerGetDeviceTool } from './getDevice.js';
@@ -156,6 +157,7 @@ export function registerAllTools(
     registerGetApAfcStatusTool(server, client);
     registerGetApAvailableChannelsTool(server, client);
     registerGetClientHistoryTool(server, client);
+    registerGetClientApplicationTrafficTool(server, client);
     registerGetSwitchStackDetailTool(server, client);
     registerGetClientTool(server, client);
     registerSearchDevicesTool(server, client);
