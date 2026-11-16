@@ -63,6 +63,42 @@ function setup() {
 }
 
 describe('curated discovered write requirements', () => {
+    it('requires declared AP modes and permits disabled/smart modes without inventing trigger settings', async () => {
+        const { run, request } = setup();
+        for (const mode of [0, 2, 3]) await expect(run('modifyPowerSavingConfig', { mode })).resolves.toMatchObject({ written: false });
+        for (const body of [{ timeEnable: false, bandEnable: false }, { mode: 4 }, { mode: 2, timeEnable: true }, { mode: 0, bandEnable: true }])
+            await expect(run('modifyPowerSavingConfig', body)).rejects.toThrow('write requirements');
+        await expect(run('modifyPowerSavingConfig', { mode: 1, bandEnable: true, bands: [0], idleDuration: 60 })).resolves.toMatchObject({
+            written: false,
+        });
+        expect(request.request).not.toHaveBeenCalled();
+    });
+    it('retains the legacy AP contract when its selected schema has no mode', async () => {
+        const legacy = new OperationCatalog(
+            JSON.parse(readFileSync(new URL('../../docs/openapi/03-device.json', import.meta.url), 'utf8')),
+            'bundled'
+        );
+        const request = { request: vi.fn() };
+        const run = (body: unknown) =>
+            executeDiscoveredOperation(
+                legacy,
+                request as unknown as RequestHandler,
+                { operationId: 'modifyPowerSavingConfig', params: { apMac: 'AA-BB-CC-DD-EE-FF' }, body },
+                context
+            );
+        await expect(run({ timeEnable: false, bandEnable: false })).resolves.toMatchObject({ written: false });
+        await expect(run({ timeEnable: true, bandEnable: false })).rejects.toThrow('write requirements');
+        await expect(run({ mode: 0 })).rejects.toThrow();
+        expect(request.request).not.toHaveBeenCalled();
+    });
+    it('requires a bounded TTL only when custom TTL is enabled in the selected DNS contract', async () => {
+        const { run, request } = setup();
+        for (const settings of [{ customTtl: true }, { customTtl: true, ttl: 0 }, { customTtl: true, ttl: 86401 }])
+            await expect(run('createLanDns', { ...dns, ...settings })).rejects.toThrow('write requirements');
+        await expect(run('createLanDns', { ...dns, customTtl: true, ttl: 1 })).resolves.toMatchObject({ written: false });
+        await expect(run('createLanDns', { ...dns, customTtl: true, ttl: 86400 })).resolves.toMatchObject({ written: false });
+        expect(request.request).not.toHaveBeenCalled();
+    });
     it.each(['createDdns', 'modifyDdns'])('rejects missing, conflicting and unsupported intervals for %s before I/O', async (id) => {
         const { run, request } = setup();
         for (const interval of [
@@ -123,11 +159,13 @@ describe('curated discovered write requirements', () => {
             { timeEnable: false, bandEnable: true, bands: [1] },
             { timeEnable: false, bandEnable: true, bands: [1], idleDuration: 59 },
         ])
-            await expect(run('modifyPowerSavingConfig', body)).rejects.toThrow('write requirements');
+            await expect(run('modifyPowerSavingConfig', { mode: 1, ...body })).rejects.toThrow('write requirements');
         await expect(
-            run('modifyPowerSavingConfig', { timeEnable: true, bandEnable: false, startTimeH: 0, startTimeM: 0, endTimeH: 23, endTimeM: 59 })
+            run('modifyPowerSavingConfig', { mode: 1, timeEnable: true, bandEnable: false, startTimeH: 0, startTimeM: 0, endTimeH: 23, endTimeM: 59 })
         ).resolves.toMatchObject({ written: false });
-        await expect(run('modifyPowerSavingConfig', { timeEnable: false, bandEnable: true, bands: [1], idleDuration: 60 })).resolves.toMatchObject({
+        await expect(
+            run('modifyPowerSavingConfig', { mode: 1, timeEnable: false, bandEnable: true, bands: [1], idleDuration: 60 })
+        ).resolves.toMatchObject({
             written: false,
         });
         expect(request.request).not.toHaveBeenCalled();
@@ -167,7 +205,9 @@ describe('curated discovered write requirements', () => {
         await expect(
             run('createVoucherGroup', { ...voucher, rateLimit: { mode: 0, customRateLimit: { upLimitEnable: false, downLimitEnable: false } } })
         ).resolves.toMatchObject({ written: false });
-        await expect(run('modifyPowerSavingConfig', { timeEnable: false, bandEnable: true, bands: [1], idleDuration: 1440 })).resolves.toMatchObject({
+        await expect(
+            run('modifyPowerSavingConfig', { mode: 1, timeEnable: false, bandEnable: true, bands: [1], idleDuration: 1440 })
+        ).resolves.toMatchObject({
             written: false,
         });
     });

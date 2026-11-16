@@ -48,7 +48,7 @@ const rateLimit = z
         )
             ctx.addIssue({ code: 'custom', message: 'Provide only the rate-limit source selected by mode' });
     });
-const powerSaving = z
+const powerSavingFields = z
     .object({
         timeEnable: z.boolean(),
         bandEnable: z.boolean(),
@@ -59,16 +59,31 @@ const powerSaving = z
         bands: z.array(z.number().int()).min(1).optional(),
         idleDuration: z.number().int().min(60).max(1440).optional(),
     })
+    .loose();
+function validateTriggers(v: Record<string, unknown>, ctx: z.RefinementCtx): void {
+    for (const field of ['startTimeH', 'startTimeM', 'endTimeH', 'endTimeM'] as const)
+        if (v.timeEnable && v[field] === undefined) ctx.addIssue({ code: 'custom', path: [field], message: 'Required when timeEnable is true' });
+    for (const field of ['bands', 'idleDuration'] as const)
+        if (v.bandEnable && v[field] === undefined) ctx.addIssue({ code: 'custom', path: [field], message: 'Required when bandEnable is true' });
+}
+const powerSaving = powerSavingFields.superRefine(validateTriggers);
+const powerSavingWithMode = powerSavingFields
+    .partial({ timeEnable: true, bandEnable: true })
+    .extend({ mode: z.number().int().min(0).max(3), bands: z.array(z.number().int().min(0).max(3)).min(1).optional() })
+    .superRefine(validateTriggers)
+    .superRefine((v, ctx) => {
+        if (v.mode !== 1 && (v.timeEnable === true || v.bandEnable === true))
+            ctx.addIssue({ code: 'custom', path: ['mode'], message: 'Time and band triggers require standard mode (1)' });
+    });
+const ttl = z
+    .object({ customTtl: z.boolean().optional(), ttl: z.number().int().min(1).max(86400).optional() })
     .loose()
     .superRefine((v, ctx) => {
-        for (const field of ['startTimeH', 'startTimeM', 'endTimeH', 'endTimeM'] as const)
-            if (v.timeEnable && v[field] === undefined) ctx.addIssue({ code: 'custom', path: [field], message: 'Required when timeEnable is true' });
-        for (const field of ['bands', 'idleDuration'] as const)
-            if (v.bandEnable && v[field] === undefined) ctx.addIssue({ code: 'custom', path: [field], message: 'Required when bandEnable is true' });
+        if (v.customTtl && v.ttl === undefined) ctx.addIssue({ code: 'custom', path: ['ttl'], message: 'Custom TTL requires ttl' });
     });
 
 /** Explicit contracts supplement vendor JSON; prose is never parsed into executable rules. */
-export function validateWriteRequirements(operation: ApiOperation, body: unknown): void {
+export function validateWriteRequirements(operation: ApiOperation, body: unknown, requestSchema?: Record<string, unknown>): void {
     const route = operation.path.replace(/^\/openapi\/v1\/\{omadacId\}\/sites\/\{siteId\}/, '');
     let schema: z.ZodType | undefined;
     if (['POST', 'PATCH'].includes(operation.method) && /^\/setting\/service\/ddns(?:\/\{ddnsId\})?$/.test(route)) schema = ddns;
@@ -76,11 +91,16 @@ export function validateWriteRequirements(operation: ApiOperation, body: unknown
     if (operation.method === 'PATCH' && route === '/lan-profiles/{profileId}')
         schema = z.object({ untagNetworkIds: z.array(z.string().min(1)) }).loose();
     if (operation.method === 'POST' && route === '/hotspot/voucher-groups') schema = z.object({ rateLimit }).loose();
-    if (operation.method === 'PUT' && route === '/aps/{apMac}/power-saving') schema = powerSaving;
+    const properties = requestSchema?.properties as Record<string, unknown> | undefined;
+    if (operation.method === 'PUT' && route === '/aps/{apMac}/power-saving') schema = properties?.mode ? powerSavingWithMode : powerSaving;
     if (!schema) return;
     const result = schema.safeParse(body);
     if (!result.success)
         throw new Error(
             `Invalid documented write requirements: ${result.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`
         );
+    if (schema === lanDns && properties?.customTtl) {
+        const parsed = ttl.safeParse(body);
+        if (!parsed.success) throw new Error('Invalid documented write requirements: custom TTL requires ttl in the range 1–86400');
+    }
 }
