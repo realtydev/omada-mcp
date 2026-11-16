@@ -1,4 +1,5 @@
 import type { OmadaApiResponse } from '../types/index.js';
+import { parsePoeUsage } from './poeUsage.js';
 import type { RequestHandler } from './request.js';
 import type { SiteOperations } from './site.js';
 
@@ -10,10 +11,13 @@ export interface SiteDashboardOptions {
     siteId?: string;
     start?: number;
     end?: number;
+    includePoePorts?: boolean;
 }
 
 type Summary = Record<string, unknown>;
-export type DashboardSection = { status: 'ok'; data: Summary | Summary[]; truncated: boolean } | { status: 'error' | 'unavailable'; message: string };
+export type DashboardSection =
+    | { status: 'ok'; data: Summary | Summary[]; truncated: boolean; partial?: boolean }
+    | { status: 'error' | 'unavailable'; message: string };
 
 export interface SiteDashboardResult {
     capturedAt: number;
@@ -119,6 +123,8 @@ export class MonitorOperations {
     ) {}
 
     public async getSiteDashboard(options: SiteDashboardOptions = {}): Promise<SiteDashboardResult> {
+        if (options.includePoePorts !== undefined && typeof options.includePoePorts !== 'boolean')
+            throw new Error('includePoePorts must be a boolean.');
         const capturedAt = Date.now();
         const now = Math.floor(capturedAt / 1000);
         const end = options.end ?? now;
@@ -162,14 +168,18 @@ export class MonitorOperations {
                 summarizeGroups(value, ['retryEaps', 'droppedEaps'], ['apMac', 'name', 'avg', 'status'], ['avg'])
             ),
             read('switch-summary', true, (value) => summarize(value, ['clients', 'portUtilization', 'connectedSwitchNum', 'totalTraffic'])),
-            read('poe-usage', false, summarizePoe),
+            read('poe-usage', false, (value) => {
+                if (!options.includePoePorts) return summarizePoe(value);
+                const usage = parsePoeUsage(value);
+                return { status: 'ok', data: usage.switches, truncated: usage.truncated, ...(usage.partial ? { partial: true } : {}) };
+            }),
         ]);
         const sections = { wifi, traffic, wirelessRates, switches, poe };
         return {
             capturedAt,
             completedAt: Date.now(),
             queryWindow: { ...window, unit: 'seconds' },
-            collectionComplete: Object.values(sections).every((section) => section.status === 'ok' && !section.truncated),
+            collectionComplete: Object.values(sections).every((section) => section.status === 'ok' && !section.truncated && !section.partial),
             sections,
         };
     }

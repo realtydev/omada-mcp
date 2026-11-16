@@ -30,13 +30,15 @@ const web = (mac: string) => ({
     ],
 });
 describe('managed switch port coverage', () => {
-    let request: { fetchPaginated: ReturnType<typeof vi.fn> };
+    let request: { fetchPaginated: ReturnType<typeof vi.fn>; get: ReturnType<typeof vi.fn>; ensureSuccess: ReturnType<typeof vi.fn> };
     let inventory: { listDevices: ReturnType<typeof vi.fn> };
     let detail: { getSwitch: ReturnType<typeof vi.fn> };
     let internal: { get: ReturnType<typeof vi.fn>; ensureSuccess: ReturnType<typeof vi.fn> };
     let ops: SwitchPortReadOperations;
     beforeEach(() => {
         request = {
+            get: vi.fn().mockRejectedValue(Object.assign(new Error('PoE dashboard unavailable'), { status: 404 })),
+            ensureSuccess: vi.fn((response) => response.result),
             fetchPaginated: vi.fn().mockResolvedValue([
                 {
                     switchMac: A,
@@ -79,6 +81,69 @@ describe('managed switch port coverage', () => {
         });
         expect(r.ports[0]).toMatchObject({ connectedStatus: 1, supportPoe: true, evidence: { telemetrySource: 'open-api-poe-info' } });
         expect(inventory.listDevices).toHaveBeenCalledWith('site', { maxRecords: 1000 });
+    });
+    it('joins bounded dashboard power only to established standalone physical identities', async () => {
+        request.get.mockResolvedValue({
+            errorCode: 0,
+            result: [
+                {
+                    mac: A,
+                    portNum: 1,
+                    totalPowerUsed: 13,
+                    totalPower: 160,
+                    totalPercentUsed: 8.31,
+                    poePorts: [
+                        { portId: 1, poeSupported: true, poeEnabled: true, poePower: 13, poePercent: 43.3 },
+                        { portId: 2, poeSupported: true, poeEnabled: false },
+                    ],
+                },
+                { mac: 'AA-BB-CC-DD-EE-03', portNum: 1, poePorts: [{ portId: 99, poeSupported: false }] },
+            ],
+        });
+        const result = await ops.getSwitchPortOverview();
+        expect(result.switches).toHaveLength(2);
+        expect(result.ports).toHaveLength(4);
+        expect(result.switches[0]).toMatchObject({ poeUsage: { headroomWatts: 147, source: 'dashboard-poe-usage', status: 'partial' } });
+        expect(result.ports.find((port) => port.switchMac === A && port.port === 1)).toMatchObject({
+            poeUsage: { poePower: 13, poePercent: 43.3, source: 'dashboard-poe-usage' },
+            evidence: { telemetrySource: 'open-api-poe-info' },
+        });
+        expect(result.ports.find((port) => port.switchMac === A && port.port === 2)).toMatchObject({
+            poeUsage: { status: 'partial', poeEnabled: false },
+        });
+        expect(request.get).toHaveBeenCalledExactlyOnceWith('/openapi/v1/controller/sites/site/dashboard/poe-usage');
+        expect(result.ports.find((port) => port.switchMac === B && port.port === 1)).toMatchObject({ poeUsage: { status: 'unavailable' } });
+    });
+    it.each(['ports', 'switches'] as const)('refuses PoE joins when a duplicate can hide beyond the %s cap', async (kind) => {
+        const port = { portId: 1, poeSupported: true, poeEnabled: true, poePower: 1, poePercent: 1 };
+        const row = { mac: A, portNum: 1, totalPower: 80, totalPowerUsed: 1, totalPercentUsed: 1.25, poePorts: [port] };
+        const rows =
+            kind === 'ports'
+                ? [{ ...row, poePorts: [...Array.from({ length: 512 }, (_, i) => ({ ...port, portId: i + 1 })), { ...port, poePower: 99 }] }]
+                : [
+                      ...Array.from({ length: 50 }, (_, i) => ({ ...row, mac: `AA-BB-CC-DD-EE-${(i + 1).toString(16).padStart(2, '0')}` })),
+                      { ...row, totalPowerUsed: 50 },
+                  ];
+        request.get.mockResolvedValue({ errorCode: 0, result: rows });
+        const result = await ops.getSwitchPortOverview(A);
+        expect(result.poeUsageTruncated).toBe(true);
+        expect(result.collectionComplete).toBe(true);
+        expect(result.ports).toHaveLength(2);
+        expect(result.switches[0].poeUsage).toEqual({
+            source: 'dashboard-poe-usage',
+            status: 'unavailable',
+            reason: 'truncated_poe_identity_evidence',
+        });
+        expect(result.ports.every((item) => (item.poeUsage as Record<string, unknown>).reason === 'truncated_poe_identity_evidence')).toBe(true);
+        expect(result.ports[0].portStatus).toMatchObject({ linkStatus: 1 });
+    });
+    it('reports invalid dashboard identities without corrupting independent inventory and link evidence', async () => {
+        request.get.mockResolvedValue({ errorCode: 0, result: [{ mac: 'invalid' }] });
+        const result = await ops.getSwitchPortOverview();
+        expect(result.collectionComplete).toBe(true);
+        expect(result.switches[0].sources.poeUsage).toBe('unknown');
+        expect(result.ports[0]).toMatchObject({ poeUsage: { status: 'unknown' } });
+        expect(result.ports[0].portStatus).toMatchObject({ linkStatus: 1 });
     });
     it('keeps the legacy array result and distinguishes configured enablement from a down link', async () => {
         const ports = await ops.listSwitchPorts('aabbccddee02');
@@ -179,9 +244,23 @@ describe('managed switch port coverage', () => {
                 ],
             },
         }));
+        request.get.mockResolvedValue({
+            errorCode: 0,
+            result: [
+                {
+                    mac: B,
+                    portNum: 1,
+                    totalPower: 80,
+                    totalPowerUsed: 10,
+                    totalPercentUsed: 12.5,
+                    poePorts: [{ portId: 1, poeSupported: true, poeEnabled: true, poePower: 10, poePercent: 33 }],
+                },
+            ],
+        });
         const r = await ops.getSwitchPortOverview(B);
         expect(r.ports).toHaveLength(2);
         expect(r.collectionComplete).toBe(true);
+        expect(r.ports.every((port) => (port.poeUsage as Record<string, unknown>).reason === 'unestablished_or_stacked_port_identity')).toBe(true);
         expect(r.ports.map((p) => p.standardPort)).toEqual([
             { unit: 1, slot: 0, port: 1 },
             { unit: 2, slot: 0, port: 1 },

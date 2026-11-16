@@ -17,6 +17,8 @@ describe('getSiteDashboard tool', () => {
         expect(name).toBe('getSiteDashboard');
         expect(config.annotations).toEqual({ readOnlyHint: true, destructiveHint: false, idempotentHint: true });
         expect(config.inputSchema.safeParse({}).success).toBe(true);
+        expect(config.inputSchema.safeParse({ includePoePorts: true }).success).toBe(true);
+        expect(config.inputSchema.safeParse({ includePoePorts: 'true' }).success).toBe(false);
         expect(config.inputSchema.safeParse({ start: -1 }).success).toBe(false);
         expect(config.inputSchema.safeParse({ end: 1.2 }).success).toBe(false);
         expect(config.inputSchema.safeParse({ unknown: true }).success).toBe(false);
@@ -26,8 +28,8 @@ describe('getSiteDashboard tool', () => {
         const { client, handler } = setup();
         const partial = { collectionComplete: false, sections: { wifi: { status: 'error', message: 'unsupported' } } };
         client.getSiteDashboard.mockResolvedValue(partial);
-        const result = await handler({ siteId: 'site', start: 1000, end: 2000 }, {});
-        expect(client.getSiteDashboard).toHaveBeenCalledExactlyOnceWith({ siteId: 'site', start: 1000, end: 2000 });
+        const result = await handler({ siteId: 'site', start: 1000, end: 2000, includePoePorts: true }, {});
+        expect(client.getSiteDashboard).toHaveBeenCalledExactlyOnceWith({ siteId: 'site', start: 1000, end: 2000, includePoePorts: true });
         expect(JSON.parse(result.content[0].text)).toEqual(partial);
     });
 

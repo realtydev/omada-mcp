@@ -6,6 +6,7 @@ import { toToolResult, wrapToolHandler } from '../server/common.js';
 const dashboardSchema = z
     .object({
         siteId: z.string().min(1).optional(),
+        includePoePorts: z.boolean().optional().describe('Include bounded per-port PoE evidence and switch power headroom; omitted by default.'),
         start: z
             .number()
             .int()
@@ -21,7 +22,7 @@ export function registerGetSiteDashboardTool(server: McpServer, client: OmadaCli
         'getSiteDashboard',
         {
             description:
-                'Read Wi-Fi, device traffic, wireless retry/drop averages, switch and current PoE summaries. Reports partial or unavailable sections explicitly. Uses a bounded window and at most 50 devices per list; omits per-port and historical series. Does not run scans or speed tests. Wi-Fi traffic is KB, device traffic MB, switch traffic bytes and PoE power watts, as reported by the controller.',
+                'Read Wi-Fi, device traffic, wireless retry/drop averages, switch and current PoE summaries. Reports partial or unavailable sections explicitly. Uses a bounded window and at most 50 devices per list; omits historical series and includes per-port PoE only when includePoePorts is true. Does not run scans or speed tests. Wi-Fi traffic is KB, device traffic MB, switch traffic bytes and PoE power watts, as reported by the controller.',
             inputSchema: dashboardSchema,
             annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
         },
