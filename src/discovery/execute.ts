@@ -350,7 +350,12 @@ function preferredWriteTool(operation: ApiOperation): string | undefined {
     if (/\/aps\/\{[^}]+\}\/radio-config$/.test(operation.path)) return 'setApRadio';
     if (/\/site\/log-notification$/.test(operation.path)) return 'setLogNotifications';
     if (operation.method === 'PUT' && /\/rate-limit-profile\/\{[^}]+\}$/.test(operation.path)) return 'updateRateLimitProfile';
-    if (/\/sites\/\{[^}]+\}\/wireless-network\/wlans\/\{[^}]+\}\/ssids\/\{[^}]+\}\/update-basic-config$/.test(operation.path)) return 'updateSsid';
+    if (
+        /\/sites\/\{[^}]+\}\/wireless-network\/(?:wlans\/\{[^}]+\}\/ssids\/\{[^}]+\}\/update-basic-config|ssids\/\{[^}]+\}\/basic-config)$/.test(
+            operation.path
+        )
+    )
+        return 'updateSsid';
     const switchPort =
         /\/sites\/\{[^}]+\}\/switches\/\{[^}]+\}\/(ports\/\{[^}]+\}|multi-ports)\/(profile|poe-mode|name|status|profile-override)$/.exec(
             operation.path
@@ -374,6 +379,9 @@ function preferredWriteTool(operation: ApiOperation): string | undefined {
     if (operation.method === 'PATCH' && /\/sites\/\{[^}]+\}\/switches\/\{[^}]+\}\/ports\/\{[^}]+\}$/.test(operation.path)) {
         return 'updateSwitchPort';
     }
+    if (operation.method === 'PATCH' && /\/sites\/\{[^}]+\}\/switches\/(?:\{[^}]+\}\/)?multi-ports\/config$/.test(operation.path))
+        return 'the guarded switch port tools';
+    if (operation.method === 'POST' && /\/setting\/service\/dhcp\/user-list\/reservation$/.test(operation.path)) return 'createDhcpReservation';
     if (/\/setting\/service\/dhcp(?:\/\{[^}]+\})?$/.test(operation.path)) {
         if (operation.method === 'POST') return 'createDhcpReservation';
         if (operation.method === 'DELETE') return 'deleteDhcpReservation';
@@ -483,6 +491,11 @@ export async function executeDiscoveredOperation(
     const query = queryParameters(operation, params, catalog);
     const dryRun = options.dryRun ?? mutation;
     const preferredTool = preferredWriteTool(operation);
+    const unsupportedStackWrite =
+        mutation &&
+        /\/sites\/\{[^}]+\}\/stacks?\/\{[^}]+\}\/(?:ports\/(?:\{[^}]+\}|config)|multi-ports\/config|lags\/\{[^}]+\})$/.test(operation.path)
+            ? 'Stack port and LAG configuration writes are unsupported until guarded stack identity and read-back verification are available. Use the controller interface for this change.'
+            : undefined;
     const metadata = { operationId: operation.operationId, source: catalog.source, loadedAt: catalog.loadedAt, verified: false as const };
     if (dryRun) {
         return {
@@ -491,9 +504,14 @@ export async function executeDiscoveredOperation(
             written: false,
             request: { method: operation.method, path, query, ...(options.body === undefined ? {} : { body: options.body }) },
             ...(transfer?.preview === undefined ? {} : { transfer: transfer.preview }),
-            ...(preferredTool ? { warning: `Actual writes use ${preferredTool} to preserve its preflight and read-back checks.` } : {}),
+            ...(unsupportedStackWrite
+                ? { warning: unsupportedStackWrite }
+                : preferredTool
+                  ? { warning: `Actual writes use ${preferredTool} to preserve its preflight and read-back checks.` }
+                  : {}),
         };
     }
+    if (unsupportedStackWrite) throw new Error(unsupportedStackWrite);
     if (preferredTool) throw new Error(`Use ${preferredTool} for this write to preserve its preflight and read-back verification.`);
     try {
         const response = await request.request<unknown>({

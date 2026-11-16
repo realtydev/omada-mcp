@@ -26,7 +26,7 @@ export function registerDiagnoseClientTool(server: McpServer, client: OmadaClien
         'diagnoseClient',
         {
             description:
-                'Collect current client attachment, device inventory, topology path and association history. Reports failed or missing evidence, truncated history and topology staleness explicitly; does not infer a healthy connection from missing data. Topology requires web UI credentials.',
+                'Collect current client attachment, device inventory, topology path, association history and bounded switch LLDP corroboration of existing path adjacencies. Reports failed or missing evidence, truncated history and topology staleness explicitly; does not infer a healthy connection from missing data. Missing, ambiguous or expired LLDP advertisements never establish a physical path. Topology and port inventory require web UI credentials.',
             inputSchema: diagnoseClientSchema,
             annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
         },

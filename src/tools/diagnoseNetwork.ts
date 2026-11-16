@@ -7,7 +7,7 @@ export function registerDiagnoseNetworkTool(server: McpServer, client: OmadaClie
         'diagnoseNetwork',
         {
             description:
-                'Collect one bounded read-only network diagnosis: managed devices/clients, WAN, Wi-Fi, full switch-port coverage, inherited VLANs, topology, RF planning and recent events/alerts. Evidence-linked observations distinguish controller snapshots, candidates, historical incidents and later loop clears. Unknown evidence remains explicit. No health score, scans, reconnects, failover tests or configuration changes. Requires read access to devices, clients, wireless, switching, network and monitoring categories.',
+                'Collect one bounded read-only network diagnosis: managed devices/clients, WAN, Wi-Fi, full switch-port coverage, inherited VLANs, topology, RF planning, native health/incident history, bounded LLDP advertisements and recent events/alerts. Evidence-linked observations distinguish controller snapshots, candidates, historical incidents and later loop clears. Unknown evidence remains explicit. Preserves controller-native scores without inventing a score. No scans, reconnects, failover tests or configuration changes. Requires read access to devices, clients, wireless, switching, network and monitoring categories.',
             inputSchema: networkDiagnosisOptionsSchema,
             annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
         },

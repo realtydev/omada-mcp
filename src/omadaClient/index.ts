@@ -47,6 +47,7 @@ import {
 import { type DiagnoseClientResult, type DiagnoseLogsResult, DiagnosticsOperations } from './diagnostics.js';
 import { DiscoveryOperations, type DiscoveryPolicy, type ExecuteApiOperationOptions, type SearchApiOperationsOptions } from './discovery.js';
 import { GenericOperations } from './generic.js';
+import { HealthDiagnosticsOperations } from './healthDiagnostics.js';
 import { createControllerHttpOptions } from './httpOptions.js';
 import { InternalAuthManager } from './internalAuth.js';
 import { InternalRequestHandler } from './internalRequest.js';
@@ -67,6 +68,7 @@ import { RateLimitProfileOperations, type RateLimitProfileUpdate, type RateLimit
 import { type PaginationReadOptions, RequestHandler } from './request.js';
 import { type GetRfPlanningOptions, RfPlanningOperations } from './rfPlanning.js';
 import { SecurityOperations } from './security.js';
+import { type SecurityDiagnosticOptions, SecurityDiagnosticsOperations } from './securityDiagnostics.js';
 import { SiteOperations } from './site.js';
 import { SwitchOperations } from './switch.js';
 import { SwitchPortReadOperations } from './switchPortRead.js';
@@ -94,6 +96,8 @@ export class OmadaClient {
     private readonly clientOps: ClientOperations;
 
     private readonly securityOps: SecurityOperations;
+    private readonly securityDiagnosticsOps: SecurityDiagnosticsOperations;
+    private readonly healthDiagnosticsOps: HealthDiagnosticsOperations;
 
     private readonly networkOps: NetworkOperations;
     private readonly networkDiagnosticsOps: NetworkDiagnosticsOperations;
@@ -147,6 +151,8 @@ export class OmadaClient {
         this.deviceOps = new DeviceOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.clientOps = new ClientOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.securityOps = new SecurityOperations(this.request, this.buildOmadaPath.bind(this));
+        this.securityDiagnosticsOps = new SecurityDiagnosticsOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.healthDiagnosticsOps = new HealthDiagnosticsOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.networkOps = new NetworkOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this), options.omadacId);
         this.networkDiagnosticsOps = new NetworkDiagnosticsOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.rateLimitProfileOps = new RateLimitProfileOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this), options.omadacId);
@@ -228,6 +234,18 @@ export class OmadaClient {
     }
     public async diagnoseNetwork(options: NetworkDiagnosisOptions = {}) {
         return await this.networkDiagnosisOps.diagnoseNetwork(options);
+    }
+
+    public async diagnoseSecurity(options: SecurityDiagnosticOptions = {}) {
+        return await this.securityDiagnosticsOps.diagnoseSecurity(options);
+    }
+
+    public async getSiteHealth(siteId?: string, start?: number, end?: number) {
+        return await this.healthDiagnosticsOps.getSiteHealth(siteId, start, end);
+    }
+
+    public async getSwitchLldpNeighbors(switchMac: string, siteId?: string) {
+        return await this.healthDiagnosticsOps.getSwitchLldpNeighbors(switchMac, siteId);
     }
 
     public async getSiteDashboard(options: SiteDashboardOptions = {}): Promise<SiteDashboardResult> {

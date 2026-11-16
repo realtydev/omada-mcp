@@ -12,7 +12,7 @@
 
 </div>
 
-> **Release:** [v0.12.0](https://github.com/realtydev/omada-mcp/releases/tag/v0.12.0) includes 110 tools, safe internal-session recovery, detailed PoE, RF planning and combined network diagnosis. Use `getServerInfo` to confirm the running build.
+> **Release:** [v0.13.0](https://github.com/realtydev/omada-mcp/releases/tag/v0.13.0) includes 111 tools, a refreshed discovery catalog, native health/LLDP evidence and wireless security diagnostics. Use `getServerInfo` to confirm the running build.
 
 ```text
 You:    Why is the guest SSID slow on the upstairs AP?
@@ -28,8 +28,8 @@ Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned
 
 ## Highlights
 
-- **Automatic API discovery.** `searchApiOperations` → `describeApiOperation` → `executeApiOperation`. Prefer the controller's live specification, with an explicit bundled fallback containing 1,676 indexed operations. Unsupported operations are identified; a catalogue entry does not prove device support. See [API discovery](docs/api-discovery.md).
-- **110 tools, including 59 in read-only mode before category filtering.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
+- **Automatic API discovery.** `searchApiOperations` → `describeApiOperation` → `executeApiOperation`. Prefer the controller's live specification, with an explicit bundled fallback containing 2,450 indexed operations. Unsupported operations are identified; a catalogue entry does not prove device support. See [API discovery](docs/api-discovery.md).
+- **111 tools, including 60 in read-only mode before category filtering.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
 - **Traffic, RF and WAN diagnostics.** Bounded history and timestamped evidence distinguish missing metrics, partial results and truncation. See [network workflows](docs/network-workflows.md) and [diagnostic comparisons](docs/diagnostic-comparisons.md).
 - **MSP, OpenAPI 3.1 and files.** Explicit MSP scope, JSON Schema 2020 validation and opt-in bounded multipart uploads/binary downloads. See [file transfers](docs/file-transfers.md).
 - **Session recovery and PoE detail.** Safe internal reads renew rejected sessions once; writes are never replayed. Request `getSiteDashboard({includePoePorts:true})` for bounded port power and switch headroom. See [session recovery](docs/session-recovery.md) and [PoE reporting](docs/poe-reporting.md).
@@ -187,6 +187,7 @@ For Fusion gateways that do not expose Platform Integration OAuth credentials, s
 | `getGatewayWanSpeedTestResults` | Read saved gateway WAN speed-test results without starting a test                                                                                                   |
 | `listDhcpReservations`          | Read all DHCP reservation pages, optionally filtered by search text                                                                                                 |
 | `diagnoseClient`                | Combine client attachment, device, topology and history evidence with explicit completeness and staleness                                                           |
+| `diagnoseSecurity`              | Saved rogue-AP and WIDS detections plus site-local threat evidence, with explicit source failures and bounded collection                                            |
 | `diagnoseLogs`                  | Combine bounded alert/event samples for an explicit time window, preserving failures and truncation                                                                 |
 | `diagnoseWifi`                  | Audit bounded Wi-Fi evidence and compare portable radio-configuration snapshots, with explicit missing/stale data                                                   |
 | `getClientHistory`              | A client's association sessions over a time range, optionally with roams between APs                                                                                |
@@ -219,7 +220,7 @@ For Fusion gateways that do not expose Platform Integration OAuth credentials, s
 | `getCableTestResults`           | Cable test results for a switch                                                                                                                                     |
 | `getSwitchNetworks`             | Switch VLAN trunking configuration                                                                                                                                  |
 
-`listSwitchPorts` was verified by the contributor on Software Controller 6.2.14.11 with an ES206GP v1.20. The endpoint is absent from the bundled API snapshot; older controllers may not support it. Gateway-integrated switch ports (such as ER7212PC) may return an empty list, as [reported in TP-Link's community](https://community.tp-link.com/en/business/forum/topic/860490). It is not a universal gateway PoE reader. The current source joins managed-switch configuration and web-API telemetry, including non-PoE switches. `getSwitchPortOverview` exposes coverage and partial evidence; `listSwitchPorts` preserves its array response and refuses unestablished inventories. See [switch port coverage](docs/switch-port-coverage.md).
+`listSwitchPorts` was verified by the contributor on Software Controller 6.2.14.11 with an ES206GP v1.20. The PoE-information endpoint is included in the refreshed bundled API snapshot; actual coverage still depends on controller and device firmware. Gateway-integrated switch ports (such as ER7212PC) may return an empty list, as [reported in TP-Link's community](https://community.tp-link.com/en/business/forum/topic/860490). It is not a universal gateway PoE reader. The current source joins managed-switch configuration and web-API telemetry, including non-PoE switches. `getSwitchPortOverview` exposes coverage and partial evidence; `listSwitchPorts` preserves its array response and refuses unestablished inventories. See [switch port coverage](docs/switch-port-coverage.md).
 
 The AP diagnostics use the bundled `docs/openapi/03-device.json` operations `getRFScanResultV2`, `getAfcInfo`, and `getAvailableChannelOfAp`. Results and availability depend on controller and AP firmware. Unsupported-device errors are returned to the caller. RF results may be empty or stale until a scan has been run through the controller; these tools do not start scans or change radio settings. All three AP diagnostic tools were validated through MCP on two EAP773(US) v2.0 APs and an EAP772-Outdoor(US) v1.0, running firmware 1.5.5 with Controller 6.3.0.45. RF status 1 correctly reported no saved scan; the outdoor AP returned AFC working status and a future expiry, while indoor APs without AFC support returned status false.
 
@@ -394,11 +395,11 @@ the new build. After merging a change and rebuilding:
 
 ## Feature direction
 
+Native health/incident and LLDP evidence enrich the existing network/client diagnoses; [wireless security diagnostics](docs/wireless-security.md) compose saved rogue-AP, WIDS and site-threat reads. See [health and LLDP evidence](docs/health-diagnostics.md) for collection limits and identity qualification.
+
 [Omada 6.3 release notes](https://static.tp-link.com/upload/software/2026/202609/20260904/Omada%20Software%20Controller%20v6.3.0%20Release%20Note.pdf) introduce incident detection, wired-client health, and richer wireless health metrics. Useful next additions are:
 
-- Read-only incident and health summaries that preserve the controller's scores and firmware requirements. Verify API contracts before implementing these newer surfaces.
-- Wireless security visibility: rogue APs and WIDS detections, starting with the endpoints already described in `docs/openapi/09-insight.json`.
-- Client-path diagnostics combining device, switch-port and LLDP telemetry to explain where a client connects and where a link is unhealthy.
+- Broader client-path evidence where compatible hardware exposes reliable identities; LLDP observations alone do not prove a complete physical path.
 - Broader configuration previews and read-back verification, extending the existing radio dry-run pattern one operation at a time.
 
 These are follow-up concepts, not advertised tools. The Fusion web-session expiry issue [#14](https://github.com/realtydev/omada-mcp/issues/14) still needs a sanitized real expired-session response before a controller-specific retry code can be added reliably.

@@ -11,18 +11,18 @@ This example permits reads across known categories and writes only in `wireless`
 
 ## Categories and syntax
 
-| Category      | Public command families                                        |
-| ------------- | -------------------------------------------------------------- |
-| `msp`         | Explicit MSP account/customer/admin routes                     |
-| `system`      | Site listing and controller/build information                  |
-| `devices`     | Device inventory, adoption, reboot and locating                |
-| `clients`     | Client diagnostics/settings/actions and rate-limit profiles    |
-| `wireless`    | AP radios, SSIDs, saved RF diagnostics and Wi-Fi audit         |
-| `switching`   | Switch ports, stacks, PoE, cable tests and LAN port profiles   |
-| `network`     | WAN/LAN networks, DHCP, routes and forwarding                  |
-| `security`    | Firewall, ACLs, IPS, threats and VPN status                    |
-| `monitoring`  | Dashboards, topology, logs and composed client/log diagnostics |
-| `maintenance` | Firmware and site LED controls                                 |
+| Category      | Public command families                                                  |
+| ------------- | ------------------------------------------------------------------------ |
+| `msp`         | Explicit MSP account/customer/admin routes                               |
+| `system`      | Site listing and controller/build information                            |
+| `devices`     | Device inventory, adoption, reboot and locating                          |
+| `clients`     | Client diagnostics/settings/actions and rate-limit profiles              |
+| `wireless`    | AP radios, SSIDs, saved RF diagnostics and Wi-Fi audit                   |
+| `switching`   | Switch ports, stacks, PoE, cable tests and LAN port profiles             |
+| `network`     | WAN/LAN networks, DHCP, routes and forwarding                            |
+| `security`    | Firewall, ACLs, IPS, wireless security diagnosis, threats and VPN status |
+| `monitoring`  | Dashboards, topology, logs and composed client/log diagnostics           |
+| `maintenance` | Firmware and site LED controls                                           |
 
 Each entry uses `:r`, `:w`, or `:rw`. A specific category overrides the `all` fallback: `all:rw,security:r` denies security writes. Missing categories have no permission unless `all` supplies it. Unknown categories, duplicate entries, empty strings, missing permissions and malformed entries fail configuration validation.
 
@@ -49,3 +49,5 @@ For read-only Wi-Fi work, a scope such as `system:r,wireless:r` keeps site selec
 Controller 6.3.0.45 validation confirmed denied discovery and generic writes stopped before HTTP, and server options could not broaden configured scopes or read-only access. With `all:r,clients:rw`, a guarded test created and renamed a disabled, unassigned rate-limit profile, verified both results, deleted it, and confirmed existing profiles were unchanged. The guard permitted exactly those three mutations.
 
 `rollbackNetworkChange` follows the receipt resource: `clients:w` for rate-limit profiles, `network:w` for DHCP reservations, and `wireless:w` for SSID/AP radio changes. Listing the shared tool does not grant authority over another category; both server and configured-client checks enforce the resource at invocation.
+
+`diagnoseSecurity` requires `security:r`. Native health and incident reads use `monitoring`; switch LLDP reads use `switching`. Incident status changes and deletions remain mutations and are denied by read-only scopes. Existing composite client/network diagnostics retain their documented command-scope permission model.

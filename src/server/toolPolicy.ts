@@ -60,6 +60,7 @@ const groups: Record<ToolCategory, readonly string[]> = {
         'getWifiHistory',
     ],
     switching: [
+        'getSwitchLldpNeighbors',
         'getSwitchPortOverview',
         'getSwitch',
         'listSwitchPorts',
@@ -106,6 +107,7 @@ const groups: Record<ToolCategory, readonly string[]> = {
         'setGatewayWanConnect',
     ],
     security: [
+        'diagnoseSecurity',
         'getThreatList',
         'getFirewallSetting',
         'getIpsSetting',
@@ -119,6 +121,7 @@ const groups: Record<ToolCategory, readonly string[]> = {
         'listVpnConnections',
     ],
     monitoring: [
+        'getSiteHealth',
         'getSiteTopology',
         'getSiteDashboard',
         'getTrafficHistory',
@@ -182,6 +185,7 @@ export function categoryForPath(path: string): ToolCategory | undefined {
     if (/\/gateways\/[^/]+\/speedTestResult$/.test(route)) return 'monitoring';
     if (/^\/dashboard\/(?:active-clients|client-activity)(?:\/|$)/.test(route) || /^\/insight\/past-connection(?:\/|$)/.test(route)) return 'clients';
     if (/^\/insight\/port-forwarding(?:\/|$)/.test(route)) return 'network';
+    if (/^\/anomaly\/incidents?(?:\/|$)/.test(route)) return 'monitoring';
     if (
         /^\/(?:wireless-network|aps|rfPlanning|rfplanning|planningHistory|rogue-ap|full-channel-detect|roaming|mesh|beacon-control|band-steering|ppsk-profiles?)(?:\/|$)/.test(
             route

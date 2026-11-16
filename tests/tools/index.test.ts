@@ -33,6 +33,7 @@ describe('tools/index', () => {
                 // Read tools
                 'getControllerCapabilities',
                 'diagnoseClient',
+                'diagnoseSecurity',
                 'diagnoseLogs',
                 'diagnoseWifi',
                 'listDhcpReservations',

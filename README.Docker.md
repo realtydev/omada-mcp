@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server for TP-Link Omada network diagnostics and configuration, with stdio and HTTP transports and a runtime CLI for managed Docker setup, updates and rollback.
 
-> **Release:** The [v0.12.0 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.12.0) includes 110 tools, safe internal-session recovery, detailed PoE, RF planning and combined network diagnosis. `getServerInfo` identifies the running build.
+> **Release:** The [v0.13.0 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.13.0) includes 111 tools, a refreshed discovery catalog, native health/LLDP evidence and wireless security diagnostics. `getServerInfo` identifies the running build.
 
 ## Runtime management
 
@@ -78,7 +78,7 @@ The HTTP server will be available at `http://localhost:3000/mcp` (stream transpo
 ## Features
 
 - OAuth client-credentials authentication with automatic token refresh, plus web-session authentication for Fusion gateways
-- 110 tools for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
+- 111 tools for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
 - Automatic API discovery: search, describe and execute documented JSON operations with live/bundled source information and write previews
 - Dedicated dashboard, topology and client/log diagnostics, with guarded DHCP, radio and log-notification workflows
 - Read-only profile enforced for dedicated tools and discovered operations
@@ -258,6 +258,7 @@ If an intermediary strips the `Mcp-Session-Id` header, set `MCP_SERVER_STATEFUL=
 | `getGatewayWanSpeedTestResults` | Read saved gateway WAN speed-test results without starting a test                                                                                                   |
 | `listDhcpReservations`          | Read all DHCP reservation pages, optionally filtered by search text                                                                                                 |
 | `diagnoseClient`                | Combine client attachment, device, topology and history evidence with explicit completeness and staleness                                                           |
+| `diagnoseSecurity`              | Saved rogue-AP and WIDS detections plus site-local threat evidence, with explicit source failures and bounded collection                                            |
 | `diagnoseLogs`                  | Combine bounded alert/event samples for an explicit time window, preserving failures and truncation                                                                 |
 | `diagnoseWifi`                  | Audit bounded Wi-Fi evidence and compare portable radio-configuration snapshots, with explicit missing/stale data                                                   |
 | `getClientHistory`              | A client's association sessions over a time range, optionally with roams between APs                                                                                |
@@ -290,7 +291,7 @@ If an intermediary strips the `Mcp-Session-Id` header, set `MCP_SERVER_STATEFUL=
 | `getCableTestResults`           | Cable test results for a switch                                                                                                                                     |
 | `getSwitchNetworks`             | Switch VLAN trunking configuration                                                                                                                                  |
 
-`listSwitchPorts` was verified by the contributor on Software Controller 6.2.14.11 with an ES206GP v1.20. The endpoint is absent from the bundled API snapshot; older controllers may not support it. Gateway-integrated switch ports (such as ER7212PC) may return an empty list, as [reported in TP-Link's community](https://community.tp-link.com/en/business/forum/topic/860490). It is not a universal gateway PoE reader. The current source joins managed-switch configuration and web-API telemetry, including non-PoE switches. `getSwitchPortOverview` exposes coverage and partial evidence; `listSwitchPorts` preserves its array response and refuses unestablished inventories. See [switch port coverage](docs/switch-port-coverage.md).
+`listSwitchPorts` was verified by the contributor on Software Controller 6.2.14.11 with an ES206GP v1.20. The PoE-information endpoint is included in the refreshed bundled API snapshot; actual coverage still depends on controller and device firmware. Gateway-integrated switch ports (such as ER7212PC) may return an empty list, as [reported in TP-Link's community](https://community.tp-link.com/en/business/forum/topic/860490). It is not a universal gateway PoE reader. The current source joins managed-switch configuration and web-API telemetry, including non-PoE switches. `getSwitchPortOverview` exposes coverage and partial evidence; `listSwitchPorts` preserves its array response and refuses unestablished inventories. See [switch port coverage](docs/switch-port-coverage.md).
 
 The AP diagnostics use the bundled `docs/openapi/03-device.json` operations `getRFScanResultV2`, `getAfcInfo`, and `getAvailableChannelOfAp`. Results and availability depend on controller and AP firmware. Unsupported-device errors are returned to the caller. RF results may be empty or stale until a scan has been run through the controller; these tools do not start scans or change radio settings. All three AP diagnostic tools were validated through MCP on two EAP773(US) v2.0 APs and an EAP772-Outdoor(US) v1.0, running firmware 1.5.5 with Controller 6.3.0.45. RF status 1 correctly reported no saved scan; the outdoor AP returned AFC working status and a future expiry, while indoor APs without AFC support returned status false.
 

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { OmadaClientInfo, OmadaDeviceInfo, PaginatedResult } from '../types/index.js';
+import { correlateLldp, type LldpEvidence, type SiteHealthReport } from './healthDiagnostics.js';
 import { networkFindings } from './networkFindings.js';
 import type { PaginationReadOptions } from './request.js';
 import type { SiteOperations } from './site.js';
@@ -17,6 +18,8 @@ export const networkDiagnosisOptionsSchema = z
     .strict();
 export type NetworkDiagnosisOptions = z.input<typeof networkDiagnosisOptionsSchema>;
 export interface NetworkDiagnosisClient {
+    getSiteHealth?(siteId?: string, start?: number, end?: number): Promise<SiteHealthReport>;
+    getSwitchLldpNeighbors?(switchMac: string, siteId?: string): Promise<LldpEvidence>;
     listDevices(siteId?: string, options?: PaginationReadOptions): Promise<OmadaDeviceInfo[]>;
     listClients(siteId?: string, options?: PaginationReadOptions): Promise<OmadaClientInfo[]>;
     diagnoseWifi(options: GetWifiAuditOptions): Promise<WifiAuditResult>;
@@ -338,7 +341,57 @@ export class NetworkDiagnosisOperations {
                 (v) => v.sourceComplete && !v.truncated && v.inventoryKnown
             ),
         ]);
-        const sections = { devices, clients, wifi, switchPorts, topology, events, alerts, rfPlanning, wan, vlans };
+        const [nativeHealth, lldp] = await Promise.all([
+            this.client.getSiteHealth
+                ? this.read(
+                      'native site health and incidents',
+                      () => this.client.getSiteHealth!(siteId, logStart, capturedAt),
+                      (v) => object(v),
+                      (v) => v.collectionComplete === true
+                  )
+                : undefined,
+            this.client.getSwitchLldpNeighbors
+                ? this.read(
+                      'managed-switch LLDP advertisements',
+                      async () => {
+                          const switches = deviceRows.filter((d) => d.type === 'switch');
+                          const selected = switches.slice(0, 8);
+                          const overview =
+                              'data' in switchPorts && !switchPorts.data.portsTruncated
+                                  ? (switchPorts.data as unknown as SwitchPortOverview)
+                                  : undefined;
+                          const reports = await Promise.all(
+                              selected.map(async (sw) => {
+                                  const evidence = await this.client.getSwitchLldpNeighbors!(String(sw.mac), siteId);
+                                  return { ...evidence, correlations: correlateLldp(evidence, overview, deviceRows as unknown as OmadaDeviceInfo[]) };
+                              })
+                          );
+                          return {
+                              switches: reports,
+                              truncated: switches.length > 8,
+                              inventoryKnown: devices.status === 'ok',
+                              collectionComplete: devices.status === 'ok' && switches.length <= 8 && reports.every((r) => r.status === 'ok'),
+                          };
+                      },
+                      (v) => object(v),
+                      (v) => v.collectionComplete === true
+                  )
+                : undefined,
+        ]);
+        const sections = {
+            devices,
+            clients,
+            wifi,
+            switchPorts,
+            topology,
+            events,
+            alerts,
+            rfPlanning,
+            wan,
+            vlans,
+            ...(nativeHealth ? { nativeHealth } : {}),
+            ...(lldp ? { lldp } : {}),
+        };
         const all = networkFindings(sections, input.weakRssiDbm);
         const clientRows = 'data' in clients ? clients.data : [];
         return {
@@ -354,6 +407,7 @@ export class NetworkDiagnosisOperations {
                 maxClients: 1000,
                 maxObservations: 100,
                 maxFilteredEventPages: 4,
+                maxLldpSwitches: 8,
             },
             collectionComplete:
                 Object.values(sections).every((s) => s.status === 'ok') && all.length <= 100 && !all.some((o) => o.basis === 'evidence_gap'),
@@ -370,7 +424,8 @@ export class NetworkDiagnosisOperations {
             observationsTruncated: all.length > 100,
             sections,
             limitations: [
-                'Evidence review only: no health score, proven root cause, failover test, scan or configuration change.',
+                'Evidence review only: native controller scores are preserved without inventing a health score, root cause or current-state verdict. No failover test, scan or configuration change.',
+                'LLDP advertisements corroborate unambiguous managed-device/standalone-port identities only; missing, ambiguous or expired advertisements never establish a physical cable path.',
                 'Reads are independent and may be cached; controller snapshots do not prove physical coverage, cable paths or current client performance.',
                 'RSSI review uses an explicit policy threshold. Candidate channel overlap does not prove mutual radio visibility or harmful contention.',
                 'Channel overlap detection covers qualified standard 5 GHz 20/40/80 MHz blocks and the lower two 160 MHz blocks; no 6 GHz overlap is inferred.',

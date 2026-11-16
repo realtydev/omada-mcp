@@ -197,3 +197,57 @@ describe('DiagnosticsOperations', () => {
         expect(client.listEvents).not.toHaveBeenCalled();
     });
 });
+
+describe('client-path LLDP corroboration', () => {
+    it('corroborates existing path adjacencies using unique identities and established standalone ports', async () => {
+        const client = sources();
+        client.listDevices.mockResolvedValue([
+            { mac: AP, type: 'ap' },
+            { mac: SWITCH, type: 'switch' },
+            { mac: GATEWAY, type: 'gateway' },
+        ] as never);
+        const getSwitchLldpNeighbors = vi.fn().mockResolvedValue({
+            switchMac: SWITCH,
+            status: 'ok',
+            source: 'getGridLldpNeighborTable',
+            collectedAt: Date.now(),
+            data: {
+                records: [{ portId: 2, standardPortIndex: { unit: 1, slot: 0, port: 2 }, deviceId: AP, neighborMac: AP, ttl: 120 }],
+                totalRows: 1,
+                completenessKnown: true,
+                invalidRecords: 0,
+                truncated: false,
+            },
+        });
+        const getSwitchPortOverview = vi.fn().mockResolvedValue({
+            inventoryStatus: 'ok',
+            inventoryTruncated: false,
+            switches: [{ switchMac: SWITCH, inventoryKnown: true }],
+            ports: [{ switchMac: SWITCH, port: 2, standardPort: { unit: 1, slot: 0, port: 2 } }],
+        });
+        Object.assign(client, { getSwitchLldpNeighbors, getSwitchPortOverview });
+        const r = await new DiagnosticsOperations(client).diagnoseClient(MAC, 'site');
+        expect(getSwitchLldpNeighbors).toHaveBeenCalledExactlyOnceWith(SWITCH, 'site');
+        expect(getSwitchPortOverview).toHaveBeenCalledExactlyOnceWith(SWITCH, 'site');
+        expect(r.sections.lldp?.data?.switches[0].correlations).toEqual([
+            { switchMac: SWITCH, neighborMac: AP, port: 2, standardPort: { unit: 1, slot: 0, port: 2 }, basis: 'lldp_advertisement' },
+        ]);
+        expect(r.path.nodes.map((n) => n.mac)).toEqual(['dd:dd:dd:dd:dd:dd', AP, SWITCH, GATEWAY]);
+    });
+    it('keeps legacy path evidence when LLDP is unavailable and omits raw errors', async () => {
+        const client = sources();
+        client.listDevices.mockResolvedValue([
+            { mac: AP, type: 'ap' },
+            { mac: SWITCH, type: 'switch' },
+        ] as never);
+        Object.assign(client, { getSwitchLldpNeighbors: vi.fn().mockRejectedValue(new Error('private-secret')) });
+        const r = await new DiagnosticsOperations(client).diagnoseClient(MAC);
+        expect(r.sections.topology.status).toBe('ok');
+        expect(r.sections.history.status).toBe('ok');
+        expect(r.sections.lldp?.status).toBe('partial');
+        expect(r.collectionComplete).toBe(false);
+        expect(r.sections.lldp?.data?.switches[0].correlations).toEqual([]);
+        expect(JSON.stringify(r)).not.toContain('private-secret');
+        expect(r.path.nodes).toHaveLength(4);
+    });
+});

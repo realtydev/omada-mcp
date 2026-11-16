@@ -47,8 +47,8 @@ describe('OperationCatalog', () => {
     it('indexes the real bundled document without silently dropping operations', () => {
         const document = JSON.parse(readFileSync(new URL('../../docs/openapi/00-all.json', import.meta.url), 'utf8')) as ApiDocument;
         const catalog = new OperationCatalog(document, 'bundled');
-        expect(catalog.operations.length).toBe(1676);
-        expect(new Set(catalog.operations.map((operation) => operation.operationId.toLowerCase())).size).toBe(1676);
+        expect(catalog.operations.length).toBe(2450);
+        expect(new Set(catalog.operations.map((operation) => operation.operationId.toLowerCase())).size).toBe(2450);
         expect(catalog.search({ query: 'wifi summary' }).operations.some((operation) => operation.path.endsWith('/dashboard/wifi-summary'))).toBe(
             true
         );
@@ -56,7 +56,7 @@ describe('OperationCatalog', () => {
             expect.arrayContaining(['omadacId', 'siteId', 'start', 'end'])
         );
         const msp = catalog.operations.filter((operation) => operation.path.startsWith('/openapi/v1/msp/'));
-        expect(msp).toHaveLength(118);
+        expect(msp).toHaveLength(140);
         expect(msp.some((operation) => operation.unsupportedReason?.includes('controller-scoped'))).toBe(false);
         expect(msp.find((operation) => operation.path === '/openapi/v1/msp/{mspId}/users')?.unsupportedReason).toBeUndefined();
     });
@@ -396,7 +396,7 @@ it.each([{ file: { contentType: 'application/pdf' } }, { config: { style: 'deepO
         expect(catalog.describe('encodedUpload').unsupportedReason).toContain('Explicit multipart encoding');
     }
 );
-it('preserves empty/default multipart encoding and all seven bundled multipart descriptors', () => {
+it('preserves empty/default multipart encoding and all ten bundled multipart descriptors', () => {
     const catalog = new OperationCatalog(
         fixture({
             [`${PREFIX}/upload`]: {
@@ -419,6 +419,6 @@ it('preserves empty/default multipart encoding and all seven bundled multipart d
     const document = JSON.parse(readFileSync(new URL('../../docs/openapi/00-all.json', import.meta.url), 'utf8')) as ApiDocument;
     const bundled = new OperationCatalog(document, 'bundled');
     const multipart = bundled.operations.filter((operation) => operation.requestBody?.contentType === 'multipart/form-data');
-    expect(multipart).toHaveLength(7);
+    expect(multipart).toHaveLength(10);
     expect(multipart.every((operation) => operation.unsupportedReason === undefined)).toBe(true);
 });
