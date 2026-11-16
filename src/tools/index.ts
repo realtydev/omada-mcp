@@ -87,6 +87,7 @@ import { registerRollbackNetworkChangeTool } from './rollbackNetworkChange.js';
 import { registerSearchApiOperationsTool } from './searchApiOperations.js';
 import { registerSearchDevicesTool } from './searchDevices.js';
 import { registerSetApRadioTool } from './setApRadio.js';
+import { registerSetClientApLockTool } from './setClientApLock.js';
 import { registerSetDeviceLedTool } from './setDeviceLed.js';
 import { registerSetGatewayWanConnectTool } from './setGatewayWanConnect.js';
 import { registerSetIpsSettingTool } from './setIpsSetting.js';
@@ -206,6 +207,7 @@ export function registerAllTools(
     registerSetSsidEnableTool(server, client);
     registerUpdateSwitchPortTool(server, client);
     registerUpdateClientTool(server, client);
+    registerSetClientApLockTool(server, client);
     registerSetSwitchNetworksTool(server, client);
     registerCreateRouteTool(server, client);
     registerUpdateRouteTool(server, client);

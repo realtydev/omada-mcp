@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Guarded `setClientApLock` previews, sets and removes a wireless client AP lock using documented client detail and eligible-AP evidence; readback verifies configuration after one mutation.
+
 - Opt-in compact catalog with four search, describe, capability and dispatch tools that reuse existing handlers and permission checks. Runtime probes support both catalog modes.
 - Guarded SSID/WLAN lifecycle and policy-route workflows through API discovery, with inventory checks, preservation, drift refusal and bounded readback.
 - Controller-side backup workflows verify newly observed files and keep recovery permission separate from ordinary maintenance.

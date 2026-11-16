@@ -200,6 +200,26 @@ describe('managed lifecycle and policy routes through discovery', () => {
         await expect(generic.genericApiCall('POST', '/sites/site/routing/policy-routings', 'v1', route)).rejects.toThrow('executeApiOperation');
         expect(f.writes()).toHaveLength(0);
     });
+    it('redirects single and batch AP-lock writes to the guarded setter while retaining previews', async () => {
+        const f = fixture();
+        const settings = { enable: true, aps: ['AA-BB-CC-DD-EE-01'] };
+        for (const [id, body, params] of [
+            ['updateClientLockToApSetting', settings, { clientMac: 'AA-BB-CC-DD-EE-FF' }],
+            ['batchModifyClientSetting', { macList: ['AA-BB-CC-DD-EE-FF'], lockToAp: settings }, {}],
+        ] as const) {
+            expect(await f.run(id, body, params, true)).toMatchObject({ written: false, warning: expect.stringContaining('setClientApLock') });
+            await expect(f.run(id, body, params)).rejects.toThrow('setClientApLock');
+        }
+        const generic = new GenericOperations(f.request as never, (path) => `/openapi/v1/controller${path}`);
+        await expect(generic.genericApiCall('POST', '/sites/site/clients/AA-BB-CC-DD-EE-FF/lock-to-ap', 'v1', settings)).rejects.toThrow(
+            'setClientApLock'
+        );
+        await expect(generic.genericApiCall('POST', '/sites/site/clients/config', 'v1', { lockToAp: settings })).rejects.toThrow('setClientApLock');
+        await expect(generic.genericApiCall('POST', '/sites/site/clients/config', 'v1', JSON.stringify({ lockToAp: settings }))).rejects.toThrow(
+            'setClientApLock'
+        );
+        expect(f.request.request).not.toHaveBeenCalled();
+    });
     it('does not treat repeated, conflicting or truncated collections as complete', async () => {
         await expect(readResourceRows(async () => ({ data: [{ id: 'same' }], totalRows: 2 }))).rejects.toThrow('repeated');
         await expect(readResourceRows(async () => [{ id: 'a', ssidId: 'b' }], ['ssidId'])).rejects.toThrow('conflicting');

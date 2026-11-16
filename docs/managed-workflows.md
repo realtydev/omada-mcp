@@ -50,3 +50,13 @@ Backups remain on the controller. Existing [file transfers](file-transfers.md) s
 Controller/site restore operations now require an explicit `recovery:w` or `recovery:rw` scope; `full`, `all:rw` and `maintenance:rw` alone do not grant it. For example, `MCP_TOOL_CATEGORIES=all:r,maintenance:rw,recovery:rw` permits backup and recovery with reads. Global read-only still blocks restoration. Restore remains an explicit, preview-first discovery operation with an unverified outcome, not a tested disaster-recovery procedure.
 
 These additions have mocked controller and MCP protocol coverage. Live creation, deletion, routing, backup and restore behavior still require controller-specific qualification.
+
+## Client AP locks
+
+`setClientApLock` uses the existing client-action implementation and requires `clients:w`. Like other dedicated write commands, its client-detail and eligible-AP reads are dependencies of that command. To inspect eligible APs separately, discover `getAllApBriefInfosBySite` (`wireless:r`); existing `getClient`/client-detail discovery returns reported lock configuration.
+
+Preview with `{"clientMac":"AA-BB-CC-DD-EE-FF","enable":true,"aps":["AA-BB-CC-DD-EE-01"]}`. Inspect `before` and `desired`, then repeat with `dryRun:false` to apply. Unlock with `enable:false` and an empty or omitted `aps` list. MACs accept compact, colon or hyphen notation and are normalized to the controller's uppercase hyphen format. Enabled lists must be unique and contain 1–64 APs (a local request bound, not a promised device limit).
+
+Enabling a changed lock requires a wireless, unblocked client and selected APs that are present, connected and explicitly report `supportLockToAp:true`. Missing or contradictory evidence stops the operation. Unlocking does not require the previous AP to remain online. Unchanged settings are no-ops. Execution rereads client state to reject drift, sends one POST without retry, then verifies reported lock settings with bounded reads. Lost acknowledgement remains `written:"unknown"`; missing readback is `unknown`, not success.
+
+Lock changes can disconnect the client and limit roaming. Verified configuration does not prove association, radio coverage or reachability. AP availability can change after preflight. Single-client and batch discovery/raw AP-lock writes are directed to the guarded setter. Live AP locking has not been exercised.

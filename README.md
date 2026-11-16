@@ -29,7 +29,7 @@ Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned
 ## Highlights
 
 - **Automatic API discovery.** `searchApiOperations` → `describeApiOperation` → `executeApiOperation`. Prefer the controller's live specification, with an explicit bundled fallback containing 2,450 indexed operations. Unsupported operations are identified; a catalogue entry does not prove device support. See [API discovery](docs/api-discovery.md).
-- **112 tools, including 61 in read-only mode before category filtering.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
+- **113 tools in the working tree, including 61 in read-only mode before category filtering.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
 - **Traffic, RF and WAN diagnostics.** Bounded history and timestamped evidence distinguish missing metrics, partial results and truncation. See [network workflows](docs/network-workflows.md) and [diagnostic comparisons](docs/diagnostic-comparisons.md).
 - **MSP, OpenAPI 3.1 and files.** Explicit MSP scope, JSON Schema 2020 validation and opt-in bounded multipart uploads/binary downloads. See [file transfers](docs/file-transfers.md).
 - **Session recovery and PoE detail.** Safe internal reads renew rejected sessions once; writes are never replayed. Request `getSiteDashboard({includePoePorts:true})` for bounded port power and switch headroom. See [session recovery](docs/session-recovery.md) and [PoE reporting](docs/poe-reporting.md).
@@ -243,6 +243,7 @@ The AP diagnostics use the bundled `docs/openapi/03-device.json` operations `get
 | `setSsidEnable`          | Enable or disable an SSID network-wide                                                                                   |
 | `updateSwitchPort`       | Guarded profile or PoE update (one setting); unsupported generic settings are rejected                                   |
 | `updateClient`           | Update name, fixed IPv4 or rate limits through setting-specific endpoints; supports dry-run previews                     |
+| `setClientApLock`        | Preview, set or remove a wireless client AP lock with eligibility checks, drift refusal and configuration readback       |
 | `updateRateLimitProfile` | Partial profile updates with previews, preservation, read-back verification and rollback receipts                        |
 | `rollbackNetworkChange`  | Restore a verified rate-limit profile change after checking for drift                                                    |
 | `setSwitchNetworks`      | Set switch VLAN trunking configuration                                                                                   |

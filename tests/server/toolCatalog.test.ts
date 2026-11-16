@@ -17,6 +17,7 @@ describe('preview-first tools and compact dispatch', () => {
             listSites: vi.fn().mockResolvedValue([{ id: 'site' }]),
             rebootDevice: vi.fn().mockResolvedValue({ accepted: true }),
             updateClient: vi.fn().mockResolvedValue({ dryRun: true, written: false }),
+            setClientApLock: vi.fn().mockResolvedValue({ dryRun: true, written: false }),
             setApRadio: vi.fn().mockResolvedValue({ verification: { status: 'verified' } }),
             genericApiCall: vi.fn().mockResolvedValue({ ok: true }),
             executeApiOperation: vi.fn().mockResolvedValue({ result: [] }),
@@ -40,6 +41,19 @@ describe('preview-first tools and compact dispatch', () => {
         expect(loadConfigFromEnv(env).catalogMode).toBe('standard');
         expect(loadConfigFromEnv({ ...env, MCP_CATALOG_MODE: 'compact' }).catalogMode).toBe('compact');
         expect(() => loadConfigFromEnv({ ...env, MCP_CATALOG_MODE: 'typo' })).toThrow();
+    });
+    it.each(['standard', 'compact'] as const)('validates AP-lock inputs and dispatches the existing handler in %s mode', async (catalogMode) => {
+        const { call, api } = await connect({ catalogMode });
+        const args = { clientMac: 'aa:bb:cc:dd:ee:ff', enable: true, aps: ['aa:bb:cc:dd:ee:01'] };
+        expect((await call('setClientApLock', { ...args, aps: [] })).isError).toBe(true);
+        expect(api.setClientApLock).not.toHaveBeenCalled();
+        await call('setClientApLock', args);
+        expect(api.setClientApLock).toHaveBeenLastCalledWith('AA-BB-CC-DD-EE-FF', { enable: true, aps: ['AA-BB-CC-DD-EE-01'] }, undefined, true);
+        await call('setClientApLock', { clientMac: args.clientMac, enable: false, dryRun: false });
+        expect(api.setClientApLock).toHaveBeenLastCalledWith('AA-BB-CC-DD-EE-FF', { enable: false }, undefined, false);
+        const denied = await connect({ catalogMode, toolProfile: 'read-only' });
+        expect((await denied.call('setClientApLock', args)).isError).toBe(true);
+        expect(denied.api.setClientApLock).not.toHaveBeenCalled();
     });
     it.each(['standard', 'compact'] as const)('preserves native validation, previews and explicit writes in %s mode', async (catalogMode) => {
         const { call, api } = await connect({ catalogMode });

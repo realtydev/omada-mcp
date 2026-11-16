@@ -508,6 +508,10 @@ export class OmadaClient {
         return await this.actionOps.updateClient(clientMac, data, siteId, dryRun);
     }
 
+    public async setClientApLock(clientMac: string, settings: { enable: boolean; aps?: string[] }, siteId?: string, dryRun = true): Promise<unknown> {
+        return await this.actionOps.setClientApLock(clientMac, settings, siteId, dryRun);
+    }
+
     public async setDeviceLed(deviceMac: string, ledSetting: number, siteId?: string): Promise<unknown> {
         return await this.actionOps.setDeviceLed(deviceMac, ledSetting, siteId);
     }

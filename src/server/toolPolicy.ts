@@ -38,6 +38,7 @@ const groups: Record<ToolCategory, readonly string[]> = {
         'listClientsPastConnections',
         'getClientHistory',
         'updateClient',
+        'setClientApLock',
         'updateRateLimitProfile',
         'rollbackNetworkChange',
         'blockClient',
@@ -205,6 +206,7 @@ export function categoryForPath(path: string): ToolCategory | undefined {
     )
         return 'wireless';
     if (/^\/setting\/(?:wlan|wireless|radio|iot)(?:\/|$)/.test(route)) return 'wireless';
+    if (route === '/lockToAp/aps') return 'wireless';
     if (/^\/(?:rate-limit-profiles?|clients|monitor-client)(?:\/|$)/.test(route)) return 'clients';
     if (
         /^\/(?:switches|stacks?|cable-test|lan-profiles|poe-ports|port-status-ports|switch-support|switch-oui-rules|lan-switch-setting)(?:\/|$)/.test(

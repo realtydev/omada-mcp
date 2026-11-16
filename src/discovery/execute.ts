@@ -386,8 +386,10 @@ function rejectUnknownBodyFields(schema: Schema, body: unknown, catalog: Operati
     if (unknown) throw new Error(`Request body contains an undocumented field: ${unknown}.`);
 }
 
-function preferredWriteTool(operation: ApiOperation): string | undefined {
+function preferredWriteTool(operation: ApiOperation, body: unknown): string | undefined {
     if (operation.method === 'GET') return undefined;
+    if (/\/sites\/\{[^}]+\}\/clients\/\{[^}]+\}\/lock-to-ap$/.test(operation.path)) return 'setClientApLock';
+    if (/\/sites\/\{[^}]+\}\/clients\/config$/.test(operation.path) && object(body) && Object.hasOwn(body, 'lockToAp')) return 'setClientApLock';
     if (isManagedResourceWrite(operation.method, operation.path) && !managedResource(operation))
         return 'the canonical v1 SSID/WLAN or policy-routing operation through executeApiOperation';
     if (operation.method === 'PATCH' && /\/aps\/\{[^}]+\}\/override$/.test(operation.path)) return 'updateApSsidOverride';
@@ -540,7 +542,7 @@ export async function executeDiscoveredOperation(
     if (resource) validateManagedInput(resource.kind, operation.method, options.body);
     if (isManagedBackup(operation)) backupSites(operation, options.body);
     if (isMdnsWrite(operation)) validateMdnsInput(operation.method, options.body);
-    const preferredTool = preferredWriteTool(operation);
+    const preferredTool = preferredWriteTool(operation, options.body);
     const unsupportedStackWrite =
         mutation &&
         /\/sites\/\{[^}]+\}\/stacks?\/\{[^}]+\}\/(?:ports\/(?:\{[^}]+\}|config)|multi-ports\/config|lags\/\{[^}]+\})$/.test(operation.path)

@@ -78,7 +78,7 @@ The HTTP server will be available at `http://localhost:3000/mcp` (stream transpo
 ## Features
 
 - OAuth client-credentials authentication with automatic token refresh, plus web-session authentication for Fusion gateways
-- 112 tools for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
+- 113 tools in the working tree for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
 - Automatic API discovery: search, describe and execute documented JSON operations with live/bundled source information and write previews
 - Dedicated dashboard, topology and client/log diagnostics, with guarded DHCP, radio and log-notification workflows
 - Read-only profile enforced for dedicated tools and discovered operations
@@ -315,6 +315,7 @@ The AP diagnostics use the bundled `docs/openapi/03-device.json` operations `get
 | `setSsidEnable`          | Enable or disable an SSID network-wide                                                                                   |
 | `updateSwitchPort`       | Guarded profile or PoE update (one setting); unsupported generic settings are rejected                                   |
 | `updateClient`           | Update name, fixed IPv4 or rate limits through setting-specific endpoints; supports dry-run previews                     |
+| `setClientApLock`        | Preview, set or remove a wireless client AP lock with eligibility checks, drift refusal and configuration readback       |
 | `updateRateLimitProfile` | Partial profile updates with previews, preservation, read-back verification and rollback receipts                        |
 | `rollbackNetworkChange`  | Restore a verified rate-limit profile change after checking for drift                                                    |
 | `setSwitchNetworks`      | Set switch VLAN trunking configuration                                                                                   |
