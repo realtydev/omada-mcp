@@ -6,6 +6,7 @@ import _addFormats, { type FormatsPlugin } from 'ajv-formats';
 import type { RequestHandler } from '../omadaClient/request.js';
 import type { ToolAccessPolicy } from '../server/toolPolicy.js';
 import type { ApiOperation, ApiParameter, OperationCatalog } from './catalog.js';
+import { validateWriteRequirements } from './requirements.js';
 import { prepareTransfer } from './transfer.js';
 
 type Schema = Record<string, unknown>;
@@ -186,6 +187,10 @@ function validationSchema(operation: ApiOperation, catalog: OperationCatalog): S
                 result[key] = child.map((entry) => copy(entry, depth + 1));
             } else if (schemaValues.has(key)) result[key] = copy(child, depth + 1);
             else result[key] = copyData(child, depth + 1);
+        }
+        // This vendor Java-octal ASCII pattern has the same meaning with JSON Schema Unicode escapes.
+        if (result.pattern === '^[\\041-\\0176]$|^[\\041-\\0176][\\040-\\0176]{0,126}[\\041-\\0176]$') {
+            result.pattern = '^[\\x21-\\x7e]$|^[\\x21-\\x7e][\\x20-\\x7e]{0,126}[\\x21-\\x7e]$';
         }
         if (typeof value.$ref === 'string') result.$ref = `#/components/schemas/${referenceName(value.$ref)}`;
         for (const bound of ['Minimum', 'Maximum']) {
@@ -472,6 +477,7 @@ export async function executeDiscoveredOperation(
     if (Buffer.byteLength(JSON.stringify(input)) > MAX_REQUEST_BYTES) throw new Error('Operation input exceeds the 1 MiB execution limit.');
     validate(operation, catalog, input);
     if (operation.requestBody && validationBody !== undefined) rejectUnknownBodyFields(operation.requestBody.schema, validationBody, catalog);
+    validateWriteRequirements(operation, validationBody);
     const path = operation.path.replace(/\{([^}]+)\}/g, (_match, name: string) => safeSegment(params[name]));
     if (/[{}]/.test(path)) throw new Error('Operation path contains malformed template parameters.');
     const query = queryParameters(operation, params, catalog);
