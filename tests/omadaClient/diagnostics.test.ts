@@ -206,29 +206,25 @@ describe('client-path LLDP corroboration', () => {
             { mac: SWITCH, type: 'switch' },
             { mac: GATEWAY, type: 'gateway' },
         ] as never);
-        const getSwitchLldpNeighbors = vi
-            .fn()
-            .mockResolvedValue({
-                switchMac: SWITCH,
-                status: 'ok',
-                source: 'getGridLldpNeighborTable',
-                collectedAt: Date.now(),
-                data: {
-                    records: [{ portId: 2, standardPortIndex: { unit: 1, slot: 0, port: 2 }, deviceId: AP, neighborMac: AP, ttl: 120 }],
-                    totalRows: 1,
-                    completenessKnown: true,
-                    invalidRecords: 0,
-                    truncated: false,
-                },
-            });
-        const getSwitchPortOverview = vi
-            .fn()
-            .mockResolvedValue({
-                inventoryStatus: 'ok',
-                inventoryTruncated: false,
-                switches: [{ switchMac: SWITCH, inventoryKnown: true }],
-                ports: [{ switchMac: SWITCH, port: 2, standardPort: { unit: 1, slot: 0, port: 2 } }],
-            });
+        const getSwitchLldpNeighbors = vi.fn().mockResolvedValue({
+            switchMac: SWITCH,
+            status: 'ok',
+            source: 'getGridLldpNeighborTable',
+            collectedAt: Date.now(),
+            data: {
+                records: [{ portId: 2, standardPortIndex: { unit: 1, slot: 0, port: 2 }, deviceId: AP, neighborMac: AP, ttl: 120 }],
+                totalRows: 1,
+                completenessKnown: true,
+                invalidRecords: 0,
+                truncated: false,
+            },
+        });
+        const getSwitchPortOverview = vi.fn().mockResolvedValue({
+            inventoryStatus: 'ok',
+            inventoryTruncated: false,
+            switches: [{ switchMac: SWITCH, inventoryKnown: true }],
+            ports: [{ switchMac: SWITCH, port: 2, standardPort: { unit: 1, slot: 0, port: 2 } }],
+        });
         Object.assign(client, { getSwitchLldpNeighbors, getSwitchPortOverview });
         const r = await new DiagnosticsOperations(client).diagnoseClient(MAC, 'site');
         expect(getSwitchLldpNeighbors).toHaveBeenCalledExactlyOnceWith(SWITCH, 'site');

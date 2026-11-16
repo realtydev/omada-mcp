@@ -222,13 +222,11 @@ describe('native health and LLDP composition', () => {
     it('retains other sources when new controller evidence is unsupported', async () => {
         const { client, ops } = setup();
         Object.assign(client, {
-            getSiteHealth: vi
-                .fn()
-                .mockResolvedValue({
-                    readOnly: true,
-                    collectionComplete: false,
-                    sections: { timeline: { status: 'unsupported' }, incidents: { status: 'unsupported' } },
-                }),
+            getSiteHealth: vi.fn().mockResolvedValue({
+                readOnly: true,
+                collectionComplete: false,
+                sections: { timeline: { status: 'unsupported' }, incidents: { status: 'unsupported' } },
+            }),
             getSwitchLldpNeighbors: vi
                 .fn()
                 .mockResolvedValue({ switchMac: SW, status: 'unsupported', source: 'getGridLldpNeighborTable', collectedAt: Date.now() }),

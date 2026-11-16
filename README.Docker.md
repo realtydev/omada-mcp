@@ -258,7 +258,7 @@ If an intermediary strips the `Mcp-Session-Id` header, set `MCP_SERVER_STATEFUL=
 | `getGatewayWanSpeedTestResults` | Read saved gateway WAN speed-test results without starting a test                                                                                                   |
 | `listDhcpReservations`          | Read all DHCP reservation pages, optionally filtered by search text                                                                                                 |
 | `diagnoseClient`                | Combine client attachment, device, topology and history evidence with explicit completeness and staleness                                                           |
-| `diagnoseSecurity`              | Saved rogue-AP and WIDS detections plus site-local threat evidence, with explicit source failures and bounded collection |
+| `diagnoseSecurity`              | Saved rogue-AP and WIDS detections plus site-local threat evidence, with explicit source failures and bounded collection                                            |
 | `diagnoseLogs`                  | Combine bounded alert/event samples for an explicit time window, preserving failures and truncation                                                                 |
 | `diagnoseWifi`                  | Audit bounded Wi-Fi evidence and compare portable radio-configuration snapshots, with explicit missing/stale data                                                   |
 | `getClientHistory`              | A client's association sessions over a time range, optionally with roams between APs                                                                                |

@@ -11,18 +11,18 @@ This example permits reads across known categories and writes only in `wireless`
 
 ## Categories and syntax
 
-| Category      | Public command families                                        |
-| ------------- | -------------------------------------------------------------- |
-| `msp`         | Explicit MSP account/customer/admin routes                     |
-| `system`      | Site listing and controller/build information                  |
-| `devices`     | Device inventory, adoption, reboot and locating                |
-| `clients`     | Client diagnostics/settings/actions and rate-limit profiles    |
-| `wireless`    | AP radios, SSIDs, saved RF diagnostics and Wi-Fi audit         |
-| `switching`   | Switch ports, stacks, PoE, cable tests and LAN port profiles   |
-| `network`     | WAN/LAN networks, DHCP, routes and forwarding                  |
-| `security`    | Firewall, ACLs, IPS, wireless security diagnosis, threats and VPN status                    |
-| `monitoring`  | Dashboards, topology, logs and composed client/log diagnostics |
-| `maintenance` | Firmware and site LED controls                                 |
+| Category      | Public command families                                                  |
+| ------------- | ------------------------------------------------------------------------ |
+| `msp`         | Explicit MSP account/customer/admin routes                               |
+| `system`      | Site listing and controller/build information                            |
+| `devices`     | Device inventory, adoption, reboot and locating                          |
+| `clients`     | Client diagnostics/settings/actions and rate-limit profiles              |
+| `wireless`    | AP radios, SSIDs, saved RF diagnostics and Wi-Fi audit                   |
+| `switching`   | Switch ports, stacks, PoE, cable tests and LAN port profiles             |
+| `network`     | WAN/LAN networks, DHCP, routes and forwarding                            |
+| `security`    | Firewall, ACLs, IPS, wireless security diagnosis, threats and VPN status |
+| `monitoring`  | Dashboards, topology, logs and composed client/log diagnostics           |
+| `maintenance` | Firmware and site LED controls                                           |
 
 Each entry uses `:r`, `:w`, or `:rw`. A specific category overrides the `all` fallback: `all:rw,security:r` denies security writes. Missing categories have no permission unless `all` supplies it. Unknown categories, duplicate entries, empty strings, missing permissions and malformed entries fail configuration validation.
 
