@@ -33,6 +33,7 @@
         "docs/ap-ssid-overrides.md",
         "docs/rf-planning.md",
         "docs/scoped-tools.md",
+        "docs/managed-workflows.md",
         "docs/openapi/00-all.json",
         "LICENSE"
     ],

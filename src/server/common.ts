@@ -8,6 +8,7 @@ import type { OmadaClient } from '../omadaClient/index.js';
 import { registerAllTools } from '../tools/index.js';
 import { logger } from '../utils/logger.js';
 import { redactForLogs } from '../utils/redact.js';
+import { registerCompactTools, type ToolCatalog } from './toolCatalog.js';
 import { ToolAccessPolicy } from './toolPolicy.js';
 import { toolRegistrationServer } from './toolProfile.js';
 
@@ -183,7 +184,10 @@ function setupServerLogging(server: McpServer): void {
     };
 }
 
-export function createServer(client: OmadaClient, options: Pick<EnvironmentConfig, 'toolProfile' | 'toolCategories'> = {}): McpServer {
+export function createServer(
+    client: OmadaClient,
+    options: Pick<EnvironmentConfig, 'toolProfile' | 'toolCategories' | 'catalogMode'> = {}
+): McpServer {
     const server = new McpServer({
         name: 'omada-mcp',
         version: PACKAGE_VERSION,
@@ -194,7 +198,9 @@ export function createServer(client: OmadaClient, options: Pick<EnvironmentConfi
     const configured = policyClient.getToolAccessPolicy?.() ?? new ToolAccessPolicy();
     const access = configured.intersect(new ToolAccessPolicy(options.toolProfile, options.toolCategories));
     const profile = access.readOnly ? 'read-only' : 'full';
-    registerAllTools(toolRegistrationServer(server, profile, access), client, profile, access);
+    const catalog: ToolCatalog | undefined = options.catalogMode === 'compact' ? new Map() : undefined;
+    registerAllTools(toolRegistrationServer(server, profile, access, catalog), client, profile, access);
+    if (catalog) registerCompactTools(server, catalog);
 
     return server;
 }

@@ -155,14 +155,24 @@ export async function probe(state: RuntimeState, selection = state.current, doct
             transport = new StreamableHTTPClientTransport(new URL(localUrl(state.url ?? '')));
         }
         await client.connect(transport, { timeout: 8_000 });
-        const result = await client.callTool({ name: 'getServerInfo', arguments: {} }, undefined, { timeout: 8_000 });
+        const { tools } = await client.listTools({}, { timeout: 8_000 });
+        const compact = !tools.some((tool) => tool.name === 'getServerInfo') && tools.some((tool) => tool.name === 'callTool');
+        const result = await client.callTool(
+            compact ? { name: 'callTool', arguments: { name: 'getServerInfo', arguments: {} } } : { name: 'getServerInfo', arguments: {} },
+            undefined,
+            { timeout: 8_000 }
+        );
         if (result.isError || !Array.isArray(result.content)) throw new Error();
         const part = result.content.find((item) => item.type === 'text');
         if (!part || typeof part.text !== 'string') throw new Error();
         const info = JSON.parse(part.text) as BuildInfo;
         verifyBuild(info, selection);
         if (doctor) {
-            const sites = await client.callTool({ name: 'listSites', arguments: {} }, undefined, { timeout: 35_000 });
+            const sites = await client.callTool(
+                compact ? { name: 'callTool', arguments: { name: 'listSites', arguments: {} } } : { name: 'listSites', arguments: {} },
+                undefined,
+                { timeout: 35_000 }
+            );
             if (sites.isError) throw new Error();
         }
         return info;

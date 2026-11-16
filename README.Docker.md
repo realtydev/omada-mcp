@@ -119,16 +119,17 @@ For a private CA, mount its certificate bundle read-only (for example, `-v /path
 
 ### MCP Generic Server Configuration
 
-| Variable                           | Required | Default   | Description                                                           |
-| ---------------------------------- | -------- | --------- | --------------------------------------------------------------------- |
-| `MCP_SERVER_LOG_LEVEL`             | No       | `info`    | Logging verbosity (`debug`, `info`, `warn`, `error`, `silent`)        |
-| `MCP_SERVER_LOG_FORMAT`            | No       | `plain`   | Log output format (`plain`, `json`, or `gcp-json`)                    |
-| `MCP_SERVER_USE_HTTP`              | No       | `false`   | Start HTTP server instead of stdio                                    |
-| `MCP_TOOL_PROFILE`                 | No       | `full`    | `full` or `read-only`; excludes writes and generic calls in read-only |
-| `MCP_TOOL_CATEGORIES`              | No       | —         | Optional category permissions, e.g. `all:r,wireless:rw`               |
-| `MCP_HTTP_SESSION_IDLE_TIMEOUT_MS` | No       | `1800000` | Positive integer idle session lifetime in milliseconds                |
-| `MCP_HTTP_MAX_SESSIONS`            | No       | `100`     | Maximum retained and initializing HTTP/SSE sessions                   |
-| `MCP_SERVER_STATEFUL`              | No       | `false`   | Maintain stateful sessions per client                                 |
+| Variable                           | Required | Default    | Description                                                                     |
+| ---------------------------------- | -------- | ---------- | ------------------------------------------------------------------------------- |
+| `MCP_SERVER_LOG_LEVEL`             | No       | `info`     | Logging verbosity (`debug`, `info`, `warn`, `error`, `silent`)                  |
+| `MCP_SERVER_LOG_FORMAT`            | No       | `plain`    | Log output format (`plain`, `json`, or `gcp-json`)                              |
+| `MCP_SERVER_USE_HTTP`              | No       | `false`    | Start HTTP server instead of stdio                                              |
+| `MCP_TOOL_PROFILE`                 | No       | `full`     | `full` or `read-only`; excludes writes and generic calls in read-only           |
+| `MCP_TOOL_CATEGORIES`              | No       | —          | Optional category permissions, e.g. `all:r,wireless:rw`                         |
+| `MCP_CATALOG_MODE`                 | No       | `standard` | `standard` or `compact`; compact exposes four tools using the existing handlers |
+| `MCP_HTTP_SESSION_IDLE_TIMEOUT_MS` | No       | `1800000`  | Positive integer idle session lifetime in milliseconds                          |
+| `MCP_HTTP_MAX_SESSIONS`            | No       | `100`      | Maximum retained and initializing HTTP/SSE sessions                             |
+| `MCP_SERVER_STATEFUL`              | No       | `false`    | Maintain stateful sessions per client                                           |
 
 ### MCP Server HTTP Configuration
 
@@ -390,6 +391,8 @@ Automatic discovery keeps the existing tools and adds searchable API coverage. S
 Concurrent requests share OAuth renewal and web/internal logins. Responses from an invalidated login cannot overwrite newer credentials, and a late authentication error cannot clear a newer token. Authentication retries are bounded and retain controller error details.
 
 Set `MCP_TOOL_PROFILE=read-only` to expose read tools and diagnostics while excluding writes and `genericApiCall`. The default `full` profile preserves the full tool catalogue. The profile controls exposed operations; controller credentials and permissions still determine API access.
+
+All MCP mutations now preview by default; pass `dryRun:false` explicitly to apply. Set `MCP_CATALOG_MODE=compact` and recreate the container to use the four-tool catalog. Guarded backup, SSID/WLAN lifecycle and policy-route workflows reuse API discovery. Controller/site restore requires explicit `recovery` permission. See [managed workflows and migration](docs/managed-workflows.md) for behavior and limits.
 
 HTTP/SSE sessions default to a 30-minute idle timeout (`MCP_HTTP_SESSION_IDLE_TIMEOUT_MS=1800000`) and a limit of 100 sessions (`MCP_HTTP_MAX_SESSIONS=100`). Capacity includes sessions being initialized. Full capacity returns HTTP 503 with a retry hint. Active tool calls are protected from idle expiry; keeping an event stream open alone does not keep a session alive. SSE accepts the SDK's `sessionId` query parameter as well as the legacy session header.
 

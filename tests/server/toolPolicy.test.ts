@@ -19,7 +19,7 @@ const PREFIX = '/openapi/v1/{omadacId}/sites/{siteId}';
 const doc = {
     openapi: '3.0.1',
     paths: {
-        [`${PREFIX}/wireless-network/ssids`]: { get: { operationId: 'wifiRead' }, post: { operationId: 'wifiWrite' } },
+        [`${PREFIX}/wireless-network/custom-settings`]: { get: { operationId: 'wifiRead' }, post: { operationId: 'wifiWrite' } },
         [`${PREFIX}/rate-limit-profiles`]: { get: { operationId: 'clientRead' }, post: { operationId: 'clientWrite' } },
         [`${PREFIX}/mystery`]: { get: { operationId: 'unknownRead' } },
     },

@@ -41,7 +41,7 @@ describe('tool exposure profiles', () => {
         return { api, server, client };
     }
 
-    it('keeps the existing full catalogue and write schemas unchanged by default', async () => {
+    it('keeps the full catalogue and applies the same preview defaults for implicit and explicit full profiles', async () => {
         const { client: implicit } = await connect();
         const { client: explicit } = await connect('full');
         const { tools: implicitTools } = await implicit.listTools();
@@ -49,6 +49,9 @@ describe('tool exposure profiles', () => {
         expect(implicitTools).toEqual(explicitTools);
         expect(implicitTools.length).toBeGreaterThan(80);
         expect(implicitTools.some((tool) => tool.name === 'genericApiCall')).toBe(true);
+        for (const tool of implicitTools.filter((tool) => MUTATING.test(tool.name) || tool.name === 'genericApiCall')) {
+            expect(tool.inputSchema.properties?.dryRun).toMatchObject({ type: 'boolean', default: true });
+        }
         expect(implicitTools.find((tool) => tool.name === 'rebootDevice')?.inputSchema.additionalProperties).toBe(false);
     });
 
@@ -158,7 +161,7 @@ describe('tool exposure profiles', () => {
             },
         };
         const server = original as unknown as McpServer;
-        expect(toolRegistrationServer(server, 'full')).toBe(server);
+        expect(toolRegistrationServer(server, 'full')).not.toBe(server);
         const filtered = toolRegistrationServer(server, 'read-only');
         filtered.registerTool('unknownOperation', { annotations: { readOnlyHint: true } }, vi.fn());
         filtered.registerTool('getDestructiveOperation', { annotations: { destructiveHint: true } }, vi.fn());
@@ -166,6 +169,8 @@ describe('tool exposure profiles', () => {
         expect(registered).toEqual([]);
         filtered.registerTool('getStatus', {}, vi.fn());
         expect(originalThis).toBe(original);
-        expect(registered).toEqual([{ name: 'getStatus', config: { annotations: { readOnlyHint: true, destructiveHint: false } } }]);
+        expect(registered).toEqual([
+            { name: 'getStatus', config: expect.objectContaining({ annotations: { readOnlyHint: true, destructiveHint: false } }) },
+        ]);
     });
 });

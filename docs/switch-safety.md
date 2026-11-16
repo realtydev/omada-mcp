@@ -1,6 +1,6 @@
 # Switch-port changes
 
-Single-port and batch tools read configured state, validate targets, preview changes, and verify the result after one mutation. Their default remains to apply; use `dryRun:true` for a preview.
+Single-port and batch tools read configured state, validate targets, preview changes, and verify the result after one mutation. MCP calls default to a preview; set `dryRun:false` explicitly to apply.
 
 For `setSwitchPortName`:
 

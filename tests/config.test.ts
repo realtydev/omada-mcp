@@ -29,6 +29,7 @@ describe('config', () => {
             expect(loadConfigFromEnv(mockEnv).toolCategories).toBeUndefined();
             expect(loadConfigFromEnv({ ...mockEnv, MCP_TOOL_CATEGORIES: 'all:r,wireless:rw' })).toMatchObject({
                 toolProfile: 'full',
+                catalogMode: 'standard',
                 toolCategories: 'all:r,wireless:rw',
             });
             expect(loadConfigFromEnv({ ...mockEnv, MCP_TOOL_PROFILE: 'read-only', MCP_TOOL_CATEGORIES: 'all:rw' })).toMatchObject({
@@ -450,6 +451,8 @@ describe('config', () => {
                 useHttp: true,
                 stateful: true,
                 toolProfile: 'full',
+                catalogMode: 'standard',
+                toolCategories: undefined,
                 httpPort: 9000,
                 httpTransport: 'sse',
                 httpBindAddr: '0.0.0.0',
