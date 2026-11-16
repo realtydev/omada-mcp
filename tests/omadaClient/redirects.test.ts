@@ -20,6 +20,8 @@ const baseUrl = `http://127.0.0.1:${PORT}`;
 describe('controller redirect refusal', () => {
     const received: Array<{ url: string; headers: IncomingHttpHeaders }> = [];
     let redirectLogin = false;
+    let recoverSession: false | 'redirect' | 'html' = false;
+    let recoveryRequests = 0;
     const server = createServer((request, response) => {
         const url = request.url ?? '';
         received.push({ url, headers: request.headers });
@@ -30,6 +32,18 @@ describe('controller redirect refusal', () => {
         } else if (!redirectLogin && url === '/controller/api/v2/login') {
             response.setHeader('Set-Cookie', 'TPOMADA_SESSIONID=test-session; HttpOnly');
             response.end(JSON.stringify({ errorCode: 0, result: { token: 'test-csrf' } }));
+        } else if (recoverSession && ['/controller/api/v2/sites', '/controller/api/v2/settings'].includes(url)) {
+            if (recoveryRequests++ === 0) {
+                if (recoverSession === 'redirect') {
+                    response.writeHead(302, { Location: `${baseUrl}/controller/login?private=never-returned` });
+                    response.end();
+                } else {
+                    response.setHeader('Content-Type', 'text/html');
+                    response.end('<html><form method=post action=/controller/api/v2/login><input name=username><input type=password></form></html>');
+                }
+            } else {
+                response.end(JSON.stringify({ errorCode: 0, result: { recovered: true } }));
+            }
         } else {
             response.writeHead(302, { Location: `${baseUrl}/unexpected-destination` });
             response.end(JSON.stringify({ msg: 'Use the configured controller URL' }));
@@ -51,6 +65,8 @@ describe('controller redirect refusal', () => {
     beforeEach(() => {
         received.length = 0;
         redirectLogin = false;
+        recoverSession = false;
+        recoveryRequests = 0;
     });
 
     const http = () => axios.create({ ...createControllerHttpOptions({ baseUrl, strictSsl: true, requestTimeout: 1000 }), proxy: false });
@@ -72,10 +88,43 @@ describe('controller redirect refusal', () => {
         const auth = new InternalAuthManager(transport, 'admin', 'password', 'controller');
         const request = new InternalRequestHandler(transport, auth, 'controller');
 
-        await expect(request.get('/sites')).rejects.toThrow('GET /controller/api/v2/sites (HTTP 302) - Use the configured controller URL');
+        await expect(request.get('/sites')).rejects.toThrow(
+            'GET /controller/api/v2/sites (HTTP 302) - Redirect refused; use the configured controller URL.'
+        );
         expect(received.map(({ url }) => url)).toEqual(['/controller/api/v2/login', '/controller/api/v2/sites']);
         expect(received[1].headers.cookie).toBe('TPOMADA_SESSIONID=test-session');
         expect(received[1].headers['csrf-token']).toBe('test-csrf');
+    });
+
+    it.each(['redirect', 'html'] as const)('recovers internal reads from a proven %s login response without following it', async (kind) => {
+        recoverSession = kind;
+        const transport = http();
+        const auth = new InternalAuthManager(transport, 'admin', 'password', 'controller');
+        const request = new InternalRequestHandler(transport, auth, 'controller');
+        await expect(request.get('/sites')).resolves.toEqual({ errorCode: 0, result: { recovered: true } });
+        expect(received.map(({ url }) => url)).toEqual([
+            '/controller/api/v2/login',
+            '/controller/api/v2/sites',
+            '/controller/api/v2/login',
+            '/controller/api/v2/sites',
+        ]);
+        expect(received.filter(({ url }) => url.includes('private=') || url === '/controller/login')).toEqual([]);
+    });
+
+    it('does not replay an internal mutation; the next explicit read obtains a new session', async () => {
+        recoverSession = 'redirect';
+        const transport = http();
+        const auth = new InternalAuthManager(transport, 'admin', 'password', 'controller');
+        const request = new InternalRequestHandler(transport, auth, 'controller');
+        await expect(request.post('/settings', { enabled: false })).rejects.toThrow('write outcome is unverified');
+        expect(received.map(({ url }) => url)).toEqual(['/controller/api/v2/login', '/controller/api/v2/settings']);
+        await expect(request.get('/sites')).resolves.toEqual({ errorCode: 0, result: { recovered: true } });
+        expect(received.map(({ url }) => url)).toEqual([
+            '/controller/api/v2/login',
+            '/controller/api/v2/settings',
+            '/controller/api/v2/login',
+            '/controller/api/v2/sites',
+        ]);
     });
 
     it('also refuses redirects while sending OAuth and internal login credentials', async () => {
