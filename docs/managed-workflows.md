@@ -89,3 +89,24 @@ Previews validate schema, site consistency, nonempty time-range IDs and bounded 
 Readback compares the entire target map, normalizing MAC notation and port ordering. Unexpected device assignments, missing fields or changed sibling schedules cannot yield verified success. Inventories and target selections are bounded to 1,000 records/ports; schedules use the existing ten-page collection limit. Known optional writable fields are preserved; execution metadata such as `nextExecute` is not written back. Raw or unsupported-version schedule mutations cannot bypass this workflow.
 
 PoE schedule changes can interrupt power to attached APs, phones and cameras. The controller's time-range profile, site timezone and DST settings determine execution; the MCP server does not convert local times or run its own timer. Verification proves reported configuration only, not that power switched at the scheduled time. Concurrent edits or capability changes after preflight remain possible. Live scheduling has not been tested.
+
+## WireGuard interfaces and peers
+
+WireGuard configuration reuses `executeApiOperation` in standard and compact mode. Use `security:rw` for guarded writes and their inventory reads. Discover and describe these operations before submitting a preview:
+
+| Resource  | Read            | Create            | Update            | Delete            |
+| --------- | --------------- | ----------------- | ----------------- | ----------------- |
+| Interface | `listWireguard` | `createWireguard` | `modifyWireguard` | `deleteWireguard` |
+| Peer      | `listPeer`      | `createPeer`      | `modifyPeer`      | `deletePeer`      |
+
+These canonical v1 endpoints are **deprecated in the bundled controller specification** in favor of site-to-site VPN APIs. This workflow supports controllers that still expose them; it does not translate between VPN models or promise support on newer firmware. Other VPN operations retain their existing discovery behavior and unverified outcomes.
+
+Previews validate the schema without HTTP; set `dryRun:false` to apply. Updates and deletes use `params.id`. Supply the complete required configuration from `describeApiOperation` for create/update. Interface configuration includes `name`, `status`, `mtu` (576–1440), `listenPort` (1–65535), `privateKey` and IPv4 `localIp`. Peer configuration includes `name`, `status`, `interfaceId`, `publicKey`, a nonempty `allowAddress` CIDR list and `keepAlive` (0–65535 seconds). Use `status:false` to disable an interface or peer.
+
+Additionally, **supply `presharedKey` explicitly on every peer create/update**: a valid 32-byte base64 key, or `""` to select no preshared key. Interface updates likewise require an explicit private key. Never submit a masked value from a controller response. Keys are redacted in previews, logs and submitted-secret error echoes. The workflow does not generate, export or persist keys; existing discovery reads still return controller data and must be treated as sensitive.
+
+Optional `endPoint` accepts an IP address or hostname without scheme/port. Supply `endPointPort` with a nonempty endpoint. Hostnames require the peer inventory to advertise `supportDomain:true`. Omit both for a roaming peer on creation. Updates preserve omitted known optional fields; explicitly set `endPoint:""` to remove an existing endpoint and its port. `allowAddress` replaces the complete list; readback ignores ordering but detects extra or missing entries. CIDR checks validate syntax and exact duplicates, not route overlap or canonical subnet equivalence.
+
+Execution checks bounded, complete inventories, duplicate names, missing targets and drift, then sends one mutation without replay. Peers must reference an existing interface and cannot duplicate another peer's public key on that interface. Interface address/listen-port reuse is conservatively refused, including disabled interfaces. Delete peers explicitly before deleting their interface; missing peer reference evidence also blocks interface deletion. Peer deletion does not require its former interface to exist. An exact disable-only update also skips interface availability and domain capability checks, while retaining explicit key input, drift checks and readback. All fields except `status` must match reported configuration; masked keys cannot prove this condition. Other edits still require reference checks.
+
+Readback verifies reported configuration and unchanged sibling records. Nonempty private/preshared keys are always listed in `notVerifiedFields` and keep overall verification `unknown`; clearing a preshared key requires an observed empty value. Lost acknowledgements remain `written:"unknown"` and must be inspected before retrying. No automatic rollback occurs. Changes can disrupt VPN connectivity, and concurrent edits after preflight remain possible. Verification does not prove a handshake, routing or reachability. Live WireGuard configuration has not been tested.

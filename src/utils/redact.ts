@@ -1,4 +1,5 @@
-const SENSITIVE_KEY = /password|passwd|secret|token|cookie|authorization|psk|security.?key|private.?key|api.?key|credential|client.?id/i;
+const SENSITIVE_KEY =
+    /password|passwd|secret|token|cookie|authorization|psk|preshared.?key|security.?key|private.?key|api.?key|credential|client.?id/i;
 
 /** Redact values in tool/request logs; returned tool data is unaffected. */
 export function redactForLogs(value: unknown, depth = 0, seen = new WeakSet<object>()): unknown {
@@ -106,7 +107,8 @@ export function redactedRequestError(error: unknown, redact: (value: unknown) =>
     const safe = new Error(message);
     if (error instanceof Error) safe.name = String(redact(error.name));
     if (error && typeof error === 'object') {
-        const source = error as { code?: unknown; status?: unknown };
+        const source = error as { code?: unknown; status?: unknown; errorCode?: unknown };
+        if (typeof source.errorCode === 'number' && Number.isSafeInteger(source.errorCode)) Object.assign(safe, { errorCode: source.errorCode });
         if (typeof source.code === 'string' || typeof source.code === 'number') Object.assign(safe, { code: redact(source.code) });
         const errorStatus = status ?? source.status;
         if (typeof errorStatus === 'number' && Number.isFinite(errorStatus)) Object.assign(safe, { status: errorStatus });

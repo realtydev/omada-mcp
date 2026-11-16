@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import { isDeepStrictEqual } from 'node:util';
 import type { RequestHandler } from '../omadaClient/request.js';
 import { createRequestRedactor, redactedRequestError } from '../utils/redact.js';
@@ -5,14 +6,17 @@ import { completeSsidSchema, ssidUpdateSchema } from '../utils/ssid-update-schem
 import { normalizeMac, validateSwitchMac } from '../utils/switch-port-safety.js';
 import { verifyWrite } from '../utils/write-verification.js';
 import type { ApiOperation } from './catalog.js';
+import { validateWireguard } from './wireguard.js';
 
 const SITE = '/openapi/v1/{omadacId}/sites/{siteId}';
 export const WLAN_PATH = `${SITE}/wireless-network/wlans`;
 export const SSID_PATH = `${WLAN_PATH}/{wlanId}/ssids`;
 export const POLICY_ROUTE_PATH = `${SITE}/routing/policy-routings`;
 const POE_SCHEDULE_PATH = `${SITE}/poe-schedules`;
+const WIREGUARD_PATH = `${SITE}/vpn/wireguards`;
+const WIREGUARD_PEER_PATH = `${SITE}/vpn/wireguard-peers`;
 type Row = Record<string, unknown> & { id: string };
-export type ResourceKind = 'wlan' | 'ssid' | 'policy-route' | 'poe-schedule';
+export type ResourceKind = 'wlan' | 'ssid' | 'policy-route' | 'poe-schedule' | 'wireguard' | 'wireguard-peer';
 export type ResourceRead = (path: string, params?: Record<string, unknown>) => Promise<unknown>;
 
 export function managedResource(
@@ -23,6 +27,8 @@ export function managedResource(
         ['ssid', SSID_PATH, 'ssidId', ''],
         ['policy-route', POLICY_ROUTE_PATH, 'policyRoutingId', 'PUT'],
         ['poe-schedule', POE_SCHEDULE_PATH, 'poeScheduleId', 'PUT'],
+        ['wireguard', WIREGUARD_PATH, 'id', 'PUT'],
+        ['wireguard-peer', WIREGUARD_PEER_PATH, 'id', 'PUT'],
     ] as const) {
         if (
             (operation.method === 'POST' && operation.path === listPath) ||
@@ -38,6 +44,7 @@ export function isManagedResourceWrite(method: string, path: string): boolean {
     return (
         method !== 'GET' &&
         (/\/sites\/[^/]+\/poe-schedules(?:\/[^/]+)?\/?$/.test(path) ||
+            /\/sites\/[^/]+\/vpn\/(?:wireguards|wireguard-peers)(?:\/[^/]+)?\/?$/.test(path) ||
             /\/sites\/[^/]+\/routing\/policy-routings(?:\/[^/]+)?$/.test(path) ||
             /\/sites\/[^/]+\/wireless-network\/wlans(?:\/[^/]+)?$/.test(path) ||
             /\/sites\/[^/]+\/wireless-network\/(?:wlans\/[^/]+\/)?ssids(?:\/[^/]+)?$/.test(path))
@@ -112,7 +119,9 @@ function poePorts(value: unknown): Record<string, number[]> {
 export function validateManagedInput(kind: ResourceKind, method: string, body: unknown, siteId?: unknown): void {
     if (method === 'DELETE') return;
     if (!object(body)) throw new Error('Resource configuration is required');
-    if (kind === 'ssid') {
+    if (kind === 'wireguard' || kind === 'wireguard-peer') {
+        validateWireguard(kind, body);
+    } else if (kind === 'ssid') {
         completeSsidSchema.parse(Object.fromEntries(Object.entries(body).filter(([key]) => Object.hasOwn(ssidUpdateSchema.shape, key))));
     } else if (kind === 'wlan' && method === 'POST' && body.clone !== false) {
         throw new Error('Verified WLAN creation requires clone:false; cloning SSIDs is not supported by this workflow');
@@ -168,18 +177,33 @@ export async function executeManagedWrite(input: {
     const { kind, listPath, idParam } = resource;
     const method = operation.method;
     const id = method === 'POST' ? undefined : String(params[idParam]);
+    let peerDomainSupport = false;
     const readRows = async () => {
-        const rows = await readResourceRows((page) => read(listPath, { ...params, page, pageSize: 100 }), [idParam]);
+        const rows = await readResourceRows(
+            async (page) => {
+                const result = await read(listPath, { ...params, page, pageSize: 100 });
+                if (kind === 'wireguard-peer' && page === 1) peerDomainSupport = object(result) && result.supportDomain === true;
+                return result;
+            },
+            [idParam]
+        );
         if (kind === 'poe-schedule' && rows.some((row) => row.siteId !== undefined && row.siteId !== params.siteId))
             throw new Error('PoE schedule inventory identifies another site');
         return rows;
     };
     const before = await readRows(),
         current = before.find((row) => row.id === id);
+    const secretFields =
+        (kind === 'wireguard' || kind === 'wireguard-peer') && object(input.body)
+            ? Object.entries(input.body)
+                  .filter(([key, value]) => ['privateKey', 'presharedKey'].includes(key) && Boolean(value))
+                  .map(([key]) => key)
+            : [];
     const noOp = () => ({
         written: false as const,
-        verified: true,
-        verification: { status: 'verified' as const, attempts: 0, ...(id ? { resourceId: id } : {}) },
+        verified: secretFields.length === 0,
+        verification: { status: secretFields.length ? ('unknown' as const) : ('verified' as const), attempts: 0, ...(id ? { resourceId: id } : {}) },
+        ...(secretFields.length ? { notVerifiedFields: secretFields } : {}),
     });
     if (method === 'DELETE' && !current) return noOp();
     if (method !== 'POST' && !current) throw new Error('Resource target does not exist');
@@ -188,8 +212,11 @@ export async function executeManagedWrite(input: {
     const comparable = (value: Record<string, unknown>) =>
         kind === 'poe-schedule' && value.poePortsMap !== undefined
             ? { ...value, poePortsMap: Object.entries(poePorts(value.poePortsMap)).sort(([a], [b]) => a.localeCompare(b)) }
-            : value;
+            : kind === 'wireguard-peer' && Array.isArray(value.allowAddress)
+              ? { ...value, allowAddress: [...value.allowAddress].sort() }
+              : value;
     const desired = method === 'DELETE' ? undefined : { ...(current ? config(current) : {}), ...(object(input.body) ? input.body : {}) };
+    if (kind === 'wireguard-peer' && desired?.endPoint === '') delete desired.endPointPort;
     if (desired) {
         validateBody(desired);
         validateManagedInput(kind, method, desired, params.siteId);
@@ -198,6 +225,8 @@ export async function executeManagedWrite(input: {
             throw new Error('Resource name already exists');
         if (current && subset(comparable(current), comparable(desired), false)) return noOp();
     }
+    const disableOnly =
+        current && desired?.status === false && isDeepStrictEqual(comparable({ ...config(current), status: false }), comparable(desired));
     if (kind === 'ssid') {
         const groups = await readResourceRows(() => read(WLAN_PATH, params), ['wlanId']);
         if (!groups.some((group) => group.id === params.wlanId)) throw new Error('WLAN group does not exist');
@@ -206,6 +235,25 @@ export async function executeManagedWrite(input: {
         if (current?.primary !== false) throw new Error('Default or unqualified WLAN groups cannot be deleted');
         const ssids = await readResourceRows((page) => read(SSID_PATH, { ...params, page, pageSize: 100 }), ['ssidId']);
         if (ssids.length) throw new Error('Delete SSIDs explicitly before deleting their WLAN group');
+    }
+    if (kind === 'wireguard' && method === 'DELETE') {
+        const peers = await readResourceRows((page) => read(WIREGUARD_PEER_PATH, { ...params, page, pageSize: 100 }));
+        if (peers.some((peer) => typeof peer.interfaceId !== 'string' || !peer.interfaceId || peer.interfaceId === id))
+            throw new Error('Delete referenced WireGuard peers explicitly before deleting their interface; unknown references cannot prove safety');
+    }
+    if (
+        kind === 'wireguard' &&
+        desired &&
+        before.some((row) => row.id !== id && (row.listenPort === desired.listenPort || row.localIp === desired.localIp))
+    )
+        throw new Error('WireGuard interface address or listen port is already in use');
+    if (kind === 'wireguard-peer' && desired) {
+        if (!disableOnly) {
+            const interfaces = await readResourceRows((page) => read(WIREGUARD_PATH, { ...params, page, pageSize: 100 }));
+            if (!interfaces.some((row) => row.id === desired.interfaceId)) throw new Error('WireGuard interface does not exist');
+        }
+        if (before.some((row) => row.id !== id && row.interfaceId === desired.interfaceId && row.publicKey === desired.publicKey))
+            throw new Error('WireGuard peer public key already exists on this interface');
     }
     if (kind === 'policy-route' && desired) {
         for (const side of ['source', 'destination']) {
@@ -216,12 +264,7 @@ export async function executeManagedWrite(input: {
                 throw new Error(`Policy route ${side} references an unavailable network/group`);
         }
     }
-    const disablePoeOnly =
-        kind === 'poe-schedule' &&
-        current &&
-        desired?.status === false &&
-        isDeepStrictEqual(comparable({ ...config(current), status: false }), comparable(desired));
-    if (kind === 'poe-schedule' && desired && !disablePoeOnly) {
+    if (kind === 'poe-schedule' && desired && !disableOnly) {
         const profiles = await readResourceRows(() => read(`${SITE}/time-range-profiles`, params), ['profileId']);
         if (!profiles.some((profile) => profile.id === desired.turnOnTime)) throw new Error('PoE schedule time-range profile does not exist');
         const selected = poePorts(desired.poePortsMap);
@@ -269,6 +312,15 @@ export async function executeManagedWrite(input: {
             );
         });
     if (!same(before, await readRows())) throw new Error('Resource configuration changed during preflight; no write was sent');
+    if (
+        kind === 'wireguard-peer' &&
+        !disableOnly &&
+        typeof desired?.endPoint === 'string' &&
+        desired.endPoint &&
+        !isIP(desired.endPoint) &&
+        !peerDomainSupport
+    )
+        throw new Error('Controller has not advertised WireGuard peer domain endpoint support');
     const redact = createRequestRedactor(input.body, desired);
     let acknowledged = false,
         result: unknown,
@@ -298,8 +350,9 @@ export async function executeManagedWrite(input: {
         if (!object(value)) return value;
         return Object.fromEntries(
             Object.entries(value)
-                .filter(([key]) => {
-                    if (!/password|passwd|secret|^psk$|security.?key|private.?key/i.test(key)) return true;
+                .filter(([key, child]) => {
+                    if (key === 'presharedKey' && child === '') return true;
+                    if (!/password|passwd|secret|^psk$|preshared.?key|security.?key|private.?key/i.test(key)) return true;
                     notVerifiedFields.push(`${prefix}${key}`);
                     return false;
                 })
@@ -337,7 +390,7 @@ export async function executeManagedWrite(input: {
                 return false;
             if (method === 'DELETE') return !observed;
             if (!observed || (method === 'POST' && ackId !== undefined && ackId !== observed.id)) return false;
-            return subset(kind === 'poe-schedule' ? comparable(observed) : (detail ?? observed), expected);
+            return subset(kind === 'poe-schedule' || kind === 'wireguard-peer' ? comparable(observed) : (detail ?? observed), expected);
         }
     );
     const verified = verification.status === 'verified' && notVerifiedFields.length === 0;

@@ -391,7 +391,7 @@ function preferredWriteTool(operation: ApiOperation, body: unknown): string | un
     if (/\/sites\/\{[^}]+\}\/clients\/\{[^}]+\}\/lock-to-ap$/.test(operation.path)) return 'setClientApLock';
     if (/\/sites\/\{[^}]+\}\/clients\/config$/.test(operation.path) && object(body) && Object.hasOwn(body, 'lockToAp')) return 'setClientApLock';
     if (isManagedResourceWrite(operation.method, operation.path) && !managedResource(operation))
-        return 'the canonical v1 SSID/WLAN, policy-routing or PoE-scheduling operation through executeApiOperation';
+        return 'the canonical v1 managed resource operation through executeApiOperation';
     if (operation.method === 'PATCH' && /\/aps\/\{[^}]+\}\/override$/.test(operation.path)) return 'updateApSsidOverride';
     if (/\/aps\/\{[^}]+\}\/radio-config$/.test(operation.path)) return 'setApRadio';
     if (/\/site\/log-notification$/.test(operation.path)) return 'setLogNotifications';

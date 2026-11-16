@@ -35,6 +35,15 @@ describe('tool log redaction', () => {
 });
 
 describe('request-scoped secret redaction', () => {
+    it('redacts WireGuard key names and echoes while retaining controller error identity', () => {
+        const body = { privateKey: 'private-value', presharedKey: 'preshared-value', publicKey: 'public-value' };
+        expect(JSON.parse(safeSerialize(body))).toEqual({ privateKey: '[redacted]', presharedKey: '[redacted]', publicKey: 'public-value' });
+        const error = Object.assign(new Error('Rejected private-value and preshared-value'), { errorCode: -43208 });
+        const safe = redactedRequestError(error, createRequestRedactor(body));
+        expect(safe).toMatchObject({ message: 'Rejected [redacted] and [redacted]', errorCode: -43208 });
+        expect(safe.stack).not.toMatch(/private-value|preshared-value/);
+    });
+
     it('fully masks secret echoes in ordinary text, encoded bodies and response keys', () => {
         const secret = 'wireless-"secret"-value';
         const redact = createRequestRedactor(

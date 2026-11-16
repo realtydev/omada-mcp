@@ -429,3 +429,5 @@ Read-only qualification for additional controllers is documented in [compatibili
 Use `getSiteDashboard({includePoePorts:true})` for bounded port PoE detail and reported switch headroom. [PoE reporting](docs/poe-reporting.md) explains source coverage and missing readings; [session recovery](docs/session-recovery.md) describes safe-read renewal and write refusal.
 
 PoE schedule creation, updates and deletion reuse `executeApiOperation`, with preview defaults, time-range/port checks and configuration readback. See [PoE scheduling](docs/managed-workflows.md#poe-scheduling) for operation IDs, scopes and examples.
+
+WireGuard interface and peer configuration also reuses `executeApiOperation`, with guarded lifecycle writes, key redaction and explicit secret-verification limits. See [WireGuard configuration](docs/managed-workflows.md#wireguard-interfaces-and-peers) for scopes, key requirements and compatibility with the deprecated v1 endpoints.

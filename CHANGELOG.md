@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Guarded WireGuard interface/peer create, update and delete through existing discovery, with explicit secret handling, reference/conflict checks, bounded readback and raw-call bypass protection for the deprecated v1 endpoints.
+
 - Guarded PoE schedule create/update/delete through existing API discovery, with time-range and PoE-port reference checks, active-port conflict checks, site binding, drift refusal and exact target-map readback.
 
 - Guarded `setClientApLock` previews, sets and removes a wireless client AP lock using documented client detail and eligible-AP evidence; readback verifies configuration after one mutation.
