@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server for TP-Link Omada network diagnostics and configuration, with stdio and HTTP transports and a runtime CLI for managed Docker setup, updates and rollback.
 
-> **Release:** The [v0.14.0 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.14.0) includes 112 tools, verified DNS/mDNS management, eligible DNS rollback and per-client application-traffic reporting. `getServerInfo` identifies the running build.
+> **Release:** The [v0.14.1 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.14.1) includes 112 tools, verified DNS/mDNS management, eligible DNS rollback and per-client application-traffic reporting with OC200 limitation guidance. See [DNS resolution quirks](docs/dns-rollback.md#resolution-checks-and-observed-dns-quirks). `getServerInfo` identifies the running build.
 
 ## Runtime management
 

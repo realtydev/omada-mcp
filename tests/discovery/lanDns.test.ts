@@ -138,6 +138,37 @@ describe('verified discovered LAN DNS writes', () => {
         expect(await run()).toMatchObject({ written: true, verified: false, verification: { status: 'unknown', attempts: 3 } });
         expect(writes()).toHaveLength(1);
     });
+    it('refuses to verify CNAME custom TTL silently omitted by the controller and never replays it', async () => {
+        const cname = { enable: true, name: 'CNAME fixture', domain: 'fixture.lan', type: 1, cname: 'example.com', lanNetworkIds: ['net'] };
+        const { run, writes } = setup([[], [], [{ ...cname, id: 'dns-1' }]]);
+        const result = await run('createLanDns', { ...cname, customTtl: true, ttl: 30 });
+        expect(result).toMatchObject({
+            written: true,
+            verified: false,
+            verification: { status: 'unknown', attempts: 3, observed: cname },
+        });
+        expect(result).not.toHaveProperty('rollbackReceipt');
+        expect(writes()).toHaveLength(1);
+        expect(writes()[0][1]).toBe(false);
+    });
+    it('verifies CNAME configuration with default TTL without claiming a DNS resolution check', async () => {
+        const cname = { enable: true, name: 'CNAME fixture', domain: 'fixture.lan', type: 1, cname: 'example.com', lanNetworkIds: ['net'] };
+        const { run, writes, request } = setup([[], [], [{ ...cname, id: 'dns-1' }]]);
+        const result = await run('createLanDns', cname);
+        expect(result).toMatchObject({ written: true, verified: true, verification: { status: 'verified', observed: cname } });
+        expect(writes()).toHaveLength(1);
+        expect(request.request.mock.calls.every(([config]) => config.url.includes('/setting/lan/dns'))).toBe(true);
+        expect(result).not.toHaveProperty('resolutionVerified');
+    });
+    it.each(['fixture.test', 'fixture.lan'])('keeps %s valid for configuration without claiming runtime resolution', async (domain) => {
+        const desired = { ...body, enable: true, domain, customTtl: true, ttl: 30, ipv6Addresses: ['2001:db8::123'] };
+        const { run, request } = setup([[], [], [{ ...desired, id: 'dns-1' }]]);
+        expect(await run('createLanDns', desired)).toMatchObject({
+            verified: true,
+            verification: { status: 'verified', observed: desired },
+        });
+        expect(request.request.mock.calls.every(([config]) => config.url.includes('/setting/lan/dns'))).toBe(true);
+    });
     it('reports unapplied writes as mismatches without replay', async () => {
         const { run, writes } = setup([[], [], []]);
         expect(await run()).toMatchObject({ written: true, verified: false, verification: { status: 'mismatch', attempts: 3 } });

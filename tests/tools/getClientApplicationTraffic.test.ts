@@ -28,6 +28,7 @@ describe('client application traffic MCP boundary', () => {
         expect(tools).toHaveLength(1);
         expect(tools[0].annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false, idempotentHint: true });
         expect(tools[0].inputSchema.additionalProperties).toBe(false);
+        expect(tools[0].description).toContain('OC200');
         expect((await client.callTool({ name: 'getClientApplicationTraffic', arguments: { clientMac: 'AA-BB-CC-DD-EE-01' } })).isError).toBeFalsy();
         expect(getClientApplicationTraffic).toHaveBeenCalledExactlyOnceWith({ clientMac: 'AA-BB-CC-DD-EE-01', maxApplications: 100 });
     });

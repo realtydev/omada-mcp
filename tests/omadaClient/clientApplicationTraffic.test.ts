@@ -75,6 +75,40 @@ describe('selected-client application traffic', () => {
             data: { applications: [{ metadata: { status: 'matched', value: { applicationName: 'Live name', nameSource: 'application' } } }] },
         });
     });
+    it('explains possible OC200 limitations for an empty response with recording enabled without diagnosing the controller', async () => {
+        responses[`specificClientInfo/${clientMac}`] = [];
+        const result = await ops.getClientApplicationTraffic({ clientMac });
+        expect(result).toMatchObject({
+            recording: 'enabled',
+            collectionComplete: false,
+            sections: { traffic: { status: 'partial', data: { applications: [], availableRecords: 0 } } },
+        });
+        const explanation = result.limitations.join(' ');
+        expect(explanation).toContain('OC200');
+        expect(explanation).toContain('User analytics UI');
+        expect(explanation).toContain('possible reason');
+        expect(explanation).toContain('not a detected controller model or a confirmed API limitation');
+        expect(explanation).toContain('https://support.omadanetworks.com/en/document/13241/');
+        expect(explanation).toContain('getApplicationControlTraffics');
+        expect(explanation).toContain('aggregate counters cannot establish per-client usage');
+        expect(request.request).toHaveBeenCalledTimes(3);
+        expect(request.request.mock.calls.every(([config]) => config.method === 'GET')).toBe(true);
+    });
+    it.each([{ value: [{ ...traffic, upload: 0, download: 0, traffic: 0 }] }, { value: [{ ...traffic, siteId: 'other' }] }, { value: null }])(
+        'does not label populated, rejected or malformed records as an empty controller response %j',
+        async ({ value }) => {
+            responses[`specificClientInfo/${clientMac}`] = value;
+            const result = await ops.getClientApplicationTraffic({ clientMac });
+            expect(result.limitations.join(' ')).not.toContain('OC200');
+        }
+    );
+    it.each([403, 404, 500])('preserves source failure %i without suggesting an empty OC200 response', async (status) => {
+        responses[`specificClientInfo/${clientMac}`] = Object.assign(new Error('private failure'), { status });
+        const result = await ops.getClientApplicationTraffic({ clientMac });
+        expect(result.sections.traffic).toHaveProperty('httpStatus', status);
+        expect(result.limitations.join(' ')).not.toContain('OC200');
+        expect(JSON.stringify(result)).not.toContain('private failure');
+    });
     it('keeps disabled DPI and omitted logging distinct from empty or zero traffic', async () => {
         responses.status = { dpi: false };
         responses.applications = { ...grid(), totalRows: 2788 };

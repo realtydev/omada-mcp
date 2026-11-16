@@ -8,7 +8,7 @@ export function registerGetClientApplicationTrafficTool(server: McpServer, clien
         'getClientApplicationTraffic',
         {
             description:
-                'Read bounded application-traffic evidence for one client MAC and a past epoch-second window up to 24 hours. Reports DPI/logging settings, native counter fields and partial/unsupported evidence. Missing or empty traffic is not zero usage; no byte conversion, rate calculation, client fanout or setting change.',
+                'Read bounded application-traffic evidence for one client MAC and a past epoch-second window up to 24 hours. Reports DPI/logging settings, native counter fields and partial/unsupported evidence. Empty responses explain the possible OC200 hardware-controller analytics limitation and how to check aggregate data. Missing or empty traffic is not zero usage; no byte conversion, rate calculation, client fanout or setting change.',
             inputSchema: clientApplicationTrafficOptionsSchema,
             annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
         },
