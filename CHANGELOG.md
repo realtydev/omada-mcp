@@ -4,13 +4,22 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-16
+
 ### Added
+
+- Opt-in dashboard PoE port detail and reported headroom, plus source-labelled power evidence in existing switch-port overviews. Missing readings, unsupported ports, duplicate identities and truncated joins remain explicit.
 
 - `diagnoseNetwork` composes bounded read-only inventory, WAN/Wi-Fi, switch coverage, inherited VLANs, topology and incident evidence, with qualified channel-overlap candidates, explicit signal policy and matching historical loop recovery. Operating channels now accept the controller’s channel/frequency format.
 - AP SSID reads now distinguish native override fields, inherited WLAN VLAN settings and resolved configured tagging by stable SSID ID, leaving missing or advanced evidence unknown.
 - Managed-switch port coverage joins public configuration and guarded web telemetry, includes non-PoE switches, separates administrative/link state and adds an explicit coverage report without changing the legacy array shape.
 - Read-only RF planning reports combine configuration, native status, successful-deployment evidence, bounded history and optional per-device/radio detail, with explicit partial-failure and tool-scope handling.
 - Typed per-AP SSID override reads and updates with redacted previews, internal configuration evidence, sibling preservation, preflight drift refusal and bounded read-back verification.
+
+### Fixed
+
+- Internal web-API reads recover one rejected session on a proven login redirect or bounded login form without following redirects, changing the configured TLS origin or leaking response bodies. Timeout and matching-session invalidation remain bounded.
+- Internal mutations clear rejected sessions but never automatically replay after authentication failure or ambiguous responses; callers must inspect current state before an explicit retry.
 
 ## [0.11.0] - 2026-11-09
 

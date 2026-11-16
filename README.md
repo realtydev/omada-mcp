@@ -12,7 +12,7 @@
 
 </div>
 
-> **Release:** [v0.11.0](https://github.com/realtydev/omada-mcp/releases/tag/v0.11.0) includes 105 tools, automatic API discovery, discovery refresh, diagnostic comparisons and extended verified rollback. Use `getServerInfo` to confirm the running build.
+> **Release:** [v0.12.0](https://github.com/realtydev/omada-mcp/releases/tag/v0.12.0) includes 110 tools, safe internal-session recovery, detailed PoE, RF planning and combined network diagnosis. Use `getServerInfo` to confirm the running build.
 
 ```text
 You:    Why is the guest SSID slow on the upstairs AP?
@@ -26,14 +26,13 @@ Claude: (setApRadio dryRun=true → setApRadio) Done. Read back and verified.
 
 Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned updates and rollback of client-managed stdio processes or a persistent local Docker service. It verifies actual running builds with `getServerInfo`, preserves credential files, and can adopt an existing Compose service. Setup can configure Codex, Cursor and Claude Desktop automatically; updates report client reload results and support optional desktop restarts.
 
-Current source adds per-AP SSID overrides and read-only RF planning workflows (110 tools; 59 in read-only mode before category filtering). These additions await the next release. See [per-AP overrides](docs/ap-ssid-overrides.md), [RF planning](docs/rf-planning.md), [switch coverage](docs/switch-port-coverage.md) and [combined diagnosis](docs/network-diagnosis.md).
-
 ## Highlights
 
 - **Automatic API discovery.** `searchApiOperations` → `describeApiOperation` → `executeApiOperation`. Prefer the controller's live specification, with an explicit bundled fallback containing 1,676 indexed operations. Unsupported operations are identified; a catalogue entry does not prove device support. See [API discovery](docs/api-discovery.md).
-- **110 tools in the current source, including 59 in read-only mode before category filtering.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
+- **110 tools, including 59 in read-only mode before category filtering.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
 - **Traffic, RF and WAN diagnostics.** Bounded history and timestamped evidence distinguish missing metrics, partial results and truncation. See [network workflows](docs/network-workflows.md) and [diagnostic comparisons](docs/diagnostic-comparisons.md).
 - **MSP, OpenAPI 3.1 and files.** Explicit MSP scope, JSON Schema 2020 validation and opt-in bounded multipart uploads/binary downloads. See [file transfers](docs/file-transfers.md).
+- **Session recovery and PoE detail.** Safe internal reads renew rejected sessions once; writes are never replayed. Request `getSiteDashboard({includePoePorts:true})` for bounded port power and switch headroom. See [session recovery](docs/session-recovery.md) and [PoE reporting](docs/poe-reporting.md).
 - **Guarded configuration changes.** Discovered writes default to validated previews. Radio, DHCP, SSID, switch-port, rate-limit profile and log-notification writes retain dedicated safeguards. Eligible rate-limit, DHCP, AP radio and secret-free SSID changes include drift-checked rollback receipts. Other discovered writes explicitly report that they have not been verified by reading settings back.
 - **Wi-Fi audit snapshots and scoped tools.** Compare AP radio configuration across matching snapshots with [Wi-Fi audits](docs/wifi-audit.md), and limit dedicated/discovered operations with [category scopes](docs/scoped-tools.md).
 - **Explicit read-only access.** `MCP_TOOL_PROFILE=read-only` blocks writes, including discovered operations. Controller permissions still govern which data is accessible.
@@ -421,3 +420,5 @@ Maintained by [realtydev](https://github.com/realtydev).
 [MIT](LICENSE)
 
 Read-only qualification for additional controllers is documented in [compatibility validation](docs/compatibility-validation.md). Missing MSP/Fusion hardware remains explicitly untested.
+
+Use `getSiteDashboard({includePoePorts:true})` for bounded port PoE detail and reported switch headroom. [PoE reporting](docs/poe-reporting.md) explains source coverage and missing readings; [session recovery](docs/session-recovery.md) describes safe-read renewal and write refusal.
