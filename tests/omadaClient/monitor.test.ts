@@ -73,6 +73,49 @@ describe('MonitorOperations dashboard', () => {
         expect(JSON.stringify(result)).not.toContain('poePorts');
     });
 
+    it('opts into bounded detailed PoE without extra requests or changing other sections', async () => {
+        request.get.mockImplementation(async (path: string) => ({
+            errorCode: 0,
+            result: path.endsWith('poe-usage')
+                ? [
+                      {
+                          mac: 'AA-BB-CC-DD-EE-01',
+                          portNum: 8,
+                          totalPowerUsed: 13,
+                          totalPercentUsed: 8.31,
+                          totalPower: 160,
+                          poePorts: [
+                              { portId: 1, poeSupported: true, poeEnabled: true, poePower: 13, poePercent: 43.3 },
+                              { portId: 2, poeSupported: true, poeEnabled: false },
+                          ],
+                      },
+                  ]
+                : payloads[path.split('/').at(-1) ?? ''],
+        }));
+        const result = await ops.getSiteDashboard({ includePoePorts: true });
+        expect(result.sections.poe).toMatchObject({
+            status: 'ok',
+            partial: true,
+            data: [
+                {
+                    headroomWatts: 147,
+                    totalPercentUsed: 8.31,
+                    poePorts: [
+                        { portId: 1, poePower: 13, poePercent: 43.3 },
+                        { portId: 2, status: 'partial', missingFields: ['poePower', 'poePercent'] },
+                    ],
+                },
+            ],
+        });
+        expect(result.collectionComplete).toBe(false);
+        expect(request.get).toHaveBeenCalledTimes(5);
+    });
+
+    it('validates the PoE detail flag before controller requests', async () => {
+        await expect(ops.getSiteDashboard({ includePoePorts: 'true' as never })).rejects.toThrow('includePoePorts');
+        expect(request.get).not.toHaveBeenCalled();
+    });
+
     it('reports independent request and controller errors while keeping successful sections', async () => {
         request.get.mockImplementation((path: string) => {
             if (path.endsWith('wifi-summary')) throw new Error('Unsupported request path');

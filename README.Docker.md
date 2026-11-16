@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server for TP-Link Omada network diagnostics and configuration, with stdio and HTTP transports and a runtime CLI for managed Docker setup, updates and rollback.
 
-> **Release:** The [v0.11.0 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.11.0) includes 105 tools, automatic API discovery, discovery refresh, diagnostic comparisons and extended verified rollback. `getServerInfo` identifies the running build.
+> **Release:** The [v0.12.0 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.12.0) includes 110 tools, safe internal-session recovery, detailed PoE, RF planning and combined network diagnosis. `getServerInfo` identifies the running build.
 
 ## Runtime management
 
@@ -78,7 +78,7 @@ The HTTP server will be available at `http://localhost:3000/mcp` (stream transpo
 ## Features
 
 - OAuth client-credentials authentication with automatic token refresh, plus web-session authentication for Fusion gateways
-- 110 tools in the current source (the released image has 105) for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
+- 110 tools for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
 - Automatic API discovery: search, describe and execute documented JSON operations with live/bundled source information and write previews
 - Dedicated dashboard, topology and client/log diagnostics, with guarded DHCP, radio and log-notification workflows
 - Read-only profile enforced for dedicated tools and discovered operations
@@ -404,3 +404,5 @@ Want to help improve this project? Contributions are welcome! Visit our GitHub r
 ## License
 
 This project is licensed under the [MIT License](https://github.com/realtydev/omada-mcp/blob/main/LICENSE).
+
+Use `getSiteDashboard({includePoePorts:true})` for bounded port PoE detail and reported switch headroom. [PoE reporting](docs/poe-reporting.md) explains source coverage and missing readings; [session recovery](docs/session-recovery.md) describes safe-read renewal and write refusal.

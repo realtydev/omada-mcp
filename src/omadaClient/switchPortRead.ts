@@ -2,6 +2,7 @@ import type { OmadaApiResponse, OmadaDeviceInfo } from '../types/index.js';
 import { normalizeMac, portNumber, record, validateSwitchMac } from '../utils/switch-port-safety.js';
 import type { DeviceOperations } from './device.js';
 import type { InternalRequestHandler } from './internalRequest.js';
+import { POE_SOURCE, type PoeSwitchUsage, parsePoeUsage } from './poeUsage.js';
 import type { RequestHandler } from './request.js';
 import type { SiteOperations } from './site.js';
 import type { SwitchOperations } from './switch.js';
@@ -20,7 +21,8 @@ export interface SwitchPortCoverage {
     inventoryKnown: boolean;
     knownPorts: number;
     telemetryPorts: number;
-    sources: { configuration: EvidenceState; internal: EvidenceState; poe: EvidenceState };
+    sources: { configuration: EvidenceState; internal: EvidenceState; poe: EvidenceState; poeUsage?: EvidenceState };
+    poeUsage?: Record<string, unknown>;
 }
 export interface SwitchPortOverview {
     capturedAt: number;
@@ -29,6 +31,7 @@ export interface SwitchPortOverview {
     collectionComplete: boolean;
     inventoryStatus: EvidenceState;
     inventoryTruncated: boolean;
+    poeUsageTruncated?: boolean;
     switches: SwitchPortCoverage[];
     ports: Row[];
     limitations: string[];
@@ -131,12 +134,23 @@ export class SwitchPortReadOperations {
         let devices: OmadaDeviceInfo[] = [],
             inventoryStatus: EvidenceState = 'ok',
             inventoryTruncated = false;
-        const [inventory, poeResult] = await Promise.allSettled([
+        const [inventory, poeResult, usageResult] = await Promise.allSettled([
             this.inventory.listDevices(resolved, { maxRecords: 1000 }),
             this.request.fetchPaginated<Row>(this.buildPath(`/sites/${encodeURIComponent(resolved)}/switches/ports/poe-info`), {}, 200, {
                 maxRecords: 8192,
             }),
+            (async () => {
+                const response = await this.request.get<OmadaApiResponse<unknown>>(
+                    this.buildPath(`/sites/${encodeURIComponent(resolved)}/dashboard/poe-usage`)
+                );
+                return parsePoeUsage(this.request.ensureSuccess(response));
+            })(),
         ]);
+        const usageState: EvidenceState = usageResult.status === 'fulfilled' ? 'ok' : state(usageResult.reason);
+        const usageTruncated = usageResult.status === 'fulfilled' && usageResult.value.truncated;
+        const usageByMac = new Map<string, PoeSwitchUsage>(
+            usageResult.status === 'fulfilled' ? usageResult.value.switches.map((item) => [item.mac, item]) : []
+        );
         if (inventory.status === 'fulfilled') devices = inventory.value.filter((d) => d.type === 'switch');
         else inventoryStatus = state(inventory.reason);
         const selected = new Map<string, { mac: string; name?: string }>();
@@ -189,7 +203,7 @@ export class SwitchPortReadOperations {
                         inventoryKnown: false,
                         knownPorts: 0,
                         telemetryPorts: 0,
-                        sources: { configuration: 'unavailable', internal: 'unavailable', poe: poeState },
+                        sources: { configuration: 'unavailable', internal: 'unavailable', poe: poeState, poeUsage: usageState },
                     });
                 break;
             }
@@ -207,7 +221,7 @@ export class SwitchPortReadOperations {
                               )
                             : Promise.resolve({ source: 'internal-web-api', status: 'unavailable' } as ReadEvidence),
                     ]);
-                    const sources = { configuration: config.status, internal: web.status, poe: poeState };
+                    const sources = { configuration: config.status, internal: web.status, poe: poeState, poeUsage: usageState };
                     let publicPorts: Map<string, Row> | undefined, webPorts: Map<string, Row> | undefined;
                     for (const [e, key] of [
                         [config, 'portList'],
@@ -233,6 +247,10 @@ export class SwitchPortReadOperations {
                     const authority = publicPorts ?? webPorts;
                     const inventoryKnown =
                         consistent && authority !== undefined && authority.size > 0 && [...primary.keys()].every((k) => authority.has(k));
+                    const usage = usageByMac.get(d.mac);
+                    const usagePorts = new Map(usage?.poePorts.map((port) => [port.portId, port]));
+                    const powerJoinable = inventoryKnown && [...authority!.keys()].every((key) => key.startsWith('1:0:'));
+                    const { poePorts: _usagePorts, ...usageSummary } = usage ?? { poePorts: [] };
                     const result: Row[] = [];
                     let telemetryPorts = 0;
                     for (const key of keys) {
@@ -308,6 +326,17 @@ export class SwitchPortReadOperations {
                             portName: base.portName ?? select(w ?? {}, ['name']).name ?? select(c ?? {}, ['name']).name,
                             standardPort: { unit: Number(key.split(':')[0]), slot: Number(key.split(':')[1]), port: Number((p ?? w ?? c)!.port) },
                             configured,
+                            poeUsage: usageTruncated
+                                ? { source: POE_SOURCE, status: 'unavailable', reason: 'truncated_poe_identity_evidence' }
+                                : usageState !== 'ok'
+                                  ? { source: POE_SOURCE, status: usageState }
+                                  : !powerJoinable
+                                    ? { source: POE_SOURCE, status: 'unavailable', reason: 'unestablished_or_stacked_port_identity' }
+                                    : (usagePorts.get(Number((p ?? w ?? c)!.port)) ?? {
+                                          source: POE_SOURCE,
+                                          status: 'unavailable',
+                                          reason: 'port_not_reported_or_ambiguous',
+                                      }),
                             ...(current ? { portStatus: current } : {}),
                             operational: {
                                 status: current ? 'available' : 'unavailable',
@@ -334,6 +363,15 @@ export class SwitchPortReadOperations {
                             knownPorts: keys.size,
                             telemetryPorts,
                             sources,
+                            poeUsage: usageTruncated
+                                ? { source: POE_SOURCE, status: 'unavailable', reason: 'truncated_poe_identity_evidence' }
+                                : usage
+                                  ? usageSummary
+                                  : {
+                                        source: POE_SOURCE,
+                                        status: usageState === 'ok' ? 'unavailable' : usageState,
+                                        ...(usageState === 'ok' ? { reason: 'switch_not_reported' } : {}),
+                                    },
                         } as SwitchPortCoverage,
                         ports: result,
                     };
@@ -350,6 +388,7 @@ export class SwitchPortReadOperations {
             siteId: resolved,
             inventoryStatus,
             inventoryTruncated,
+            poeUsageTruncated: usageTruncated,
             collectionComplete:
                 inventoryStatus === 'ok' && !inventoryTruncated && poeState !== 'unknown' && switches.every((s) => s.status === 'complete'),
             switches,
@@ -358,6 +397,7 @@ export class SwitchPortReadOperations {
                 'Managed-switch ports only; gateway-integrated and unmanaged ports are outside this inventory.',
                 'Configuration/admin status is separate from live link state. Down links have no negotiated Mbps value.',
                 'Speed conversion uses controller-provided port capability labels; unknown codes remain unconverted.',
+                'Dashboard PoE details never establish port inventory; flat port IDs are not joined to stacked or ambiguous inventories.',
                 'Reads are not atomic. Freshness of controller telemetry is unknown; retrieved data may be cached.',
                 'Bounded to 1000 inventory devices, 64 switches, 512 ports per source/switch and a 30-second start budget; in-flight reads retain client timeouts.',
             ],
