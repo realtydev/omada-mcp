@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { dnsIpv4Schema, dnsIpv6Schema, dnsNameSchema, dnsServerSchema } from '../utils/dns-change-schema.js';
 import type { ApiOperation } from './catalog.js';
 
 const ids = z.array(z.string().trim().min(1)).min(1);
@@ -20,14 +21,20 @@ const ddns = z
 const lanDns = z
     .object({
         type: z.number().int().min(0).max(2),
-        lanNetworkIds: ids,
-        ipAddresses: z.array(z.string()).optional(),
-        ipv6Addresses: z.array(z.string()).optional(),
-        cname: z.string().min(1).optional(),
-        dnsServers: ids.max(2).optional(),
+        domain: dnsNameSchema.optional(),
+        aliases: z.array(dnsNameSchema).max(7).optional(),
+        lanNetworkIds: ids.optional(),
+        ipAddresses: z.array(dnsIpv4Schema).max(32).optional(),
+        ipv6Addresses: z.array(dnsIpv6Schema).max(32).optional(),
+        cname: dnsNameSchema.or(z.literal('')).optional(),
+        dnsServers: z.array(dnsServerSchema).min(1).max(2).optional(),
     })
     .loose()
     .superRefine((v, ctx) => {
+        if (v.type === 2 && v.lanNetworkIds !== undefined)
+            ctx.addIssue({ code: 'custom', path: ['lanNetworkIds'], message: 'Forward DNS does not support a LAN selection' });
+        if (v.type !== 2 && !v.lanNetworkIds?.length)
+            ctx.addIssue({ code: 'custom', path: ['lanNetworkIds'], message: 'IP and CNAME DNS require a LAN selection' });
         if (v.type === 0 && !(v.ipAddresses?.length || v.ipv6Addresses?.length))
             ctx.addIssue({ code: 'custom', path: ['ipAddresses'], message: 'IP records require an IPv4 or IPv6 address' });
         if (v.type === 1 && !v.cname) ctx.addIssue({ code: 'custom', path: ['cname'], message: 'CNAME records require a target' });

@@ -12,7 +12,7 @@
 
 </div>
 
-> **Release:** [v0.13.0](https://github.com/realtydev/omada-mcp/releases/tag/v0.13.0) includes 111 tools, a refreshed discovery catalog, native health/LLDP evidence and wireless security diagnostics. Use `getServerInfo` to confirm the running build.
+> **Release:** [v0.14.0](https://github.com/realtydev/omada-mcp/releases/tag/v0.14.0) includes 112 tools, verified DNS/mDNS management, eligible DNS rollback and per-client application-traffic reporting. Use `getServerInfo` to confirm the running build.
 
 ```text
 You:    Why is the guest SSID slow on the upstairs AP?
@@ -29,7 +29,7 @@ Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned
 ## Highlights
 
 - **Automatic API discovery.** `searchApiOperations` → `describeApiOperation` → `executeApiOperation`. Prefer the controller's live specification, with an explicit bundled fallback containing 2,450 indexed operations. Unsupported operations are identified; a catalogue entry does not prove device support. See [API discovery](docs/api-discovery.md).
-- **111 tools, including 60 in read-only mode before category filtering.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
+- **112 tools, including 61 in read-only mode before category filtering.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
 - **Traffic, RF and WAN diagnostics.** Bounded history and timestamped evidence distinguish missing metrics, partial results and truncation. See [network workflows](docs/network-workflows.md) and [diagnostic comparisons](docs/diagnostic-comparisons.md).
 - **MSP, OpenAPI 3.1 and files.** Explicit MSP scope, JSON Schema 2020 validation and opt-in bounded multipart uploads/binary downloads. See [file transfers](docs/file-transfers.md).
 - **Session recovery and PoE detail.** Safe internal reads renew rejected sessions once; writes are never replayed. Request `getSiteDashboard({includePoePorts:true})` for bounded port power and switch headroom. See [session recovery](docs/session-recovery.md) and [PoE reporting](docs/poe-reporting.md).
@@ -190,6 +190,7 @@ For Fusion gateways that do not expose Platform Integration OAuth credentials, s
 | `diagnoseSecurity`              | Saved rogue-AP and WIDS detections plus site-local threat evidence, with explicit source failures and bounded collection                                            |
 | `diagnoseLogs`                  | Combine bounded alert/event samples for an explicit time window, preserving failures and truncation                                                                 |
 | `diagnoseWifi`                  | Audit bounded Wi-Fi evidence and compare portable radio-configuration snapshots, with explicit missing/stale data                                                   |
+| `getClientApplicationTraffic`   | Read one client’s application traffic, DPI availability and bounded application metadata; missing data stays explicit                                               |
 | `getClientHistory`              | A client's association sessions over a time range, optionally with roams between APs                                                                                |
 | `getClient`                     | Get details for a specific client                                                                                                                                   |
 | `getSwitchStackDetail`          | Get switch stack configuration and status                                                                                                                           |

@@ -72,6 +72,7 @@ describe('tool exposure profiles', () => {
             'getSwitchPortOverview',
             'diagnoseNetwork',
             'diagnoseSecurity',
+            'getClientApplicationTraffic',
             'refreshApiCatalog',
             'getApRfScanResults',
             'getApAfcStatus',

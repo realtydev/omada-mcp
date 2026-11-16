@@ -63,6 +63,12 @@ describe('verified discovered LAN DNS writes', () => {
         expect(writes()[0][0].data).toMatchObject({ aliases: before.aliases, ipv6Addresses: [] });
         expect(writes()).toHaveLength(1);
     });
+    it('refuses a conflicting absolute DNS name independent of case and terminal root dot', async () => {
+        const existing = { ...row, domain: 'TEST.INVALID.', name: 'Existing DNS' };
+        const { run, writes } = setup([[existing]]);
+        await expect(run()).rejects.toThrow('conflicts');
+        expect(writes()).toHaveLength(0);
+    });
     it('does not write an unchanged configuration', async () => {
         const { run, writes } = setup([grid([row])]);
         expect(await run('modifyLanDns')).toMatchObject({ written: false, verified: true, verification: { attempts: 0 } });

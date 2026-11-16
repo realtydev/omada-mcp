@@ -1,7 +1,14 @@
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { z } from 'zod';
 import type { RequestHandler } from '../omadaClient/request.js';
+import {
+    type DnsChangeReceipt,
+    type DnsWriteSafety,
+    dnsChangeIdentifierSchema,
+    dnsChangeReceipt,
+    lanDnsConfigSchema,
+    sameDnsConfig,
+} from '../utils/dns-change-schema.js';
 import { verifyWrite, type WriteVerification } from '../utils/write-verification.js';
 import type { ApiOperation } from './catalog.js';
 
@@ -20,28 +27,8 @@ const fields = [
     'customTtl',
     'ttl',
 ] as const;
-const identifier = z
-    .string()
-    .min(1)
-    .max(256)
-    .regex(/^[^/\\%?#\s]+$/)
-    .refine((v) => v !== '.' && v !== '..');
-const rowSchema = z.object({
-    id: identifier.optional(),
-    dnsId: identifier.optional(),
-    enable: z.boolean(),
-    name: z.string().min(1).max(128),
-    domain: z.string().min(1).max(253),
-    type: z.number().int().min(0).max(2),
-    aliases: z.array(z.string()).max(7).optional(),
-    ipAddresses: z.array(z.string()).max(32).optional(),
-    ipv6Addresses: z.array(z.string()).max(32).optional(),
-    cname: z.string().optional(),
-    dnsServers: z.array(z.string()).max(2).optional(),
-    lanNetworkIds: z.array(identifier).min(1).max(1000),
-    customTtl: z.boolean().optional(),
-    ttl: z.number().int().min(1).max(86400).optional(),
-});
+const identifier = dnsChangeIdentifierSchema;
+const rowSchema = lanDnsConfigSchema.safeExtend({ id: identifier.optional(), dnsId: identifier.optional() }).strip();
 type Row = Record<string, unknown> & { id: string };
 export interface LanDnsWriteResult {
     written: boolean | 'unknown';
@@ -49,6 +36,8 @@ export interface LanDnsWriteResult {
     result?: unknown;
     verification: Omit<WriteVerification<Row[]>, 'observed' | 'message'> & { resourceId?: string; observed?: Row };
     warning?: string;
+    rollbackReceipt?: DnsChangeReceipt;
+    rollbackUnavailable?: string;
 }
 
 function object(value: unknown): value is Record<string, unknown> {
@@ -59,7 +48,7 @@ function config(row: Record<string, unknown>): Record<string, unknown> {
 }
 function canonical(value: unknown, field = ''): unknown {
     if (Array.isArray(value)) return value.map((item) => canonical(item, field)).sort();
-    if (typeof value === 'string' && ['domain', 'cname', 'aliases'].includes(field)) return value.toLowerCase();
+    if (typeof value === 'string' && ['domain', 'cname', 'aliases'].includes(field)) return value.toLowerCase().replace(/\.$/, '');
     return value;
 }
 function matches(row: Row, desired: Record<string, unknown>): boolean {
@@ -135,7 +124,8 @@ export async function executeLanDnsWrite(
     targetId: unknown,
     body: unknown,
     readPage: (page: number) => Promise<unknown>,
-    validateBody: (body: Record<string, unknown>) => void
+    validateBody: (body: Record<string, unknown>) => void,
+    safety: DnsWriteSafety = {}
 ): Promise<LanDnsWriteResult> {
     const id = method === 'POST' ? undefined : identifier.parse(targetId);
     if (object(body) && body.id !== undefined && (id === undefined || body.id !== id)) throw new Error('LAN DNS body ID must match the target');
@@ -144,6 +134,8 @@ export async function executeLanDnsWrite(
     const read = () => readLanDnsRows(readPage);
     const before = await read();
     const current = before.find((row) => row.id === id);
+    if (safety.expected && (!current || current.id !== safety.expected.id || !sameDnsConfig(config(current), safety.expected.config)))
+        throw new Error('Rollback refused: LAN DNS changed while preparing restoration');
     const unchanged = (resourceId = id): LanDnsWriteResult => ({
         written: false,
         verified: true,
@@ -153,6 +145,8 @@ export async function executeLanDnsWrite(
     if (method === 'PATCH' && !current) throw new Error('LAN DNS target does not exist');
     const desired = method === 'DELETE' ? undefined : { ...(current ? config(current) : {}), ...config(object(body) ? body : {}) };
     if (desired) {
+        if (current && current.type !== desired.type)
+            throw new Error('LAN DNS record-type changes are not supported by the verified preserving workflow');
         validateBody(desired);
         const conflict = before.some(
             (row) =>
@@ -211,9 +205,15 @@ export async function executeLanDnsWrite(
         return (method !== 'POST' || ackId === undefined || ackId === observed.id) && matches(observed, desired ?? {});
     });
     const verified = verification.status === 'verified';
+    const receipt = acknowledged && verified ? dnsChangeReceipt('lan-dns', safety.scope, current, observed) : undefined;
     return {
         written: acknowledged ? true : 'unknown',
         verified,
+        ...(receipt
+            ? { rollbackReceipt: receipt }
+            : safety.scope && verified && acknowledged
+              ? { rollbackUnavailable: 'DNS field presence cannot be safely restored from this change.' }
+              : {}),
         ...(acknowledged ? { result } : {}),
         verification: {
             status: verification.status,

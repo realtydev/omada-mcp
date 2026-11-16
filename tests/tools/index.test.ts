@@ -59,6 +59,7 @@ describe('tools/index', () => {
                 'getApAfcStatus',
                 'getApAvailableChannels',
                 'getClientHistory',
+                'getClientApplicationTraffic',
                 'getSwitchStackDetail',
                 'getClient',
                 'searchDevices',

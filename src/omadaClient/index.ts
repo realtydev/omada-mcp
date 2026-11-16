@@ -1,6 +1,7 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
 
 import type { EnvironmentConfig } from '../config.js';
+import { DnsRollbackOperations } from '../discovery/dnsRollback.js';
 import { createClientPolicyProxy, ToolAccessPolicy } from '../server/toolPolicy.js';
 import type {
     ActiveClientInfo,
@@ -36,6 +37,7 @@ import { ApSsidOverrideOperations, type ApSsidOverrideUpdate } from './apSsidOve
 import { AuthManager, type RequestAuthManager, WebAuthManager } from './auth.js';
 import { type ControllerCapabilitiesResult, ControllerCapabilityOperations, type GetControllerCapabilitiesOptions } from './capabilities.js';
 import { ClientOperations } from './client.js';
+import { ClientApplicationTrafficOperations, type ClientApplicationTrafficOptions } from './clientApplicationTraffic.js';
 import { DeviceOperations } from './device.js';
 import {
     type DhcpReservation,
@@ -94,6 +96,7 @@ export class OmadaClient {
     private readonly deviceOps: DeviceOperations;
 
     private readonly clientOps: ClientOperations;
+    private readonly clientApplicationTrafficOps: ClientApplicationTrafficOperations;
 
     private readonly securityOps: SecurityOperations;
     private readonly securityDiagnosticsOps: SecurityDiagnosticsOperations;
@@ -150,6 +153,7 @@ export class OmadaClient {
         this.siteOps = new SiteOperations(this.request, this.buildOmadaPath.bind(this), options.siteId);
         this.deviceOps = new DeviceOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.clientOps = new ClientOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.clientApplicationTrafficOps = new ClientApplicationTrafficOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.securityOps = new SecurityOperations(this.request, this.buildOmadaPath.bind(this));
         this.securityDiagnosticsOps = new SecurityDiagnosticsOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.healthDiagnosticsOps = new HealthDiagnosticsOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
@@ -163,16 +167,17 @@ export class OmadaClient {
         this.apSsidOverrideOps = new ApSsidOverrideOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this), this.networkOps);
         this.rfPlanningOps = new RfPlanningOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.apRadioOps = new ApRadioOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this), options.omadacId);
+        this.actionOps = new ActionOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
+        this.genericOps = new GenericOperations(this.request, this.buildOmadaPath.bind(this), this.accessPolicy);
+        this.discoveryOps = new DiscoveryOperations(this.request, this.http, options);
         this.networkChangeOps = new NetworkChangeOperations(
             options.omadacId,
             this.rateLimitProfileOps,
             this.networkOps,
             this.dhcpReservationOps,
-            this.apRadioOps
+            this.apRadioOps,
+            new DnsRollbackOperations(this.request, this.discoveryOps, options.omadacId)
         );
-        this.actionOps = new ActionOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
-        this.genericOps = new GenericOperations(this.request, this.buildOmadaPath.bind(this), this.accessPolicy);
-        this.discoveryOps = new DiscoveryOperations(this.request, this.http, options);
         this.capabilityOps = new ControllerCapabilityOperations(this.http, this.discoveryOps, options, this);
         this.switchOps = new SwitchOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.switchPortReadOps = new SwitchPortReadOperations(
@@ -234,6 +239,10 @@ export class OmadaClient {
     }
     public async diagnoseNetwork(options: NetworkDiagnosisOptions = {}) {
         return await this.networkDiagnosisOps.diagnoseNetwork(options);
+    }
+
+    public async getClientApplicationTraffic(options: ClientApplicationTrafficOptions) {
+        return await this.clientApplicationTrafficOps.getClientApplicationTraffic(options);
     }
 
     public async diagnoseSecurity(options: SecurityDiagnosticOptions = {}) {

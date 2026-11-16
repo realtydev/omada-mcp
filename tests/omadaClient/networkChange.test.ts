@@ -417,3 +417,37 @@ describe('versioned receipt dispatch', () => {
         expect(rate.rollbackNetworkChange).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('DNS rollback dispatch', () => {
+    it.each(['lan-dns', 'mdns-rule'] as const)('dispatches validated %s receipts with preview as default', async (resource) => {
+        const applied =
+            resource === 'lan-dns'
+                ? { enable: false, name: 'DNS', domain: 'test.invalid', type: 0, ipAddresses: ['192.0.2.1'], lanNetworkIds: ['net'] }
+                : {
+                      name: 'mDNS',
+                      status: false,
+                      type: 1,
+                      profileIds: ['profile'],
+                      osg: { serviceNetworks: ['service'], clientNetworks: ['client'] },
+                  };
+        const receipt = {
+            version: 1 as const,
+            controllerId: 'controller',
+            siteId: 'site',
+            resource,
+            before: null,
+            applied,
+            beforeId: null,
+            appliedId: 'created',
+        };
+        const dns = { rollbackDnsChange: vi.fn().mockResolvedValue({ verified: true, written: false }) };
+        const ops = new NetworkChangeOperations('controller', {} as never, {} as never, {} as never, {} as never, dns);
+        await ops.rollbackNetworkChange(receipt as never);
+        expect(dns.rollbackDnsChange).toHaveBeenCalledWith(receipt, true);
+        await expect(ops.rollbackNetworkChange({ ...receipt, controllerId: 'foreign' } as never, false)).rejects.toThrow('different controller');
+        expect(dns.rollbackDnsChange).toHaveBeenCalledTimes(1);
+        await expect(
+            new NetworkChangeOperations('controller', {} as never, {} as never, {} as never, {} as never).rollbackNetworkChange(receipt as never)
+        ).rejects.toThrow('DNS rollback is not configured');
+    });
+});
