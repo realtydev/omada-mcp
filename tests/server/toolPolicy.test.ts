@@ -76,8 +76,26 @@ describe('scoped tool policy', () => {
         expect(categoryForPath(`${PREFIX}/rate-limit-profile/{profileId}`)).toBe('clients');
         expect(categoryForPath(`${PREFIX}/wireless-network/wlans`)).toBe('wireless');
         expect(categoryForPath(`${PREFIX}/unknown-setting`)).toBeUndefined();
+        expect(categoryForPath(`${PREFIX}/anomaly/incidents`)).toBe('monitoring');
+        expect(categoryForPath(`${PREFIX}/anomaly/incident/status`)).toBe('monitoring');
+        expect(categoryForPath(`${PREFIX}/anomaly/unknown`)).toBeUndefined();
         expect(categoryForPath(`${PREFIX}/clients/backup/name`)).toBe('clients');
         expect(categoryForPath(`${PREFIX}/wireless-network/wlans/upgrade/ssids/name`)).toBe('wireless');
+    });
+
+    it('scopes health, LLDP and wireless security evidence without granting incident mutations', () => {
+        const monitoring = new ToolAccessPolicy('full', 'monitoring:r');
+        const security = new ToolAccessPolicy('full', 'security:r');
+        const switching = new ToolAccessPolicy('full', 'switching:r');
+        expect(monitoring.allowsOperation('GET', `${PREFIX}/anomaly/incidents`)).toBe(true);
+        expect(monitoring.allowsOperation('POST', `${PREFIX}/anomaly/incident/status`)).toBe(false);
+        expect(monitoring.allowsOperation('DELETE', `${PREFIX}/anomaly/incidents`)).toBe(false);
+        expect(monitoring.allowsTool('getSiteHealth')).toBe(true);
+        expect(monitoring.allowsTool('diagnoseSecurity')).toBe(false);
+        expect(security.allowsTool('diagnoseSecurity')).toBe(true);
+        expect(security.allowsTool('getSwitchLldpNeighbors')).toBe(false);
+        expect(switching.allowsTool('getSwitchLldpNeighbors')).toBe(true);
+        expect(switching.allowsOperation('GET', `${PREFIX}/switches/{switchMac}/lldp-neighbors`)).toBe(true);
     });
 
     it.each([

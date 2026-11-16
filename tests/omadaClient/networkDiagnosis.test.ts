@@ -217,3 +217,28 @@ describe('combined network evidence collection', () => {
         }
     );
 });
+
+describe('native health and LLDP composition', () => {
+    it('retains other sources when new controller evidence is unsupported', async () => {
+        const { client, ops } = setup();
+        Object.assign(client, {
+            getSiteHealth: vi
+                .fn()
+                .mockResolvedValue({
+                    readOnly: true,
+                    collectionComplete: false,
+                    sections: { timeline: { status: 'unsupported' }, incidents: { status: 'unsupported' } },
+                }),
+            getSwitchLldpNeighbors: vi
+                .fn()
+                .mockResolvedValue({ switchMac: SW, status: 'unsupported', source: 'getGridLldpNeighborTable', collectedAt: Date.now() }),
+        });
+        const r = await ops.diagnoseNetwork();
+        expect(r.sections.nativeHealth?.status).toBe('partial');
+        expect(r.sections.lldp?.status).toBe('partial');
+        expect(r.sections.devices.status).toBe('ok');
+        expect(r.sections.clients.status).toBe('ok');
+        expect(r.collectionComplete).toBe(false);
+        expect(r.sections.lldp?.data?.switches).toMatchObject([{ switchMac: SW, correlations: [] }]);
+    });
+});

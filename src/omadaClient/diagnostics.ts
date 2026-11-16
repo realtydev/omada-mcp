@@ -1,4 +1,6 @@
 import type { ClientHistory, GetClientHistoryOptions, OmadaClientInfo, OmadaDeviceInfo, PaginatedResult } from '../types/index.js';
+import { correlateLldp, evidenceMac, type LldpCorrelation, type LldpEvidence, type NativeEvidence } from './healthDiagnostics.js';
+import type { SwitchPortOverview } from './switchPortRead.js';
 
 const DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000;
 const MAX_TOPOLOGY_NODES = 2000;
@@ -6,6 +8,8 @@ const MAX_TOPOLOGY_DEPTH = 64;
 const TOPOLOGY_STALE_AFTER_MS = 10 * 60 * 1000;
 
 export interface DiagnosticsClient {
+    getSwitchLldpNeighbors?(switchMac: string, siteId?: string): Promise<LldpEvidence>;
+    getSwitchPortOverview?(switchMac?: string, siteId?: string): Promise<SwitchPortOverview>;
     listClients(siteId?: string): Promise<OmadaClientInfo[]>;
     listDevices(siteId?: string): Promise<OmadaDeviceInfo[]>;
     getSiteTopology(siteId?: string): Promise<unknown>;
@@ -69,6 +73,10 @@ export interface DiagnoseClientResult {
         devices: DiagnosticSection<OmadaDeviceInfo[]>;
         topology: DiagnosticSection<{ rootCount: number; nodesVisited: number; traversalTruncated: boolean; updatedAt?: number }>;
         history: DiagnosticSection<ClientHistory>;
+        lldp?: NativeEvidence<{
+            switches: Array<{ switchMac: string; neighbors: LldpEvidence; correlations: LldpCorrelation[]; portInventoryAvailable: boolean }>;
+            truncated: boolean;
+        }>;
     };
 }
 
@@ -269,6 +277,54 @@ export class DiagnosticsOperations {
                     ? 'No controller-discovered attachment path is available for this client.'
                     : 'Controller-discovered relationships only; unmanaged links may be missing. Check topology staleness before relying on this path.',
         };
+        let lldp: DiagnoseClientResult['sections']['lldp'];
+        if (this.client.getSwitchLldpNeighbors) {
+            const managed = devices.status === 'ok' ? devices.data : [];
+            const switches = nodes.filter(
+                (n) => managed.filter((d) => d.type === 'switch' && evidenceMac(d.mac) === evidenceMac(n.mac)).length === 1
+            );
+            const selected = [...new Set(switches.map((s) => evidenceMac(s.mac)!))].slice(0, 4);
+            const reports = await Promise.all(
+                selected.map(async (switchMac) => {
+                    const [neighbors, overview] = await Promise.allSettled([
+                        this.client.getSwitchLldpNeighbors!(switchMac, siteId),
+                        this.client.getSwitchPortOverview?.(switchMac, siteId),
+                    ]);
+                    const evidence: LldpEvidence =
+                        neighbors.status === 'fulfilled'
+                            ? neighbors.value
+                            : {
+                                  switchMac,
+                                  status: 'unavailable',
+                                  source: 'getGridLldpNeighborTable',
+                                  collectedAt: Date.now(),
+                                  reason: 'LLDP evidence could not be collected.',
+                              };
+                    const portInventory = overview.status === 'fulfilled' ? overview.value : undefined;
+                    const position = nodes.findIndex((n) => evidenceMac(n.mac) === switchMac);
+                    const adjacent = new Set(
+                        [nodes[position - 1], nodes[position + 1]].flatMap((n) => (evidenceMac(n?.mac) ? [evidenceMac(n?.mac)!] : []))
+                    );
+                    return {
+                        switchMac,
+                        neighbors: evidence,
+                        portInventoryAvailable: portInventory?.inventoryStatus === 'ok' && !portInventory.inventoryTruncated,
+                        correlations: correlateLldp(evidence, portInventory, managed, adjacent),
+                    };
+                })
+            );
+            const truncated = switches.length > 4;
+            lldp = {
+                source: 'existing topology path / LLDP advertisements',
+                collectedAt: Date.now(),
+                status:
+                    devices.status === 'ok' && !truncated && reports.every((r) => r.neighbors.status === 'ok' && r.portInventoryAvailable)
+                        ? 'ok'
+                        : 'partial',
+                data: { switches: reports, truncated },
+                reason: 'Only existing path adjacencies with unique managed MAC and standalone physical-port identities can be corroborated. Advertisements do not prove a physical cable path.',
+            };
+        }
         return {
             clientMac,
             capturedAt,
@@ -281,8 +337,9 @@ export class DiagnosticsOperations {
                 topology.status === 'ok' &&
                 history.status === 'ok' &&
                 !history.data.truncated &&
-                !scan?.truncated,
-            sections: { client, devices, topology, history },
+                !scan?.truncated &&
+                (lldp === undefined || lldp.status === 'ok'),
+            sections: { client, devices, topology, history, ...(lldp ? { lldp } : {}) },
         };
     }
 

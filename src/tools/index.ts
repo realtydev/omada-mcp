@@ -24,6 +24,7 @@ import { registerDescribeApiOperationTool } from './describeApiOperation.js';
 import { registerDiagnoseClientTool } from './diagnoseClient.js';
 import { registerDiagnoseLogsTool } from './diagnoseLogs.js';
 import { registerDiagnoseNetworkTool } from './diagnoseNetwork.js';
+import { registerDiagnoseSecurityTool } from './diagnoseSecurity.js';
 import { registerDiagnoseWanTool } from './diagnoseWan.js';
 import { registerDiagnoseWifiTool } from './diagnoseWifi.js';
 import { registerExecuteApiOperationTool } from './executeApiOperation.js';
@@ -135,6 +136,7 @@ export function registerAllTools(
     registerGetRfPlanningStatusTool(server, client);
     registerGetSwitchPortOverviewTool(server, client);
     registerDiagnoseNetworkTool(server, client);
+    registerDiagnoseSecurityTool(server, client);
     registerUpdateApSsidOverrideTool(server, client);
     registerGetControllerCapabilitiesTool(server, client);
     registerDiagnoseClientTool(server, client);

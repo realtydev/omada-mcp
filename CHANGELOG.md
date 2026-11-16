@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-16
+
+### Added
+
+- Read-only wireless security diagnosis combines saved rogue-AP detections, WIDS and site-local threats, with bounded collection, source-level failures and explicit missing evidence.
+- Existing network/client diagnoses gain native health/incident and LLDP evidence. Controller scores retain their meaning, neighbor identities require qualification, and unavailable sources do not erase other sections.
+
+### Changed
+
+- Refreshed the bundled discovery catalog from TP-Link's public specification: 2,450 operations, with schema provenance and compatibility limits documented. A catalog entry does not establish hardware support; unsupported API versions and existing mutation safeguards remain enforced.
+
+### Fixed
+
+- New DHCP reservation, SSID-basic and multi-port endpoint aliases cannot bypass existing verified workflows. Unqualified stack port/LAG configuration writes are refused while preserving previews.
+
 ## [0.12.0] - 2026-11-16
 
 ### Added
