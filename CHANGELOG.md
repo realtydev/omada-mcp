@@ -18,6 +18,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Fixed
 
 - New DHCP reservation, SSID-basic and multi-port endpoint aliases cannot bypass existing verified workflows. Unqualified stack port/LAG configuration writes are refused while preserving previews.
+- Discovered v1 site writes validate curated DDNS, LAN DNS, LAN-profile, voucher and AP power-saving dependencies before previews or mutations. The exact vendor DDNS ASCII regex is translated without relaxing credential restrictions.
 
 ## [0.12.0] - 2026-11-16
 

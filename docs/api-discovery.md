@@ -40,6 +40,18 @@ Live Controller 6.3.0.45 returned HTTP 404 for all three configured documentatio
 
 JSON execution validates declared required parameters, schema types, enums, ranges and supported JSON Schema constraints. It rejects unknown parameters, unsafe path values, caller-supplied controller IDs, custom authentication headers, unsupported serialization and invalid schemas. OpenAPI 3.0 and 3.1 are supported, with JSON Schema 2020 validation for 3.1. Local references and standard composition, tuple and unevaluated-property constraints are validated; external/dynamic references, custom dialects/vocabularies and unsupported serialization fail explicitly. Vendor prose and unknown format names are not executable validation rules. See [file transfers](file-transfers.md) for multipart and binary operations.
 
+For canonical v1 site operations, a small set of explicit requirements supplements incomplete vendor schemas before both previews and writes:
+
+| Operation              | Additional checks                                                                                                     |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| DDNS create/update     | Exactly one supported interval; services 2/3 require the standard interval; service 5 may omit it.                    |
+| LAN DNS create/update  | Select at least one LAN network and supply the target required by the record type.                                    |
+| LAN profile update     | Supply `untagNetworkIds` explicitly; an empty array is valid.                                                         |
+| Voucher group create   | Supply only the rate-limit source selected by its mode.                                                               |
+| AP power-saving update | Enabled triggers require their schedule/band fields; hours, minutes and idle duration retain their documented bounds. |
+
+These rules do not interpret arbitrary vendor prose or change undocumented AP routes, band numbering or required `mode` fields. Existing dedicated SSID validation remains authoritative. One exact vendor ASCII credential pattern is translated from Java octal escapes to equivalent JSON Schema escapes; its character and length restrictions remain intact. Unsupported schemas still fail closed. Other versions, MSP and template operations keep their declared contracts.
+
 GET executes normally. Writes default to a preview with `dryRun:true` and `written:false`; only an explicit `dryRun:false` sends a mutation. Previews do not claim that the controller will accept the request. Actual writes report `verified:false`, meaning no automatic read-back verification was performed. A successful response is not proof that hardware applied the setting. Errors preserve controller details and warn that a failed write may have applied; discovery does not replay uncertain writes.
 
 Use the existing dedicated tools where they provide stronger workflows. Radio configuration, DHCP reservation, rate-limit profile, SSID basic configuration, switch-port setting and log-notification mutations can be previewed through discovery, but execution directs callers to their dedicated tools to preserve preflight checks, preservation, reconciliation and read-back verification.
