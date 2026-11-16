@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-11-16
+
+### Fixed
+
+- Empty per-client application-traffic responses now explain the possible OC200 hardware-controller analytics limitation and suggest checking aggregate application data, without inferring a controller model, zero usage or unsupported API.
+- Regression coverage distinguishes empty responses from real zero counters, filtered records and source failures, and protects DNS verification when a controller silently drops CNAME custom TTL fields.
+
+### Documentation
+
+- Documented live aggregate DPI evidence, the remaining per-client hardware qualification limit, and safe DNS resolution checks covering `.test`/`.lan` behavior, CNAME TTL, LAN scope and cleanup.
+
 ## [0.14.0] - 2026-11-16
 
 ### Added

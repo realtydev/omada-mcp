@@ -12,7 +12,7 @@
 
 </div>
 
-> **Release:** [v0.14.0](https://github.com/realtydev/omada-mcp/releases/tag/v0.14.0) includes 112 tools, verified DNS/mDNS management, eligible DNS rollback and per-client application-traffic reporting. Use `getServerInfo` to confirm the running build.
+> **Release:** [v0.14.1](https://github.com/realtydev/omada-mcp/releases/tag/v0.14.1) includes 112 tools, verified DNS/mDNS management, eligible DNS rollback and per-client application-traffic reporting with OC200 limitation guidance. See [DNS resolution quirks](docs/dns-rollback.md#resolution-checks-and-observed-dns-quirks). Use `getServerInfo` to confirm the running build.
 
 ```text
 You:    Why is the guest SSID slow on the upstairs AP?
