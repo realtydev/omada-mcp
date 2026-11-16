@@ -6,6 +6,7 @@ import _addFormats, { type FormatsPlugin } from 'ajv-formats';
 import type { RequestHandler } from '../omadaClient/request.js';
 import type { ToolAccessPolicy } from '../server/toolPolicy.js';
 import type { ApiOperation, ApiParameter, OperationCatalog } from './catalog.js';
+import { executeLanDnsWrite, isLanDnsWrite, LAN_DNS_PATH, type LanDnsWriteResult } from './lanDns.js';
 import { validateWriteRequirements } from './requirements.js';
 import { prepareTransfer } from './transfer.js';
 
@@ -36,12 +37,13 @@ export interface DiscoveredExecutionResult {
     source: 'live' | 'bundled';
     loadedAt: number;
     dryRun: boolean;
-    written: boolean;
-    verified: false;
+    written: boolean | 'unknown';
+    verified: boolean;
     request: { method: string; path: string; query: Record<string, QueryValue>; body?: unknown };
     result?: unknown;
     warning?: string;
     transfer?: unknown;
+    verification?: LanDnsWriteResult['verification'];
 }
 
 type InputValidator = (input: unknown) => { valid: boolean; errorMessage?: string };
@@ -485,7 +487,7 @@ export async function executeDiscoveredOperation(
     if (Buffer.byteLength(JSON.stringify(input)) > MAX_REQUEST_BYTES) throw new Error('Operation input exceeds the 1 MiB execution limit.');
     validate(operation, catalog, input);
     if (operation.requestBody && validationBody !== undefined) rejectUnknownBodyFields(operation.requestBody.schema, validationBody, catalog);
-    validateWriteRequirements(operation, validationBody);
+    validateWriteRequirements(operation, validationBody, operation.requestBody ? resolve(operation.requestBody.schema, catalog.document) : undefined);
     const path = operation.path.replace(/\{([^}]+)\}/g, (_match, name: string) => safeSegment(params[name]));
     if (/[{}]/.test(path)) throw new Error('Operation path contains malformed template parameters.');
     const query = queryParameters(operation, params, catalog);
@@ -513,6 +515,34 @@ export async function executeDiscoveredOperation(
     }
     if (unsupportedStackWrite) throw new Error(unsupportedStackWrite);
     if (preferredTool) throw new Error(`Use ${preferredTool} for this write to preserve its preflight and read-back verification.`);
+    if (isLanDnsWrite(operation)) {
+        if (transfer || Object.keys(query).length)
+            throw new Error('LAN DNS read-back supports JSON configuration without transfer or query overrides');
+        const readOperation = catalog.operations.find((entry) => entry.method === 'GET' && entry.path === LAN_DNS_PATH);
+        if (!readOperation || readOperation.unsupportedReason)
+            throw new Error('LAN DNS read-back requires a supported list operation in this catalog');
+        context.accessPolicy?.assertOperation('GET', readOperation.path);
+        const readPage = async (page: number): Promise<unknown> => {
+            const result = await executeDiscoveredOperation(
+                catalog,
+                request,
+                {
+                    operationId: readOperation.operationId,
+                    params: { siteId: params.siteId, page, pageSize: 100 },
+                },
+                context
+            );
+            return result.result;
+        };
+        const result = await executeLanDnsWrite(request, operation.method, path, params.dnsId, options.body, readPage, (body) => {
+            if (Buffer.byteLength(JSON.stringify({ params, body })) > MAX_REQUEST_BYTES)
+                throw new Error('Preserved LAN DNS configuration exceeds the 1 MiB execution limit');
+            validate(operation, catalog, { params, body });
+            if (operation.requestBody) rejectUnknownBodyFields(operation.requestBody.schema, body, catalog);
+            validateWriteRequirements(operation, body, operation.requestBody ? resolve(operation.requestBody.schema, catalog.document) : undefined);
+        });
+        return { ...metadata, ...result, dryRun: false, request: { method: operation.method, path, query } };
+    }
     try {
         const response = await request.request<unknown>({
             method: operation.method,

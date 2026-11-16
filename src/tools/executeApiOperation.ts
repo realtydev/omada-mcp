@@ -36,7 +36,7 @@ export function registerExecuteApiOperationTool(server: McpServer, client: Omada
         {
             description:
                 'Validate and execute a discovered JSON or file-transfer Open API operation using the existing controller authentication and TLS checks. ' +
-                'Inspect its schema first. Writes default to dry-run previews and do not provide dedicated-tool read-back verification. ' +
+                'Inspect its schema first. Writes default to dry-run previews. Canonical v1 site LAN DNS writes include preflight and read-back verification; other discovered writes remain unverified. ' +
                 (readOnly ? 'This server permits GET operations only.' : 'Prefer a dedicated tool when it provides previews or verification.'),
             inputSchema: executeApiOperationSchema,
             annotations: { readOnlyHint: readOnly, destructiveHint: !readOnly, ...(readOnly ? { idempotentHint: true } : {}) },

@@ -42,17 +42,27 @@ JSON execution validates declared required parameters, schema types, enums, rang
 
 For canonical v1 site operations, a small set of explicit requirements supplements incomplete vendor schemas before both previews and writes:
 
-| Operation              | Additional checks                                                                                                     |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| DDNS create/update     | Exactly one supported interval; services 2/3 require the standard interval; service 5 may omit it.                    |
-| LAN DNS create/update  | Select at least one LAN network and supply the target required by the record type.                                    |
-| LAN profile update     | Supply `untagNetworkIds` explicitly; an empty array is valid.                                                         |
-| Voucher group create   | Supply only the rate-limit source selected by its mode.                                                               |
-| AP power-saving update | Enabled triggers require their schedule/band fields; hours, minutes and idle duration retain their documented bounds. |
+| Operation              | Additional checks                                                                                                                         |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| DDNS create/update     | Exactly one supported interval; services 2/3 require the standard interval; service 5 may omit it.                                        |
+| LAN DNS create/update  | Select at least one LAN network, supply the target required by the record type, and bound a requested custom TTL.                         |
+| LAN profile update     | Supply `untagNetworkIds` explicitly; an empty array is valid.                                                                             |
+| Voucher group create   | Supply only the rate-limit source selected by its mode.                                                                                   |
+| AP power-saving update | Enabled triggers require their fields and documented bounds; schemas declaring mode also require a valid mode and standard-mode triggers. |
 
-These rules do not interpret arbitrary vendor prose or change undocumented AP routes, band numbering or required `mode` fields. Existing dedicated SSID validation remains authoritative. One exact vendor ASCII credential pattern is translated from Java octal escapes to equivalent JSON Schema escapes; its character and length restrictions remain intact. Unsupported schemas still fail closed. Other versions, MSP and template operations keep their declared contracts.
+These rules do not interpret arbitrary vendor prose or change undocumented AP routes. AP mode is required only when the selected request schema declares it; legacy snapshots retain their trigger contract. The declared mode contract limits bands to 0–3 and permits time/band triggers only in standard mode (1). Existing dedicated SSID validation remains authoritative. One exact vendor ASCII credential pattern is translated from Java octal escapes to equivalent JSON Schema escapes; its character and length restrictions remain intact. Unsupported schemas still fail closed. Other versions, MSP and template operations keep their declared contracts.
 
-GET executes normally. Writes default to a preview with `dryRun:true` and `written:false`; only an explicit `dryRun:false` sends a mutation. Previews do not claim that the controller will accept the request. Actual writes report `verified:false`, meaning no automatic read-back verification was performed. A successful response is not proof that hardware applied the setting. Errors preserve controller details and warn that a failed write may have applied; discovery does not replay uncertain writes.
+GET executes normally. Writes default to a preview with `dryRun:true` and `written:false`; only an explicit `dryRun:false` sends a mutation. Previews do not claim that the controller will accept the request. Most actual writes report `verified:false`, meaning no automatic read-back verification was performed. Canonical v1 site LAN DNS writes provide the selected workflow below. A successful response alone is not proof that hardware applied a setting. Errors preserve controller details and warn that a failed write may have applied; discovery does not replay uncertain writes.
+
+### Verified LAN DNS configuration
+
+The existing `executeApiOperation` tool provides verified `createLanDns`, `modifyLanDns` and `deleteLanDns` workflows through their canonical v1 site routes; no additional tool names are registered. The current catalogue must also declare the LAN DNS list operation. Actual execution requires both network read and write permission. Previews retain their no-HTTP behavior.
+
+Actual execution collects a complete list, rejects conflicting names/domains and missing update targets, preserves omitted known writable fields (including reported custom TTL settings) on update, and rereads the list to refuse preflight drift. Unchanged updates and absent deletes return `written:false`, `verified:true` without a mutation. Newer writable fields outside the supported LAN DNS configuration fail explicitly rather than being discarded.
+
+After one mutation, the workflow rereads up to three times. `verification.status` is `verified`, `mismatch` or `unknown`, with a resource ID and observed configuration when available. Verification checks requested and preserved known fields, unique created identity and the other reported entries. DNS-name case and selection-array order are normalized; absent fields are never treated as empty. Incomplete or malformed evidence cannot prove absence. Bare arrays and paginated grids are supported with a 1,000-record and ten-page limit per collection. These bounds limit requests, not total wall-clock duration; each controller request retains its configured timeout.
+
+An explicit controller rejection still throws with its error identity. An unacknowledged mutation is sent only once and remains `written:"unknown"`, even if readback verifies the desired state. This separates observed configuration from proof that this particular request applied it. Inspect current state before retrying; automatic rollback is not provided. Verification covers only the known reported LAN DNS fields, not undocumented controller fields. Concurrent changes after the final preflight read remain possible because conditional writes are not established.
 
 Use the existing dedicated tools where they provide stronger workflows. Radio configuration, DHCP reservation, rate-limit profile, SSID basic configuration, switch-port setting and log-notification mutations can be previewed through discovery, but execution directs callers to their dedicated tools to preserve preflight checks, preservation, reconciliation and read-back verification.
 

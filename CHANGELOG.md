@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- Selected discovered LAN DNS create/update/delete workflows now provide bounded preflight, preservation of omitted known fields including TTL, no-op and drift checks, and explicit read-back verification. Lost acknowledgements remain uncertain without mutation replay; array and paginated response contracts have regression coverage.
+- Validation follows the selected AP power-saving contract: newer schemas require documented modes and standard-mode triggers, while legacy snapshots retain their existing requirements. Custom DNS TTL is bounded and required when enabled.
+
 ## [0.13.0] - 2026-11-16
 
 ### Added
