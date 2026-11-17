@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-16
+
 ### Added
 
 - Guarded v2 WireGuard/OpenVPN client-to-site server/client configuration and deletion, reusing shared VPN inventories, WAN/LAN checks and mutation verification. Shared deletion now qualifies all three VPN families and refuses ambiguous IDs or attached users/clients; imported configuration contents remain unverified.
