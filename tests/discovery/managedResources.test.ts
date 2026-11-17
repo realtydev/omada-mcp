@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { OperationCatalog } from '../../src/discovery/catalog.js';
 import { executeDiscoveredOperation } from '../../src/discovery/execute.js';
-import { readResourceRows } from '../../src/discovery/managedResources.js';
+import { readResourceRows } from '../../src/discovery/resourceInventory.js';
 import { GenericOperations } from '../../src/omadaClient/generic.js';
 import type { RequestHandler } from '../../src/omadaClient/request.js';
 import { ToolAccessPolicy } from '../../src/server/toolPolicy.js';

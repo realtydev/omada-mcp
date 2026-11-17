@@ -99,7 +99,7 @@ WireGuard configuration reuses `executeApiOperation` in standard and compact mod
 | Interface | `listWireguard` | `createWireguard` | `modifyWireguard` | `deleteWireguard` |
 | Peer      | `listPeer`      | `createPeer`      | `modifyPeer`      | `deletePeer`      |
 
-These canonical v1 endpoints are **deprecated in the bundled controller specification** in favor of site-to-site VPN APIs. This workflow supports controllers that still expose them; it does not translate between VPN models or promise support on newer firmware. Other VPN operations retain their existing discovery behavior and unverified outcomes.
+These canonical v1 endpoints are **deprecated in the bundled controller specification** in favor of site-to-site VPN APIs. This workflow supports controllers that still expose them; it does not translate between VPN models or promise support on newer firmware. For nondeprecated APIs, use the [v2 site-to-site workflows](#site-to-site-vpns-v2) below.
 
 Previews validate the schema without HTTP; set `dryRun:false` to apply. Updates and deletes use `params.id`. Supply the complete required configuration from `describeApiOperation` for create/update. Interface configuration includes `name`, `status`, `mtu` (576–1440), `listenPort` (1–65535), `privateKey` and IPv4 `localIp`. Peer configuration includes `name`, `status`, `interfaceId`, `publicKey`, a nonempty `allowAddress` CIDR list and `keepAlive` (0–65535 seconds). Use `status:false` to disable an interface or peer.
 
@@ -110,3 +110,55 @@ Optional `endPoint` accepts an IP address or hostname without scheme/port. Suppl
 Execution checks bounded, complete inventories, duplicate names, missing targets and drift, then sends one mutation without replay. Peers must reference an existing interface and cannot duplicate another peer's public key on that interface. Interface address/listen-port reuse is conservatively refused, including disabled interfaces. Delete peers explicitly before deleting their interface; missing peer reference evidence also blocks interface deletion. Peer deletion does not require its former interface to exist. An exact disable-only update also skips interface availability and domain capability checks, while retaining explicit key input, drift checks and readback. All fields except `status` must match reported configuration; masked keys cannot prove this condition. Other edits still require reference checks.
 
 Readback verifies reported configuration and unchanged sibling records. Nonempty private/preshared keys are always listed in `notVerifiedFields` and keep overall verification `unknown`; clearing a preshared key requires an observed empty value. Lost acknowledgements remain `written:"unknown"` and must be inspected before retrying. No automatic rollback occurs. Changes can disrupt VPN connectivity, and concurrent edits after preflight remain possible. Verification does not prove a handshake, routing or reachability. Live WireGuard configuration has not been tested.
+
+## Site-to-site VPNs (v2)
+
+Prefer these nondeprecated APIs for new WireGuard and IPSec configuration. They reuse `executeApiOperation` and the existing managed-resource lifecycle in both catalog modes. No new tool wrappers or dependencies are added. Existing v1 WireGuard tools remain available for older controllers; nothing migrates or deletes their configuration automatically.
+
+| Purpose                             | Operation IDs                              |
+| ----------------------------------- | ------------------------------------------ |
+| Inventory and detail                | `getGridVpnS2SV2`, `getVpnS2SDetailInfo`   |
+| Manual WireGuard or IPSec           | `createS2SManualVpn`, `modifyS2SManualVpn` |
+| Automatic WireGuard or IPSec        | `createS2SAutoVpn`, `modifyS2SAutoVpn`     |
+| Delete a qualified site-to-site VPN | `deleteVpnV2`                              |
+
+All mutations default to schema-only previews without HTTP. Set `dryRun:false` explicitly to apply; updates and deletion use `params.vpnId`. Read the current detail before editing. Supply the required configuration for the selected protocol on every create/update. The controller's `vpnType` selects IPSec (`2`) or WireGuard (`4`); `siteVpnType` identifies automatic (`0`) or manual (`1`) in responses, and is not a writable body field. Updates refuse protocol, manual/automatic mode or automatic remote-site changes; replace those configurations explicitly.
+
+The bundled manual request schema incorrectly requires both protocols' fields at once. Description and execution apply the same narrow, protocol-conditional correction to that known schema shape, retaining its property constraints and the original snapshot. Supplemental validation rejects fields from the other protocol and validates bounds and selectors. This correction follows the bundled field descriptions; its behavior has not been qualified on live firmware.
+
+- **Manual WireGuard:** supply `name`, `status`, `vpnType:4`, `mtu` (576–1440), `servicePort` (1–65535), IPv4 `tunnelIp`, explicit `privateKey` and the complete `peers` array. An empty array removes all peers. Each peer requires `name`, `status`, `serverPublicKey`, explicit `preSharedKey` (empty string selects no PSK), nonempty CIDR `remoteSubnet` and `keepAlive` (0–65535). Optional `remoteIp` and `servicePort` must appear together; omit both or use an empty `remoteIp` without a port for roaming. Optional `comment` is supported. Omitted peers are removed; nested peer settings are not silently merged from stored or masked records. Names and public keys must be unique within the VPN. Remove peers explicitly before deleting a manual WireGuard VPN.
+- **Manual IPSec:** supply `name`, `status`, `vpnType:2`, unique nonempty `wans`, `remoteIp` (empty is permitted by the vendor contract), nonempty CIDR `remoteSubnet`, explicit unmasked `preSharedKey`, a local network selection and `advancedSetting`. Advanced options retain the documented IKE/proposal/PFS enums and lifetime bounds; enabled DPD needs an interval, and name-based identities need names. No cryptographic defaults are chosen by the server. Optional `failoverSetting` requires an existing distinct backup WAN, explicit `failback`, and a 10–3600 second `failbackTime` when enabled. Omitted known advanced/failover fields are preserved during updates.
+- **Automatic provisioning:** supply `name`, `status`, `vpnType` (`2` or `4`) and `remoteSite`. Both sites must exist and differ. The workflow checks VPN inventories and advertised protocol support on both sites and refuses conflicting automatic connections. One controller mutation requests provisioning; it does not separately configure the remote site or roll back either site.
+
+Local networks use `networkType:0` with a nonempty `networkList` of existing LAN IDs, or `networkType:1` with nonempty `customNetwork` entries containing IPv4 `ip` and prefix `mask` (0–32). Supply only the selected list. Custom-network and optional WireGuard local-network configuration require advertised support. If provided, `existCustomNetwork` must match the selector. WireGuard peer hostnames, IPSec failover, advertised proposal choices and advertised subnet/peer limits are checked. Every selected IPSec port must explicitly be in WAN mode. CIDR checks validate syntax and exact duplicates, not overlap, subnet equivalence or routing safety.
+
+Required scopes:
+
+| Operation                               | Scope                   |
+| --------------------------------------- | ----------------------- |
+| Manual WireGuard without LAN references | `security:rw`           |
+| Manual WireGuard with `networkList`     | `security:rw,network:r` |
+| Manual IPSec create/update              | `security:rw,network:r` |
+| Automatic create/update                 | `security:rw,system:r`  |
+| Delete or exact disable-only update     | `security:rw`           |
+
+Example automatic preview (replace the site IDs):
+
+```json
+{
+    "operationId": "createS2SAutoVpn",
+    "params": { "siteId": "local-site-id" },
+    "body": {
+        "name": "BranchLink",
+        "status": false,
+        "vpnType": 4,
+        "remoteSite": "remote-site-id"
+    }
+}
+```
+
+Execution hydrates summary records through v2 detail reads, verifies identity/mode consistency, rejects duplicate names and drift, sends one mutation without retry, and polls configuration at most three times. The detail inventory is bounded to 100 VPNs per site; shared inventory reads retain their ten-page/1,000-record bound, and explicit peers are limited to 100 or the lower advertised device limit. No-op updates do not write. Disable-only updates skip availability/capability references while retaining drift checks and readback; all reported writable fields except `status` must match, so masked keys cannot establish this shortcut. Reordering peer/subnet selections does not cause false changes; missing or extra peers cannot establish success.
+
+**Deletion compatibility:** the shared `deleteVpnV2` path is now limited to IPSec/WireGuard targets explicitly identified in the site-to-site inventory. Unknown or client-to-site targets are refused, including already-absent targets, instead of falling through to an unqualified delete. Manage client-to-site deletion through the controller interface until it has a separately qualified workflow. Raw and legacy site-to-site mutation aliases redirect to the canonical v2 operations. Existing v1 WireGuard interface/peer writes retain their original guarded compatibility path.
+
+Previews/logs redact private and preshared keys, including nested peers; updates require explicit keys rather than reusing masked values. `notVerifiedFields` identifies every nonempty secret. Automatic create/update/delete also report `remoteSiteConfiguration` as unverified: observing the local configuration cannot prove remote provisioning or cleanup. These fields keep overall verification `unknown` even when all observable local fields match. `written:true` means acknowledgement, not tunnel success; lost replies remain `written:"unknown"` and are never replayed. Configuration verification does not prove handshakes, forwarding, remote cleanup or gateway convergence. Changes may disconnect VPN traffic, concurrent edits after preflight remain possible, and no live VPN mutations were tested.

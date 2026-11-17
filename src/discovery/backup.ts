@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { RequestHandler } from '../omadaClient/request.js';
 import { verifyWrite } from '../utils/write-verification.js';
 import type { ApiOperation } from './catalog.js';
-import type { ResourceRead } from './managedResources.js';
+import type { ResourceRead } from './resourceInventory.js';
 
 const ROOT = '/openapi/v1/{omadacId}';
 export function isManagedBackup(operation: Pick<ApiOperation, 'method' | 'path'>): boolean {

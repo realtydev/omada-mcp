@@ -36,7 +36,7 @@ export function registerExecuteApiOperationTool(server: McpServer, client: Omada
         {
             description:
                 'Validate and execute a discovered JSON or file-transfer Open API operation using the existing controller authentication and TLS checks. ' +
-                'Inspect its schema first. Writes default to dry-run previews. Canonical v1 LAN DNS, mDNS, SSID/WLAN lifecycle, policy routes, PoE schedules, WireGuard interfaces/peers and controller-side backups include bounded verification; other discovered writes remain unverified. ' +
+                'Inspect its schema first. Writes default to dry-run previews. Managed LAN DNS, mDNS, SSID/WLAN lifecycle, policy routes, PoE schedules, v1 WireGuard, v2 site-to-site VPNs and controller-side backups include bounded verification; secrets and automatic remote-site provisioning remain unverified. Shared deleteVpnV2 requires a qualified site-to-site target. Other discovered writes remain unverified. ' +
                 (readOnly ? 'This server permits GET operations only.' : 'Prefer a dedicated tool when it provides previews or verification.'),
             inputSchema: executeApiOperationSchema,
             annotations: { readOnlyHint: readOnly, destructiveHint: !readOnly, ...(readOnly ? { idempotentHint: true } : {}) },

@@ -272,7 +272,7 @@ describe('guarded WireGuard configuration', () => {
                 { operationId: 'aliasCreatePeer', body: peer, dryRun: false },
                 { omadacId: 'controller', siteId: 'site', readOnly: false, accessPolicy: new ToolAccessPolicy('full', 'security:rw') }
             )
-        ).rejects.toThrow('canonical v1 managed resource');
+        ).rejects.toThrow('canonical managed resource');
         expect(f.request.request).not.toHaveBeenCalled();
     });
     it('deletes orphaned peers without needing the former interface', async () => {

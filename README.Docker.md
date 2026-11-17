@@ -415,4 +415,4 @@ Use `getSiteDashboard({includePoePorts:true})` for bounded port PoE detail and r
 
 PoE schedule creation, updates and deletion reuse `executeApiOperation`, with preview defaults, time-range/port checks and configuration readback. See [PoE scheduling](docs/managed-workflows.md#poe-scheduling) for operation IDs, scopes and examples.
 
-WireGuard interface and peer configuration also reuses `executeApiOperation`, with guarded lifecycle writes, key redaction and explicit secret-verification limits. See [WireGuard configuration](docs/managed-workflows.md#wireguard-interfaces-and-peers) for scopes, key requirements and compatibility with the deprecated v1 endpoints.
+Use [v2 site-to-site VPN workflows](docs/managed-workflows.md#site-to-site-vpns-v2) for manual WireGuard/IPSec and automatic provisioning through `executeApiOperation`, with guarded writes, key redaction and configuration readback. Shared v2 deletion now requires a qualified site-to-site target. [Legacy WireGuard interfaces and peers](docs/managed-workflows.md#wireguard-interfaces-and-peers) remain available for older controllers.

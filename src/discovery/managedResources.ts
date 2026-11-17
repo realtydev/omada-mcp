@@ -6,6 +6,18 @@ import { completeSsidSchema, ssidUpdateSchema } from '../utils/ssid-update-schem
 import { normalizeMac, validateSwitchMac } from '../utils/switch-port-safety.js';
 import { verifyWrite } from '../utils/write-verification.js';
 import type { ApiOperation } from './catalog.js';
+import { type ResourceRead, type ResourceRow as Row, readResourceRows } from './resourceInventory.js';
+import {
+    comparableSiteToSite,
+    readSiteToSiteVpns,
+    SITE_TO_SITE_PATH,
+    type SiteToSiteKind,
+    siteToSiteConfig,
+    VPN_DELETE_PATH,
+    validateSiteToSiteCapabilities,
+    validateSiteToSiteInput,
+    validateSiteToSiteReferences,
+} from './siteToSiteVpn.js';
 import { validateWireguard } from './wireguard.js';
 
 const SITE = '/openapi/v1/{omadacId}/sites/{siteId}';
@@ -15,13 +27,19 @@ export const POLICY_ROUTE_PATH = `${SITE}/routing/policy-routings`;
 const POE_SCHEDULE_PATH = `${SITE}/poe-schedules`;
 const WIREGUARD_PATH = `${SITE}/vpn/wireguards`;
 const WIREGUARD_PEER_PATH = `${SITE}/vpn/wireguard-peers`;
-type Row = Record<string, unknown> & { id: string };
-export type ResourceKind = 'wlan' | 'ssid' | 'policy-route' | 'poe-schedule' | 'wireguard' | 'wireguard-peer';
-export type ResourceRead = (path: string, params?: Record<string, unknown>) => Promise<unknown>;
+export type ResourceKind = 'wlan' | 'ssid' | 'policy-route' | 'poe-schedule' | 'wireguard' | 'wireguard-peer' | SiteToSiteKind;
 
 export function managedResource(
     operation: Pick<ApiOperation, 'method' | 'path'>
 ): { kind: ResourceKind; listPath: string; idParam: string } | undefined {
+    if (operation.method === 'DELETE' && operation.path === VPN_DELETE_PATH)
+        return { kind: 'vpn-delete', listPath: SITE_TO_SITE_PATH, idParam: 'vpnId' };
+    for (const [kind, path] of [
+        ['vpn-manual', SITE_TO_SITE_PATH],
+        ['vpn-auto', `${SITE_TO_SITE_PATH}/auto`],
+    ] as const)
+        if ((operation.method === 'POST' && operation.path === path) || (operation.method === 'PATCH' && operation.path === `${path}/{vpnId}`))
+            return { kind, listPath: SITE_TO_SITE_PATH, idParam: 'vpnId' };
     for (const [kind, listPath, idParam, update] of [
         ['wlan', WLAN_PATH, 'wlanId', 'PATCH'],
         ['ssid', SSID_PATH, 'ssidId', ''],
@@ -44,6 +62,8 @@ export function isManagedResourceWrite(method: string, path: string): boolean {
     return (
         method !== 'GET' &&
         (/\/sites\/[^/]+\/poe-schedules(?:\/[^/]+)?\/?$/.test(path) ||
+            /\/sites\/[^/]+\/vpn\/site-to-site-vpns(?:\/[^/]+){0,2}\/?$/.test(path) ||
+            (method === 'DELETE' && /\/sites\/[^/]+\/vpn\/[^/]+\/?$/.test(path)) ||
             /\/sites\/[^/]+\/vpn\/(?:wireguards|wireguard-peers)(?:\/[^/]+)?\/?$/.test(path) ||
             /\/sites\/[^/]+\/routing\/policy-routings(?:\/[^/]+)?$/.test(path) ||
             /\/sites\/[^/]+\/wireless-network\/wlans(?:\/[^/]+)?$/.test(path) ||
@@ -53,44 +73,6 @@ export function isManagedResourceWrite(method: string, path: string): boolean {
 
 function object(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-/** Complete bounded inventory: malformed or repeated pages cannot prove absence. */
-export async function readResourceRows(readPage: (page: number) => Promise<unknown>, aliases: string[] = []): Promise<Row[]> {
-    const rows: Row[] = [],
-        ids = new Set<string>();
-    let total: number | undefined;
-    for (let page = 1; page <= 10; page++) {
-        const result = await readPage(page);
-        const bare = Array.isArray(result);
-        const data = bare ? result : object(result) && Array.isArray(result.data) ? result.data : undefined;
-        if (!data || (bare && page !== 1)) throw new Error('Incomplete resource inventory');
-        if (!bare && object(result)) {
-            if (result.currentPage !== undefined && result.currentPage !== page) throw new Error('Resource page did not advance');
-            if (result.totalRows !== undefined) {
-                if (!Number.isSafeInteger(result.totalRows) || Number(result.totalRows) < 0 || (total !== undefined && total !== result.totalRows))
-                    throw new Error('Resource count changed or is invalid');
-                total = Number(result.totalRows);
-            }
-        }
-        if (rows.length + data.length > 1000 || (total ?? 0) > 1000) throw new Error('Resource inventory exceeds 1000 records');
-        for (const value of data) {
-            if (!object(value)) throw new Error('Invalid resource row');
-            const candidates = ['id', ...aliases].filter((key) => value[key] !== undefined).map((key) => value[key]);
-            const id = candidates[0];
-            if (typeof id !== 'string' || !id || candidates.some((v) => v !== id) || ids.has(id))
-                throw new Error('Missing, conflicting or repeated resource identity');
-            ids.add(id);
-            rows.push({ ...value, id });
-        }
-        if (total !== undefined && rows.length > total) throw new Error('Resource count exceeded');
-        if (bare || (total !== undefined && rows.length === total)) return rows;
-        if (!data.length) {
-            if (total !== undefined && rows.length !== total) throw new Error('Resource inventory ended early');
-            return rows;
-        }
-    }
-    throw new Error('Resource inventory exceeds ten pages');
 }
 
 function poePorts(value: unknown): Record<string, number[]> {
@@ -119,7 +101,9 @@ function poePorts(value: unknown): Record<string, number[]> {
 export function validateManagedInput(kind: ResourceKind, method: string, body: unknown, siteId?: unknown): void {
     if (method === 'DELETE') return;
     if (!object(body)) throw new Error('Resource configuration is required');
-    if (kind === 'wireguard' || kind === 'wireguard-peer') {
+    if (kind === 'vpn-manual' || kind === 'vpn-auto' || kind === 'vpn-delete') {
+        validateSiteToSiteInput(kind, body, siteId);
+    } else if (kind === 'wireguard' || kind === 'wireguard-peer') {
         validateWireguard(kind, body);
     } else if (kind === 'ssid') {
         completeSsidSchema.parse(Object.fromEntries(Object.entries(body).filter(([key]) => Object.hasOwn(ssidUpdateSchema.shape, key))));
@@ -146,6 +130,13 @@ export function validateManagedInput(kind: ResourceKind, method: string, body: u
 }
 
 function subset(actual: unknown, desired: unknown, requireEvidence = true): boolean {
+    if (Array.isArray(desired)) {
+        if (!Array.isArray(actual)) {
+            if (requireEvidence) throw new Error('Read-back omits submitted configuration');
+            return false;
+        }
+        return actual.length === desired.length && desired.every((value, index) => subset(actual[index], value, requireEvidence));
+    }
     if (object(desired)) {
         if (!object(actual)) {
             if (requireEvidence) throw new Error('Read-back omits submitted configuration');
@@ -177,8 +168,15 @@ export async function executeManagedWrite(input: {
     const { kind, listPath, idParam } = resource;
     const method = operation.method;
     const id = method === 'POST' ? undefined : String(params[idParam]);
+    const siteToSite = kind === 'vpn-manual' || kind === 'vpn-auto' || kind === 'vpn-delete';
+    let vpnCapabilities: Record<string, unknown> = {};
     let peerDomainSupport = false;
     const readRows = async () => {
+        if (siteToSite) {
+            const snapshot = await readSiteToSiteVpns(read, params);
+            vpnCapabilities = snapshot.capabilities;
+            return snapshot.rows;
+        }
         const rows = await readResourceRows(
             async (page) => {
                 const result = await read(listPath, { ...params, page, pageSize: 100 });
@@ -193,30 +191,65 @@ export async function executeManagedWrite(input: {
     };
     const before = await readRows(),
         current = before.find((row) => row.id === id);
-    const secretFields =
-        (kind === 'wireguard' || kind === 'wireguard-peer') && object(input.body)
-            ? Object.entries(input.body)
-                  .filter(([key, value]) => ['privateKey', 'presharedKey'].includes(key) && Boolean(value))
-                  .map(([key]) => key)
-            : [];
+    if (siteToSite && method !== 'POST') {
+        if (!current || (current.vpnType !== 2 && current.vpnType !== 4) || (current.siteVpnType !== 0 && current.siteVpnType !== 1))
+            throw new Error('Target is not a qualified site-to-site IPSec or WireGuard VPN; no deletion or update was sent');
+        if (
+            kind !== 'vpn-delete' &&
+            (current.siteVpnType !== (kind === 'vpn-auto' ? 0 : 1) || !object(input.body) || current.vpnType !== input.body.vpnType)
+        )
+            throw new Error('Changing VPN protocol or automatic/manual mode requires an explicit replacement');
+        if (kind === 'vpn-auto' && object(input.body) && current.remoteSite !== input.body.remoteSite)
+            throw new Error('Changing the automatic remote site requires an explicit replacement');
+    }
+    const notVerifiedFields: string[] = [];
+    function readable(value: unknown, prefix = ''): unknown {
+        if (Array.isArray(value)) return value.map((child, index) => readable(child, `${prefix}${index}.`));
+        if (!object(value)) return value;
+        return Object.fromEntries(
+            Object.entries(value)
+                .filter(([key, child]) => {
+                    if (/^presharedKey$/i.test(key) && child === '') return true;
+                    if (!/password|passwd|secret|^psk$|preshared.?key|security.?key|private.?key/i.test(key)) return true;
+                    notVerifiedFields.push(`${prefix}${key}`);
+                    return false;
+                })
+                .map(([key, child]) => [key, readable(child, `${prefix}${key}.`)])
+        );
+    }
+    if (siteToSite && (kind === 'vpn-auto' || current?.siteVpnType === 0)) notVerifiedFields.push('remoteSiteConfiguration');
     const noOp = () => ({
         written: false as const,
-        verified: secretFields.length === 0,
-        verification: { status: secretFields.length ? ('unknown' as const) : ('verified' as const), attempts: 0, ...(id ? { resourceId: id } : {}) },
-        ...(secretFields.length ? { notVerifiedFields: secretFields } : {}),
+        verified: notVerifiedFields.length === 0,
+        verification: {
+            status: notVerifiedFields.length ? ('unknown' as const) : ('verified' as const),
+            attempts: 0,
+            ...(id ? { resourceId: id } : {}),
+        },
+        ...(notVerifiedFields.length ? { notVerifiedFields } : {}),
     });
     if (method === 'DELETE' && !current) return noOp();
     if (method !== 'POST' && !current) throw new Error('Resource target does not exist');
     const config = (row: Record<string, unknown>) =>
-        Object.fromEntries(input.fields.filter((key) => row[key] !== undefined).map((key) => [key, row[key]]));
+        siteToSite ? siteToSiteConfig(row) : Object.fromEntries(input.fields.filter((key) => row[key] !== undefined).map((key) => [key, row[key]]));
     const comparable = (value: Record<string, unknown>) =>
-        kind === 'poe-schedule' && value.poePortsMap !== undefined
-            ? { ...value, poePortsMap: Object.entries(poePorts(value.poePortsMap)).sort(([a], [b]) => a.localeCompare(b)) }
-            : kind === 'wireguard-peer' && Array.isArray(value.allowAddress)
-              ? { ...value, allowAddress: [...value.allowAddress].sort() }
-              : value;
+        siteToSite
+            ? comparableSiteToSite(value)
+            : kind === 'poe-schedule' && value.poePortsMap !== undefined
+              ? { ...value, poePortsMap: Object.entries(poePorts(value.poePortsMap)).sort(([a], [b]) => a.localeCompare(b)) }
+              : kind === 'wireguard-peer' && Array.isArray(value.allowAddress)
+                ? { ...value, allowAddress: [...value.allowAddress].sort() }
+                : value;
     const desired = method === 'DELETE' ? undefined : { ...(current ? config(current) : {}), ...(object(input.body) ? input.body : {}) };
     if (kind === 'wireguard-peer' && desired?.endPoint === '') delete desired.endPointPort;
+    if (siteToSite && desired) {
+        if (desired.networkType === 0) delete desired.customNetwork;
+        if (desired.networkType === 1) delete desired.networkList;
+        if (desired.existCustomNetwork !== undefined) desired.existCustomNetwork = desired.networkType === 1;
+        for (const field of ['advancedSetting', 'failoverSetting'])
+            if (object(current?.[field]) && object(desired[field])) desired[field] = { ...current[field], ...desired[field] };
+    }
+    const expected = readable(kind === 'wlan' && desired ? { name: desired.name } : desired ? comparable(desired) : undefined);
     if (desired) {
         validateBody(desired);
         validateManagedInput(kind, method, desired, params.siteId);
@@ -227,6 +260,16 @@ export async function executeManagedWrite(input: {
     }
     const disableOnly =
         current && desired?.status === false && isDeepStrictEqual(comparable({ ...config(current), status: false }), comparable(desired));
+    if (siteToSite && desired && !disableOnly) {
+        if (
+            Array.isArray(current?.featureDescription) &&
+            current.featureDescription.some((feature) => !object(feature) || feature.featureState !== 0 || feature.changeable === false)
+        )
+            throw new Error('VPN feature is unsupported or not changeable');
+        await validateSiteToSiteReferences(desired, kind === 'vpn-auto', before, id, read, params);
+    }
+    if (kind === 'vpn-delete' && current?.siteVpnType === 1 && current.vpnType === 4 && (!Array.isArray(current.peers) || current.peers.length))
+        throw new Error('Remove WireGuard peers explicitly before deleting their VPN');
     if (kind === 'ssid') {
         const groups = await readResourceRows(() => read(WLAN_PATH, params), ['wlanId']);
         if (!groups.some((group) => group.id === params.wlanId)) throw new Error('WLAN group does not exist');
@@ -308,10 +351,12 @@ export async function executeManagedWrite(input: {
             return (
                 other !== undefined &&
                 isDeepStrictEqual(comparable(config(row)), comparable(config(other))) &&
+                (!siteToSite || (row.siteVpnType === other.siteVpnType && row.vpnType === other.vpnType)) &&
                 (kind !== 'wlan' || row.primary === other.primary)
             );
         });
     if (!same(before, await readRows())) throw new Error('Resource configuration changed during preflight; no write was sent');
+    if (siteToSite && desired && !disableOnly) validateSiteToSiteCapabilities(desired, kind === 'vpn-auto', vpnCapabilities);
     if (
         kind === 'wireguard-peer' &&
         !disableOnly &&
@@ -345,21 +390,6 @@ export async function executeManagedWrite(input: {
     }
     const ackId = typeof result === 'string' ? result : object(result) ? (result.id ?? result[idParam]) : undefined;
     let resourceId = id;
-    const notVerifiedFields: string[] = [];
-    function readable(value: unknown, prefix = ''): unknown {
-        if (!object(value)) return value;
-        return Object.fromEntries(
-            Object.entries(value)
-                .filter(([key, child]) => {
-                    if (key === 'presharedKey' && child === '') return true;
-                    if (!/password|passwd|secret|^psk$|preshared.?key|security.?key|private.?key/i.test(key)) return true;
-                    notVerifiedFields.push(`${prefix}${key}`);
-                    return false;
-                })
-                .map(([key, child]) => [key, readable(child, `${prefix}${key}.`)])
-        );
-    }
-    const expected = readable(kind === 'wlan' && desired ? { name: desired.name } : desired ? comparable(desired) : undefined);
     const verification = await verifyWrite(
         async () => {
             const rows = await readRows();
@@ -390,7 +420,8 @@ export async function executeManagedWrite(input: {
                 return false;
             if (method === 'DELETE') return !observed;
             if (!observed || (method === 'POST' && ackId !== undefined && ackId !== observed.id)) return false;
-            return subset(kind === 'poe-schedule' || kind === 'wireguard-peer' ? comparable(observed) : (detail ?? observed), expected);
+            if (siteToSite && (observed.siteVpnType !== (kind === 'vpn-auto' ? 0 : 1) || observed.vpnType !== desired?.vpnType)) return false;
+            return subset(siteToSite || kind === 'poe-schedule' || kind === 'wireguard-peer' ? comparable(observed) : (detail ?? observed), expected);
         }
     );
     const verified = verification.status === 'verified' && notVerifiedFields.length === 0;
@@ -406,7 +437,7 @@ export async function executeManagedWrite(input: {
         ...(!acknowledged || !verified
             ? {
                   warning:
-                      'Inspect current configuration before retrying. The write was sent once; secret or missing fields and lost acknowledgements cannot establish complete success.',
+                      'Inspect current configuration before retrying. The write was sent once; secrets, missing fields, remote-site provisioning and lost acknowledgements cannot establish complete success.',
               }
             : {}),
     };
