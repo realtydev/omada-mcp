@@ -326,6 +326,12 @@ export class ClientApplicationTrafficOperations {
                 'The requested time window applies to selected-client traffic only. Retrieval time does not establish measurement freshness.',
                 'Application metadata reads one page of at most 1,000 rows. Incomplete, malformed or duplicate metadata suppresses joins; traffic retains its own reported names.',
                 'Empty traffic is incomplete evidence, not proof of zero usage. Disabled or unknown DPI/logging settings do not establish that historical records are absent.',
+                ...('data' in traffic && traffic.data.availableRecords === 0
+                    ? [
+                          'On hardware controllers such as OC200, TP-Link omits the User analytics UI due to hardware limitations. This is a possible reason for empty per-client traffic, not a detected controller model or a confirmed API limitation. See https://support.omadanetworks.com/en/document/13241/',
+                          'To check for real aggregate application data, describe and execute getApplicationControlTraffics with dateStart/dateEnd; aggregate counters cannot establish per-client usage. Positive per-client qualification requires a controller that supports client analytics.',
+                      ]
+                    : []),
                 'No client fanout, DPI enablement, traffic-policy change or speed test is performed.',
             ],
         };
