@@ -119,7 +119,8 @@ describe('curated discovered write requirements', () => {
         const body = { ...ddns, service, ...(service === 5 ? { interval: undefined } : {}) };
         const result = await run('createDdns', body);
         expect(result).toMatchObject({ dryRun: true, written: false });
-        expect(result.request.body).toEqual(JSON.parse(JSON.stringify(body)));
+        expect(result.request.body).toEqual({ ...JSON.parse(JSON.stringify(body)), password: '[redacted]' });
+        expect(body.password).toBe('sentinel-secret');
         expect(request.request).not.toHaveBeenCalled();
     });
     it.each(['createLanDns', 'modifyLanDns'])('requires network selections for %s and validates DNS type dependencies', async (id) => {

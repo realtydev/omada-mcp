@@ -103,6 +103,7 @@ describe('tools/index', () => {
                 'setSsidEnable',
                 'updateSwitchPort',
                 'updateClient',
+                'setClientApLock',
                 'setSwitchNetworks',
                 'createRoute',
                 'updateRoute',

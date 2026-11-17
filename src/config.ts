@@ -69,6 +69,7 @@ const envSchema = z
         useHttp: createBooleanStringSchema(false),
         stateful: createBooleanStringSchema(false),
         toolProfile: z.enum(['full', 'read-only']).optional().default('full'),
+        catalogMode: z.enum(['standard', 'compact']).optional().default('standard'),
         toolCategories: z
             .string()
             .optional()
@@ -173,6 +174,7 @@ export interface EnvironmentConfig {
     useHttp: boolean;
     stateful: boolean;
     toolProfile?: ToolProfile;
+    catalogMode?: 'standard' | 'compact';
     toolCategories?: string;
 
     // MCP Server HTTP/SSE Configuration
@@ -216,6 +218,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Environ
         useHttp: env.MCP_SERVER_USE_HTTP,
         stateful: env.MCP_SERVER_STATEFUL,
         toolProfile: env.MCP_TOOL_PROFILE,
+        catalogMode: env.MCP_CATALOG_MODE,
         toolCategories: env.MCP_TOOL_CATEGORIES,
 
         // MCP Server HTTP/SSE Configuration
@@ -278,6 +281,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Environ
         useHttp: parsed.data.useHttp,
         stateful: parsed.data.stateful,
         toolProfile: parsed.data.toolProfile,
+        catalogMode: parsed.data.catalogMode,
         toolCategories: parsed.data.toolCategories,
 
         // MCP Server HTTP/SSE Configuration

@@ -10,6 +10,7 @@ export const TOOL_CATEGORIES = [
     'security',
     'monitoring',
     'maintenance',
+    'recovery',
     'msp',
 ] as const;
 export type ToolCategory = (typeof TOOL_CATEGORIES)[number];
@@ -37,6 +38,7 @@ const groups: Record<ToolCategory, readonly string[]> = {
         'listClientsPastConnections',
         'getClientHistory',
         'updateClient',
+        'setClientApLock',
         'updateRateLimitProfile',
         'rollbackNetworkChange',
         'blockClient',
@@ -135,6 +137,7 @@ const groups: Record<ToolCategory, readonly string[]> = {
         'setLogNotifications',
     ],
     maintenance: ['getFirmwareDetails', 'startFirmwareUpgrade', 'setSiteLed'],
+    recovery: [],
     msp: [],
 };
 
@@ -166,10 +169,16 @@ export function categoryForPath(path: string): ToolCategory | undefined {
         return undefined;
     // MSP authority spans customers and account administration; controller categories cannot grant it implicitly.
     if (msp) return 'msp';
+    if (/^\/(?:maintenance\/restore|sites\/maintenance\/multi-restore|sites\/[^/]+\/(?:maintenance\/)?restore)(?:\/|$)/.test(route))
+        return 'recovery';
+    if (/^\/sites\/maintenance\/multi-backup(?:\/|$)/.test(route)) return 'maintenance';
     if (route === '/sites') return 'system';
     const site = /^\/sites\/[^/]+(?:\/(.*))?$/.exec(route);
     if (site) route = `/${site[1] ?? ''}`;
     if (site && /^\/profiles\/bonjour-service(?:\/[^/]+)?$/.test(route)) return 'network';
+    if (site && /^\/profiles\/groups(?:\/[^/]+)?$/.test(route)) return 'network';
+    if (site && route === '/profiles/ldap') return 'security';
+    if (site && route === '/time-range-profiles') return 'network';
     if (/^\/gateways\/[^/]+\/config\/advanced(?:\/|$)/.test(route)) return undefined;
     if (/^\/gateways\/[^/]+\/config\/(?:wlans|radios)(?:\/|$)/.test(route)) return 'wireless';
     if (
@@ -199,9 +208,10 @@ export function categoryForPath(path: string): ToolCategory | undefined {
     )
         return 'wireless';
     if (/^\/setting\/(?:wlan|wireless|radio|iot)(?:\/|$)/.test(route)) return 'wireless';
+    if (route === '/lockToAp/aps') return 'wireless';
     if (/^\/(?:rate-limit-profiles?|clients|monitor-client)(?:\/|$)/.test(route)) return 'clients';
     if (
-        /^\/(?:switches|stacks?|cable-test|lan-profiles|poe-ports|port-status-ports|switch-support|switch-oui-rules|lan-switch-setting)(?:\/|$)/.test(
+        /^\/(?:switches|stacks?|cable-test|lan-profiles|poe-ports|poe-schedules|port-status-ports|switch-support|switch-oui-rules|lan-switch-setting)(?:\/|$)/.test(
             route
         )
     )
@@ -261,6 +271,13 @@ export class ToolAccessPolicy {
 
     public allowsCategory(category: ToolCategory | undefined, write: boolean): boolean {
         if (write && this.readOnly) return false;
+        if (category === 'recovery') {
+            if (this.parents.length) {
+                const restrictions = this.parents.filter((parent) => parent.scoped || parent.readOnly);
+                return restrictions.length > 0 && restrictions.every((parent) => parent.allowsCategory(category, write));
+            }
+            return this.permissions?.get('recovery')?.includes(write ? 'w' : 'r') === true;
+        }
         if (this.parents.some((parent) => !parent.allowsCategory(category, write))) return false;
         if (!this.permissions) return category !== undefined || !this.scoped;
         if (category === undefined) return false;
@@ -318,6 +335,7 @@ export class ToolAccessPolicy {
 
     public allowsOperation(method: string, path: string): boolean {
         if (!methods.has(method)) return false;
+        if (categoryForPath(path) === 'recovery') return this.allowsCategory('recovery', method !== 'GET');
         if (this.unrestricted) return true;
         return this.allowsCategory(categoryForPath(path), method !== 'GET');
     }
@@ -327,7 +345,6 @@ export class ToolAccessPolicy {
     }
 
     public assertGeneric(method: string, path: string, version: string, query?: Record<string, unknown>): void {
-        if (this.unrestricted) return;
         if (
             !methods.has(method) ||
             !['v1', 'v2'].includes(version) ||

@@ -2,7 +2,7 @@
 
 A Model Context Protocol (MCP) server for TP-Link Omada network diagnostics and configuration, with stdio and HTTP transports and a runtime CLI for managed Docker setup, updates and rollback.
 
-> **Release:** The [v0.14.1 image](https://github.com/realtydev/omada-mcp/releases/tag/v0.14.1) includes 112 tools, verified DNS/mDNS management, eligible DNS rollback and per-client application-traffic reporting with OC200 limitation guidance. See [DNS resolution quirks](docs/dns-rollback.md#resolution-checks-and-observed-dns-quirks). `getServerInfo` identifies the running build.
+> **Release:** [v0.15.0](https://github.com/realtydev/omada-mcp/releases/tag/v0.15.0) includes 113 tools, an optional four-tool compact catalog, preview-first writes, guarded backups, SSID/policy-route workflows, AP locks, PoE scheduling and VPN configuration. **Migration:** pass `dryRun:false` explicitly to apply writes; restores require explicit `recovery` permission. Use `getServerInfo` to confirm the running build.
 
 ## Runtime management
 
@@ -78,7 +78,7 @@ The HTTP server will be available at `http://localhost:3000/mcp` (stream transpo
 ## Features
 
 - OAuth client-credentials authentication with automatic token refresh, plus web-session authentication for Fusion gateways
-- 112 tools for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
+- 113 tools for reading telemetry and managing sites, devices, clients, VLANs, firewall rules, SSIDs and switch ports
 - Automatic API discovery: search, describe and execute documented JSON operations with live/bundled source information and write previews
 - Dedicated dashboard, topology and client/log diagnostics, with guarded DHCP, radio and log-notification workflows
 - Read-only profile enforced for dedicated tools and discovered operations
@@ -119,16 +119,17 @@ For a private CA, mount its certificate bundle read-only (for example, `-v /path
 
 ### MCP Generic Server Configuration
 
-| Variable                           | Required | Default   | Description                                                           |
-| ---------------------------------- | -------- | --------- | --------------------------------------------------------------------- |
-| `MCP_SERVER_LOG_LEVEL`             | No       | `info`    | Logging verbosity (`debug`, `info`, `warn`, `error`, `silent`)        |
-| `MCP_SERVER_LOG_FORMAT`            | No       | `plain`   | Log output format (`plain`, `json`, or `gcp-json`)                    |
-| `MCP_SERVER_USE_HTTP`              | No       | `false`   | Start HTTP server instead of stdio                                    |
-| `MCP_TOOL_PROFILE`                 | No       | `full`    | `full` or `read-only`; excludes writes and generic calls in read-only |
-| `MCP_TOOL_CATEGORIES`              | No       | —         | Optional category permissions, e.g. `all:r,wireless:rw`               |
-| `MCP_HTTP_SESSION_IDLE_TIMEOUT_MS` | No       | `1800000` | Positive integer idle session lifetime in milliseconds                |
-| `MCP_HTTP_MAX_SESSIONS`            | No       | `100`     | Maximum retained and initializing HTTP/SSE sessions                   |
-| `MCP_SERVER_STATEFUL`              | No       | `false`   | Maintain stateful sessions per client                                 |
+| Variable                           | Required | Default    | Description                                                                     |
+| ---------------------------------- | -------- | ---------- | ------------------------------------------------------------------------------- |
+| `MCP_SERVER_LOG_LEVEL`             | No       | `info`     | Logging verbosity (`debug`, `info`, `warn`, `error`, `silent`)                  |
+| `MCP_SERVER_LOG_FORMAT`            | No       | `plain`    | Log output format (`plain`, `json`, or `gcp-json`)                              |
+| `MCP_SERVER_USE_HTTP`              | No       | `false`    | Start HTTP server instead of stdio                                              |
+| `MCP_TOOL_PROFILE`                 | No       | `full`     | `full` or `read-only`; excludes writes and generic calls in read-only           |
+| `MCP_TOOL_CATEGORIES`              | No       | —          | Optional category permissions, e.g. `all:r,wireless:rw`                         |
+| `MCP_CATALOG_MODE`                 | No       | `standard` | `standard` or `compact`; compact exposes four tools using the existing handlers |
+| `MCP_HTTP_SESSION_IDLE_TIMEOUT_MS` | No       | `1800000`  | Positive integer idle session lifetime in milliseconds                          |
+| `MCP_HTTP_MAX_SESSIONS`            | No       | `100`      | Maximum retained and initializing HTTP/SSE sessions                             |
+| `MCP_SERVER_STATEFUL`              | No       | `false`    | Maintain stateful sessions per client                                           |
 
 ### MCP Server HTTP Configuration
 
@@ -314,6 +315,7 @@ The AP diagnostics use the bundled `docs/openapi/03-device.json` operations `get
 | `setSsidEnable`          | Enable or disable an SSID network-wide                                                                                   |
 | `updateSwitchPort`       | Guarded profile or PoE update (one setting); unsupported generic settings are rejected                                   |
 | `updateClient`           | Update name, fixed IPv4 or rate limits through setting-specific endpoints; supports dry-run previews                     |
+| `setClientApLock`        | Preview, set or remove a wireless client AP lock with eligibility checks, drift refusal and configuration readback       |
 | `updateRateLimitProfile` | Partial profile updates with previews, preservation, read-back verification and rollback receipts                        |
 | `rollbackNetworkChange`  | Restore a verified rate-limit profile change after checking for drift                                                    |
 | `setSwitchNetworks`      | Set switch VLAN trunking configuration                                                                                   |
@@ -391,6 +393,8 @@ Concurrent requests share OAuth renewal and web/internal logins. Responses from 
 
 Set `MCP_TOOL_PROFILE=read-only` to expose read tools and diagnostics while excluding writes and `genericApiCall`. The default `full` profile preserves the full tool catalogue. The profile controls exposed operations; controller credentials and permissions still determine API access.
 
+All MCP mutations now preview by default; pass `dryRun:false` explicitly to apply. Set `MCP_CATALOG_MODE=compact` and recreate the container to use the four-tool catalog. Guarded backup, SSID/WLAN lifecycle and policy-route workflows reuse API discovery. Controller/site restore requires explicit `recovery` permission. See [managed workflows and migration](docs/managed-workflows.md) for behavior and limits.
+
 HTTP/SSE sessions default to a 30-minute idle timeout (`MCP_HTTP_SESSION_IDLE_TIMEOUT_MS=1800000`) and a limit of 100 sessions (`MCP_HTTP_MAX_SESSIONS=100`). Capacity includes sessions being initialized. Full capacity returns HTTP 503 with a retry hint. Active tool calls are protected from idle expiry; keeping an event stream open alone does not keep a session alive. SSE accepts the SDK's `sessionId` query parameter as well as the legacy session header.
 
 `getSiteDashboard` defaults to the last hour and accepts epoch-second `start`/`end` windows up to 24 hours. PoE is a current snapshot. Results cap each device list at 50 and mark truncation or unavailable sections explicitly; wireless charts and per-port details are omitted. Units are controller-defined: Wi-Fi traffic KB, per-device traffic MB, switch traffic bytes, PoE watts.
@@ -408,3 +412,9 @@ Want to help improve this project? Contributions are welcome! Visit our GitHub r
 This project is licensed under the [MIT License](https://github.com/realtydev/omada-mcp/blob/main/LICENSE).
 
 Use `getSiteDashboard({includePoePorts:true})` for bounded port PoE detail and reported switch headroom. [PoE reporting](docs/poe-reporting.md) explains source coverage and missing readings; [session recovery](docs/session-recovery.md) describes safe-read renewal and write refusal.
+
+PoE schedule creation, updates and deletion reuse `executeApiOperation`, with preview defaults, time-range/port checks and configuration readback. See [PoE scheduling](docs/managed-workflows.md#poe-scheduling) for operation IDs, scopes and examples.
+
+Use [v2 site-to-site VPN workflows](docs/managed-workflows.md#site-to-site-vpns-v2) for manual WireGuard/IPSec and automatic provisioning through `executeApiOperation`, with guarded writes, key redaction and configuration readback. Shared v2 deletion qualifies targets across site-to-site and client-to-site inventories. [Legacy WireGuard interfaces and peers](docs/managed-workflows.md#wireguard-interfaces-and-peers) remain available for older controllers.
+
+[Guarded client-to-site VPNs](docs/managed-workflows.md#client-to-site-vpns-v2) cover WireGuard/OpenVPN servers and outbound clients, including imported configurations, explicit user/client removal before server deletion and secret-aware readback.

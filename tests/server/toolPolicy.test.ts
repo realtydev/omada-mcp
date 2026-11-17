@@ -19,7 +19,7 @@ const PREFIX = '/openapi/v1/{omadacId}/sites/{siteId}';
 const doc = {
     openapi: '3.0.1',
     paths: {
-        [`${PREFIX}/wireless-network/ssids`]: { get: { operationId: 'wifiRead' }, post: { operationId: 'wifiWrite' } },
+        [`${PREFIX}/wireless-network/custom-settings`]: { get: { operationId: 'wifiRead' }, post: { operationId: 'wifiWrite' } },
         [`${PREFIX}/rate-limit-profiles`]: { get: { operationId: 'clientRead' }, post: { operationId: 'clientWrite' } },
         [`${PREFIX}/mystery`]: { get: { operationId: 'unknownRead' } },
     },
@@ -113,6 +113,14 @@ describe('scoped tool policy', () => {
             for (const categories of ['network:r', 'network:w', 'clients:rw', 'all:r'])
                 expect(() => new ToolAccessPolicy('full', categories).assertTool('rollbackNetworkChange', { resource })).toThrow();
         }
+    });
+    it('scopes the site LDAP profile collection as security without broadening template or global routes', () => {
+        expect(categoryForPath(`${PREFIX}/profiles/ldap`)).toBe('security');
+        expect(new ToolAccessPolicy('full', 'security:r').allowsOperation('GET', `${PREFIX}/profiles/ldap`)).toBe(true);
+        expect(new ToolAccessPolicy('full', 'network:r').allowsOperation('GET', `${PREFIX}/profiles/ldap`)).toBe(false);
+        expect(new ToolAccessPolicy('read-only').allowsOperation('POST', `${PREFIX}/profiles/ldap`)).toBe(false);
+        expect(categoryForPath('/openapi/v1/{omadacId}/sitetemplates/{siteTemplateId}/profiles/ldap')).toBeUndefined();
+        expect(categoryForPath('/openapi/v1/{omadacId}/profiles/ldap')).toBeUndefined();
     });
 
     it.each([

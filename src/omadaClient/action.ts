@@ -1,5 +1,8 @@
+import { isDeepStrictEqual } from 'node:util';
+import { z } from 'zod';
 import type { OmadaApiResponse } from '../types/index.js';
-import { clientUpdateSchema, customClientRateLimitSchema } from '../utils/client-update-schema.js';
+import { clientApLockSchema, clientLockMacSchema, clientUpdateSchema, customClientRateLimitSchema } from '../utils/client-update-schema.js';
+import { verifyWrite } from '../utils/write-verification.js';
 
 import type { RequestHandler } from './request.js';
 import type { SiteOperations } from './site.js';
@@ -14,6 +17,92 @@ export class ActionOperations {
         private readonly site: SiteOperations,
         private readonly buildPath: (path: string, version?: string) => string
     ) {}
+
+    /** Configure the client's allowed APs; never replay an uncertain POST. */
+    public async setClientApLock(clientMac: string, settings: z.input<typeof clientApLockSchema>, siteId?: string, dryRun = true) {
+        const mac = clientLockMacSchema.parse(clientMac);
+        const input = clientApLockSchema.parse(settings);
+        const desired = { enable: input.enable, aps: [...(input.aps ?? [])].sort() };
+        const resolvedSiteId = this.site.resolveSiteId(siteId);
+        const base = `/sites/${encodeURIComponent(resolvedSiteId)}`;
+        const clientPath = this.buildPath(`${base}/clients/${mac}`);
+        const path = `${clientPath}/lock-to-ap`;
+        const read = async () => {
+            const response = await this.request.get<OmadaApiResponse<unknown>>(clientPath);
+            const detail = z
+                .object({
+                    mac: clientLockMacSchema,
+                    wireless: z.boolean(),
+                    blocked: z.boolean(),
+                    clientLockToApSetting: z.object({
+                        enable: z.boolean(),
+                        aps: z
+                            .array(z.object({ mac: clientLockMacSchema }))
+                            .max(1000)
+                            .optional(),
+                    }),
+                })
+                .parse(this.request.ensureSuccess(response));
+            if (detail.mac !== mac) throw new Error('Client detail identifies another client');
+            const lock = detail.clientLockToApSetting;
+            const aps = lock.aps?.map((ap) => ap.mac).sort() ?? [];
+            if ((lock.enable && !aps.length) || new Set(aps).size !== aps.length)
+                throw new Error('Client AP-lock evidence is incomplete or ambiguous');
+            return { wireless: detail.wireless, blocked: detail.blocked, lock: { enable: lock.enable, aps } };
+        };
+        const before = await read();
+        if (!before.wireless) throw new Error('AP locks require a wireless client');
+        if (desired.enable && before.blocked) throw new Error('Blocked clients cannot be locked to APs');
+        const matches = (lock: typeof desired) => lock.enable === desired.enable && (!desired.enable || isDeepStrictEqual(lock.aps, desired.aps));
+        const changed = !matches(before.lock);
+        if (desired.enable && changed) {
+            const response = await this.request.get<OmadaApiResponse<unknown>>(this.buildPath(`${base}/lockToAp/aps`, 'v2'));
+            const aps = z
+                .array(z.object({ mac: clientLockMacSchema, supportLockToAp: z.boolean().optional(), statusCategory: z.number().optional() }))
+                .max(1000)
+                .parse(this.request.ensureSuccess(response));
+            if (new Set(aps.map((ap) => ap.mac)).size !== aps.length) throw new Error('Eligible AP inventory contains duplicate identities');
+            for (const apMac of desired.aps) {
+                const ap = aps.find((candidate) => candidate.mac === apMac);
+                if (!ap || ap.supportLockToAp !== true || ap.statusCategory !== 1)
+                    throw new Error('Every selected AP must be present, connected and explicitly support client locking');
+            }
+        }
+        const summary = { siteId: resolvedSiteId, clientMac: mac, before: before.lock, desired, changed };
+        if (dryRun || !changed)
+            return {
+                ...summary,
+                dryRun,
+                written: false,
+                verified: !changed,
+                warning:
+                    'AP locks can interrupt connectivity and restrict roaming. Verification covers configuration, not association or reachability.',
+            };
+        if (!isDeepStrictEqual(before, await read()))
+            throw new Error('Client AP-lock configuration or eligibility changed during preflight; no write was sent');
+        let response: OmadaApiResponse<unknown> | undefined;
+        try {
+            response = await this.request.request<OmadaApiResponse<unknown>>({ method: 'POST', url: path, data: desired }, false);
+        } catch (error) {
+            const status = error && typeof error === 'object' && 'status' in error ? error.status : undefined;
+            if (typeof status === 'number' && status >= 400 && status < 500 && status !== 408) throw error;
+        }
+        let acknowledged = false;
+        if (response && Number.isInteger(response.errorCode)) {
+            this.request.ensureSuccess(response);
+            acknowledged = true;
+        }
+        const verification = await verifyWrite(read, (observed) => matches(observed.lock));
+        return {
+            ...summary,
+            dryRun: false,
+            written: acknowledged ? true : ('unknown' as const),
+            verified: verification.status === 'verified',
+            verification: { status: verification.status, attempts: verification.attempts, observed: verification.observed?.lock },
+            warning:
+                'Verification covers AP-lock configuration, not association or reachability. Inspect current state before retrying an uncertain result.',
+        };
+    }
 
     /**
      * Reboot a device by MAC address (v1 API).

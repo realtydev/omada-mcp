@@ -4,6 +4,26 @@ import { z } from 'zod';
 const directionLimit = z.number().int().min(1).max(1024);
 const rateUnit = z.union([z.literal(1), z.literal(2)]);
 
+export const clientLockMacSchema = z
+    .string()
+    .regex(/^(?:[\da-f]{12}|(?:[\da-f]{2}[:-]){5}[\da-f]{2})$/i, 'Use a valid MAC address')
+    .transform((value) => value.replace(/[:-]/g, '').toUpperCase().match(/.{2}/g)?.join('-') ?? '');
+
+export const clientApLockSchema = z
+    .object({
+        enable: z.boolean(),
+        aps: z.array(clientLockMacSchema).max(64).optional(),
+    })
+    .strict()
+    .superRefine((value, ctx) => {
+        if (value.enable && !value.aps?.length)
+            ctx.addIssue({ code: 'custom', path: ['aps'], message: 'Enabling an AP lock requires at least one AP' });
+        if (!value.enable && value.aps?.length)
+            ctx.addIssue({ code: 'custom', path: ['aps'], message: 'Unlocking requires an empty or omitted AP list' });
+        if (value.aps && new Set(value.aps).size !== value.aps.length)
+            ctx.addIssue({ code: 'custom', path: ['aps'], message: 'AP MAC addresses must be unique' });
+    });
+
 export const customClientRateLimitSchema = z
     .object({
         upEnable: z.boolean(),

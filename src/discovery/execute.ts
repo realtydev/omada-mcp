@@ -4,10 +4,14 @@ import { Ajv2020 } from 'ajv/dist/2020.js';
 import _addFormats, { type FormatsPlugin } from 'ajv-formats';
 
 import type { RequestHandler } from '../omadaClient/request.js';
-import type { ToolAccessPolicy } from '../server/toolPolicy.js';
+import { categoryForPath, type ToolAccessPolicy } from '../server/toolPolicy.js';
 import type { DnsChangeReceipt } from '../utils/dns-change-schema.js';
+import { redactForLogs } from '../utils/redact.js';
+import { backupReadSchema, backupSites, executeBackup, isManagedBackup } from './backup.js';
 import type { ApiOperation, ApiParameter, OperationCatalog } from './catalog.js';
+import { clientToSiteRequestSchema } from './clientToSiteVpn.js';
 import { executeLanDnsWrite, isLanDnsWrite, LAN_DNS_PATH, type LanDnsWriteResult } from './lanDns.js';
+import { executeManagedWrite, isManagedResourceWrite, managedResource, validateManagedInput } from './managedResources.js';
 import {
     executeMdnsWrite,
     isMdnsWrite,
@@ -18,6 +22,7 @@ import {
     validateMdnsReferences,
 } from './mdns.js';
 import { validateWriteRequirements } from './requirements.js';
+import { siteToSiteRequestSchema } from './siteToSiteVpn.js';
 import { prepareTransfer } from './transfer.js';
 
 type Schema = Record<string, unknown>;
@@ -54,6 +59,7 @@ export interface DiscoveredExecutionResult {
     warning?: string;
     transfer?: unknown;
     verification?: LanDnsWriteResult['verification'];
+    notVerifiedFields?: string[];
     rollbackReceipt?: DnsChangeReceipt;
     rollbackUnavailable?: string;
 }
@@ -242,7 +248,7 @@ function validationSchema(operation: ApiOperation, catalog: OperationCatalog): S
                 } else delete result[exclusive];
             }
         }
-        return result;
+        return clientToSiteRequestSchema(operation, siteToSiteRequestSchema(operation, result));
     };
     const properties: Schema = Object.create(null);
     const required: string[] = [];
@@ -382,8 +388,12 @@ function rejectUnknownBodyFields(schema: Schema, body: unknown, catalog: Operati
     if (unknown) throw new Error(`Request body contains an undocumented field: ${unknown}.`);
 }
 
-function preferredWriteTool(operation: ApiOperation): string | undefined {
+function preferredWriteTool(operation: ApiOperation, body: unknown): string | undefined {
     if (operation.method === 'GET') return undefined;
+    if (/\/sites\/\{[^}]+\}\/clients\/\{[^}]+\}\/lock-to-ap$/.test(operation.path)) return 'setClientApLock';
+    if (/\/sites\/\{[^}]+\}\/clients\/config$/.test(operation.path) && object(body) && Object.hasOwn(body, 'lockToAp')) return 'setClientApLock';
+    if (isManagedResourceWrite(operation.method, operation.path) && !managedResource(operation))
+        return 'the canonical managed resource operation through executeApiOperation (site-to-site and client-to-site VPNs use v2)';
     if (operation.method === 'PATCH' && /\/aps\/\{[^}]+\}\/override$/.test(operation.path)) return 'updateApSsidOverride';
     if (/\/aps\/\{[^}]+\}\/radio-config$/.test(operation.path)) return 'setApRadio';
     if (/\/site\/log-notification$/.test(operation.path)) return 'setLogNotifications';
@@ -443,6 +453,8 @@ export async function executeDiscoveredOperation(
     if (readOnly && (options.files !== undefined || options.downloadFile !== undefined))
         throw new Error('Read-only profile blocks file transfers, including local downloads.');
     if (readOnly && mutation) throw new Error('Read-only profile blocks mutating API operations, including previews.');
+    if (categoryForPath(operation.path) === 'recovery' && !context.accessPolicy?.allowsOperation(operation.method, operation.path))
+        throw new Error('Restore operations require an explicit recovery category permission.');
     context.accessPolicy?.assertOperation(operation.method, operation.path);
     if (typeof catalog.document.openapi !== 'string' || !/^3\.[01](?:\.|$)/.test(catalog.document.openapi))
         throw new Error('Execution supports OpenAPI 3.0 and 3.1 only.');
@@ -528,8 +540,11 @@ export async function executeDiscoveredOperation(
     if (/[{}]/.test(path)) throw new Error('Operation path contains malformed template parameters.');
     const query = queryParameters(operation, params, catalog);
     const dryRun = options.dryRun ?? mutation;
+    const resource = managedResource(operation);
+    if (resource) validateManagedInput(resource.kind, operation.method, options.body, params.siteId);
+    if (isManagedBackup(operation)) backupSites(operation, options.body);
     if (isMdnsWrite(operation)) validateMdnsInput(operation.method, options.body);
-    const preferredTool = preferredWriteTool(operation);
+    const preferredTool = preferredWriteTool(operation, options.body);
     const unsupportedStackWrite =
         mutation &&
         /\/sites\/\{[^}]+\}\/stacks?\/\{[^}]+\}\/(?:ports\/(?:\{[^}]+\}|config)|multi-ports\/config|lags\/\{[^}]+\})$/.test(operation.path)
@@ -541,8 +556,14 @@ export async function executeDiscoveredOperation(
             ...metadata,
             dryRun: true,
             written: false,
-            request: { method: operation.method, path, query, ...(options.body === undefined ? {} : { body: options.body }) },
+            request: { method: operation.method, path, query, ...(options.body === undefined ? {} : { body: redactForLogs(options.body) }) },
             ...(transfer?.preview === undefined ? {} : { transfer: transfer.preview }),
+            ...(resource?.kind === 'poe-schedule'
+                ? {
+                      warning:
+                          'PoE schedule changes can interrupt power. This schema-only preview does not inspect devices or time ranges; controller scheduling uses the referenced profile and site clock.',
+                  }
+                : {}),
             ...(unsupportedStackWrite
                 ? { warning: unsupportedStackWrite }
                 : preferredTool
@@ -552,6 +573,51 @@ export async function executeDiscoveredOperation(
     }
     if (unsupportedStackWrite) throw new Error(unsupportedStackWrite);
     if (preferredTool) throw new Error(`Use ${preferredTool} for this write to preserve its preflight and read-back verification.`);
+    if (resource || isManagedBackup(operation)) {
+        if (transfer || Object.keys(query).length) throw new Error('Managed workflows require JSON without transfer or query overrides');
+        const read = async (readPath: string, values: Record<string, unknown> = {}) => {
+            const entry = catalog.operations.find((candidate) => candidate.method === 'GET' && candidate.path === readPath);
+            if (!entry || entry.unsupportedReason) throw new Error('A required workflow read operation is unavailable in this catalog');
+            const supplied = { ...params, ...values };
+            const readParams = Object.fromEntries(
+                entry.parameters
+                    .filter(
+                        (parameter) =>
+                            ['path', 'query'].includes(parameter.in) &&
+                            !controllerParameters.has(parameter.name) &&
+                            supplied[parameter.name] !== undefined
+                    )
+                    .map((parameter) => [parameter.name, supplied[parameter.name]])
+            );
+            const response = await executeDiscoveredOperation(catalog, request, { operationId: entry.operationId, params: readParams }, context);
+            return response.result;
+        };
+        if (resource) {
+            const requestSchema = operation.requestBody ? resolve(operation.requestBody.schema, catalog.document) : undefined;
+            // Deletion also needs the create contract to compare sibling configuration without volatile metadata.
+            const create = catalog.operations.find((entry) => entry.method === 'POST' && entry.path === resource.listPath);
+            const createSchema = create?.requestBody ? resolve(create.requestBody.schema, catalog.document) : undefined;
+            const properties = (requestSchema ?? createSchema)?.properties;
+            if (!object(properties)) throw new Error('Managed resource write schema is unavailable');
+            const result = await executeManagedWrite({
+                request,
+                operation,
+                path,
+                params,
+                body: options.body,
+                resource,
+                fields: Object.keys(properties),
+                read,
+                validateBody: (body) => {
+                    validate(operation, catalog, { params, body });
+                    if (operation.requestBody) rejectUnknownBodyFields(operation.requestBody.schema, body, catalog);
+                },
+            });
+            return { ...metadata, ...result, dryRun: false, request: { method: operation.method, path, query } };
+        }
+        const result = await executeBackup(request, operation, path, options.body, read);
+        return { ...metadata, ...result, dryRun: false, request: { method: operation.method, path, query } };
+    }
     if (isLanDnsWrite(operation) || isMdnsWrite(operation)) {
         const mdns = isMdnsWrite(operation);
         const label = mdns ? 'mDNS' : 'LAN DNS';
@@ -634,7 +700,9 @@ export async function executeDiscoveredOperation(
             ...(transfer?.request ?? (options.body === undefined ? {} : { data: options.body, headers: { 'Content-Type': contentType } })),
         });
         let result: unknown;
+        const backupSchema = backupReadSchema(operation);
         if (transfer?.finalize) result = await transfer.finalize(response);
+        else if (backupSchema && object(response) && !Object.hasOwn(response, 'errorCode')) result = backupSchema.parse(response);
         else {
             if (!object(response) || !Number.isInteger(response.errorCode))
                 throw new Error('Controller returned an invalid Open API response envelope.');

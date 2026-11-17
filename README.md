@@ -12,14 +12,14 @@
 
 </div>
 
-> **Release:** [v0.14.1](https://github.com/realtydev/omada-mcp/releases/tag/v0.14.1) includes 112 tools, verified DNS/mDNS management, eligible DNS rollback and per-client application-traffic reporting with OC200 limitation guidance. See [DNS resolution quirks](docs/dns-rollback.md#resolution-checks-and-observed-dns-quirks). Use `getServerInfo` to confirm the running build.
+> **Release:** [v0.15.0](https://github.com/realtydev/omada-mcp/releases/tag/v0.15.0) includes 113 tools, an optional four-tool compact catalog, preview-first writes, guarded backups, SSID/policy-route workflows, AP locks, PoE scheduling and VPN configuration. **Migration:** pass `dryRun:false` explicitly to apply writes; restores require explicit `recovery` permission. Use `getServerInfo` to confirm the running build.
 
 ```text
 You:    Why is the guest SSID slow on the upstairs AP?
 Claude: (getApRadios → listClientsActivity → getSsidDetail)
         The 5 GHz radio on "AP-Upstairs" is on channel 149 at 80 MHz with 23% retries…
 You:    Move it to 36 at 40 MHz, dry run first.
-Claude: (setApRadio dryRun=true → setApRadio) Done. Read back and verified.
+Claude: (setApRadio dryRun=true → setApRadio dryRun=false) Done. Read back and verified.
 ```
 
 ## Runtime management
@@ -29,11 +29,11 @@ Use the [runtime CLI](docs/runtime.md) for setup, doctor, status, version-pinned
 ## Highlights
 
 - **Automatic API discovery.** `searchApiOperations` → `describeApiOperation` → `executeApiOperation`. Prefer the controller's live specification, with an explicit bundled fallback containing 2,450 indexed operations. Unsupported operations are identified; a catalogue entry does not prove device support. See [API discovery](docs/api-discovery.md).
-- **112 tools, including 61 in read-only mode before category filtering.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
+- **113 tools, including 61 in read-only mode before category filtering.** Dedicated tools cover dashboards, topology, client/log diagnostics, DHCP reservations, VPN status, Wi-Fi, VLANs, firewall, routes, port forwarding, switch ports and device/client actions.
 - **Traffic, RF and WAN diagnostics.** Bounded history and timestamped evidence distinguish missing metrics, partial results and truncation. See [network workflows](docs/network-workflows.md) and [diagnostic comparisons](docs/diagnostic-comparisons.md).
 - **MSP, OpenAPI 3.1 and files.** Explicit MSP scope, JSON Schema 2020 validation and opt-in bounded multipart uploads/binary downloads. See [file transfers](docs/file-transfers.md).
 - **Session recovery and PoE detail.** Safe internal reads renew rejected sessions once; writes are never replayed. Request `getSiteDashboard({includePoePorts:true})` for bounded port power and switch headroom. See [session recovery](docs/session-recovery.md) and [PoE reporting](docs/poe-reporting.md).
-- **Guarded configuration changes.** Discovered writes default to validated previews. Radio, DHCP, SSID, switch-port, rate-limit profile and log-notification writes retain dedicated safeguards. Eligible rate-limit, DHCP, AP radio and secret-free SSID changes include drift-checked rollback receipts. Other discovered writes explicitly report that they have not been verified by reading settings back.
+- **Guarded configuration changes.** All MCP writes default to previews; apply with explicit `dryRun:false`. Radio, DHCP, SSID, switch-port, rate-limit profile and log-notification writes retain dedicated safeguards. Eligible rate-limit, DHCP, AP radio and secret-free SSID changes include drift-checked rollback receipts. Other discovered writes explicitly report that they have not been verified by reading settings back.
 - **Wi-Fi audit snapshots and scoped tools.** Compare AP radio configuration across matching snapshots with [Wi-Fi audits](docs/wifi-audit.md), and limit dedicated/discovered operations with [category scopes](docs/scoped-tools.md).
 - **Explicit read-only access.** `MCP_TOOL_PROFILE=read-only` blocks writes, including discovered operations. Controller permissions still govern which data is accessible.
 - **Two API surfaces.** The official Omada Open API, plus the controller's internal web UI API for features the Open API doesn't expose (ACLs, routes, port forwarding on OC200).
@@ -243,6 +243,7 @@ The AP diagnostics use the bundled `docs/openapi/03-device.json` operations `get
 | `setSsidEnable`          | Enable or disable an SSID network-wide                                                                                   |
 | `updateSwitchPort`       | Guarded profile or PoE update (one setting); unsupported generic settings are rejected                                   |
 | `updateClient`           | Update name, fixed IPv4 or rate limits through setting-specific endpoints; supports dry-run previews                     |
+| `setClientApLock`        | Preview, set or remove a wireless client AP lock with eligibility checks, drift refusal and configuration readback       |
 | `updateRateLimitProfile` | Partial profile updates with previews, preservation, read-back verification and rollback receipts                        |
 | `rollbackNetworkChange`  | Restore a verified rate-limit profile change after checking for drift                                                    |
 | `setSwitchNetworks`      | Set switch VLAN trunking configuration                                                                                   |
@@ -310,6 +311,8 @@ See [network workflows](docs/network-workflows.md) for diagnostics and verified 
 | `getServerInfo`             | Report the package version, git commit, and build time this server process was actually built from      |
 | `getControllerCapabilities` | Read controller metadata and API documentation evidence; optionally inspect one SSID for missing fields |
 
+Set `MCP_CATALOG_MODE=compact` to expose four search/describe/capability/dispatch tools backed by the existing handlers. Standard mode remains the default. See [write migration and managed workflows](docs/managed-workflows.md) for preview defaults, SSID/WLAN lifecycle, policy routing, backups and explicit recovery permissions.
+
 Automatic discovery keeps the existing tools and adds searchable API coverage. See [API discovery](docs/api-discovery.md) for source selection, write previews, read-only enforcement and pagination limits.
 
 ## Reliability and tool exposure
@@ -318,7 +321,7 @@ Concurrent requests share OAuth renewal and web/internal logins. Responses from 
 
 Controller requests share pacing across the public and internal APIs. GET/HEAD requests can retry transient failures twice within the request timeout, respecting bounded `Retry-After` delays; mutations are not retried for transient failures. Forbidden operations preserve the valid session, while explicit expiry still renews it. Rejected credentials enter a short cooldown to reduce repeated failed logins.
 
-`updateSsid` accepts partial basic-configuration fields and preserves required settings and nested security fields from the current SSID. Use `dryRun:true` to preview redacted changes. The default remains to apply. Inspect `verification.status`, `unexpectedChanges` and `unverifiedPreservedFields`; masked preserved values are identified explicitly. `written:"unknown"` means the write response was lost and the outcome was reconciled with reads without replaying the write. If the controller masks an existing WPA-Personal key, provide its actual value before applying a preserving update. Detected configuration drift stops the write; concurrent edits after the final read remain possible because conditional writes are not established.
+`updateSsid` accepts partial basic-configuration fields and preserves required settings and nested security fields from the current SSID. Use `dryRun:true` to preview redacted changes. MCP calls default to preview; set `dryRun:false` explicitly to apply. Inspect `verification.status`, `unexpectedChanges` and `unverifiedPreservedFields`; masked preserved values are identified explicitly. `written:"unknown"` means the write response was lost and the outcome was reconciled with reads without replaying the write. If the controller masks an existing WPA-Personal key, provide its actual value before applying a preserving update. Detected configuration drift stops the write; concurrent edits after the final read remain possible because conditional writes are not established.
 
 Some controller detail responses omit required update fields such as `mloEnable`. Supply those fields explicitly; the tool does not infer a disabled setting from missing data. If readback also omits a requested field, verification reports `unknown`. Guarded live validation confirmed preview behavior with an explicit MLO value; no SSID changes were applied.
 
@@ -424,3 +427,9 @@ Maintained by [realtydev](https://github.com/realtydev).
 Read-only qualification for additional controllers is documented in [compatibility validation](docs/compatibility-validation.md). Missing MSP/Fusion hardware remains explicitly untested.
 
 Use `getSiteDashboard({includePoePorts:true})` for bounded port PoE detail and reported switch headroom. [PoE reporting](docs/poe-reporting.md) explains source coverage and missing readings; [session recovery](docs/session-recovery.md) describes safe-read renewal and write refusal.
+
+PoE schedule creation, updates and deletion reuse `executeApiOperation`, with preview defaults, time-range/port checks and configuration readback. See [PoE scheduling](docs/managed-workflows.md#poe-scheduling) for operation IDs, scopes and examples.
+
+Use [v2 site-to-site VPN workflows](docs/managed-workflows.md#site-to-site-vpns-v2) for manual WireGuard/IPSec and automatic provisioning through `executeApiOperation`, with guarded writes, key redaction and configuration readback. Shared v2 deletion qualifies targets across site-to-site and client-to-site inventories. [Legacy WireGuard interfaces and peers](docs/managed-workflows.md#wireguard-interfaces-and-peers) remain available for older controllers.
+
+[Guarded client-to-site VPNs](docs/managed-workflows.md#client-to-site-vpns-v2) cover WireGuard/OpenVPN servers and outbound clients, including imported configurations, explicit user/client removal before server deletion and secret-aware readback.

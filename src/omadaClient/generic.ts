@@ -1,3 +1,4 @@
+import { isManagedResourceWrite } from '../discovery/managedResources.js';
 import { ToolAccessPolicy } from '../server/toolPolicy.js';
 import type { RequestHandler } from './request.js';
 
@@ -24,6 +25,14 @@ export class GenericOperations {
     ): Promise<unknown> {
         this.policy.assertGeneric(method, path, version, queryParams);
         const fullPath = this.buildPath(path, version);
+        if (
+            method !== 'GET' &&
+            (/\/clients\/[^/]+\/lock-to-ap\/?$/.test(fullPath) ||
+                (/\/clients\/config\/?$/.test(fullPath) && (typeof body !== 'object' || body === null || Object.hasOwn(body, 'lockToAp'))))
+        )
+            throw new Error('Use setClientApLock for guarded AP-lock changes.');
+        if (isManagedResourceWrite(method, fullPath) || (method !== 'GET' && /\/maintenance\/(?:multi-)?backup\//.test(fullPath)))
+            throw new Error('Use executeApiOperation for this write to preserve managed workflow validation and read-back checks.');
         return await this.request.request<unknown>({
             method,
             url: fullPath,

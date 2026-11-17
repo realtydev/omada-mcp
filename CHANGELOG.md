@@ -4,6 +4,29 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-16
+
+### Added
+
+- Guarded v2 WireGuard/OpenVPN client-to-site server/client configuration and deletion, reusing shared VPN inventories, WAN/LAN checks and mutation verification. Shared deletion now qualifies all three VPN families and refuses ambiguous IDs or attached users/clients; imported configuration contents remain unverified.
+
+- Guarded nondeprecated v2 site-to-site VPN workflows for manual WireGuard/IPSec and automatic provisioning, reusing discovery with protocol-specific validation, detail readback, capability/reference checks and explicit nested-key/remote-site verification limits.
+
+- Guarded WireGuard interface/peer create, update and delete through existing discovery, with explicit secret handling, reference/conflict checks, bounded readback and raw-call bypass protection for the deprecated v1 endpoints.
+
+- Guarded PoE schedule create/update/delete through existing API discovery, with time-range and PoE-port reference checks, active-port conflict checks, site binding, drift refusal and exact target-map readback.
+
+- Guarded `setClientApLock` previews, sets and removes a wireless client AP lock using documented client detail and eligible-AP evidence; readback verifies configuration after one mutation.
+
+- Opt-in compact catalog with four search, describe, capability and dispatch tools that reuse existing handlers and permission checks. Runtime probes support both catalog modes.
+- Guarded SSID/WLAN lifecycle and policy-route workflows through API discovery, with inventory checks, preservation, drift refusal and bounded readback.
+- Controller-side backup workflows verify newly observed files and keep recovery permission separate from ordinary maintenance.
+
+### Changed
+
+- All mutating MCP tools preview by default; automation must pass `dryRun:false` explicitly to apply. Older actions without native preflight return clearly labelled schema-only previews. Low-level client defaults remain unchanged.
+- Controller/site restore operations require explicit `recovery` permission; `full` and `all:rw` alone do not authorize restoration.
+
 ## [0.14.1] - 2026-11-16
 
 ### Fixed

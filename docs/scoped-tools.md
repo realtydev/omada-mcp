@@ -22,11 +22,12 @@ This example permits reads across known categories and writes only in `wireless`
 | `network`     | WAN/LAN networks, DHCP, routes and forwarding                            |
 | `security`    | Firewall, ACLs, IPS, wireless security diagnosis, threats and VPN status |
 | `monitoring`  | Dashboards, topology, logs and composed client/log diagnostics           |
-| `maintenance` | Firmware and site LED controls                                           |
+| `maintenance` | Firmware, backups and site LED controls                                  |
+| `recovery`    | Controller/site restore operations; explicit permission required         |
 
 Each entry uses `:r`, `:w`, or `:rw`. A specific category overrides the `all` fallback: `all:rw,security:r` denies security writes. Missing categories have no permission unless `all` supplies it. Unknown categories, duplicate entries, empty strings, missing permissions and malformed entries fail configuration validation.
 
-With the variable unset, existing full/read-only behavior is preserved. Explicit `all:rw` is still scoped: unknown route families are denied, unlike the legacy unrestricted raw escape hatch.
+Controller/site restoration always requires an explicit `recovery:w` or `recovery:rw` entry; neither an unset variable nor `all:rw` grants recovery. All other full/read-only behavior is preserved. Explicit `all:rw` is still scoped: unknown route families are denied, unlike the legacy unrestricted raw escape hatch.
 
 ## Enforcement
 
@@ -34,7 +35,7 @@ One policy governs tool registration and handler invocation, configured client m
 
 Discovery/status helpers, including `refreshApiCatalog`, remain usable, but discovered operations are filtered and authorized independently. Optional SSID evidence in `getControllerCapabilities` requires wireless read permission. A denied operation cannot be enabled through a preview, operation ID or raw path.
 
-Scoped generic calls require canonical relative paths and supported methods/versions. Absolute URLs, encoded traversal/separators, controller-prefix substitution and controller query overrides are rejected before HTTP. Unknown or mixed-operation routes without a reliable category stay denied. Raw `callApi` is unavailable on a scoped client. The global `read-only` profile retains its existing exclusion of `genericApiCall`; category-scoped read access can expose generic GET calls with runtime enforcement.
+Generic calls require canonical relative paths and supported methods/versions. Absolute URLs, encoded traversal/separators, controller-prefix substitution and controller query overrides are rejected before HTTP. Unknown or mixed-operation routes without a reliable category stay denied. Raw `callApi` is unavailable on a scoped client. The global `read-only` profile retains its existing exclusion of `genericApiCall`; category-scoped read access can expose generic GET calls with runtime enforcement.
 
 ## Permission boundaries
 
@@ -53,3 +54,7 @@ Controller 6.3.0.45 validation confirmed denied discovery and generic writes sto
 `diagnoseSecurity` requires `security:r`. Native health and incident reads use `monitoring`; switch LLDP reads use `switching`. Incident status changes and deletions remain mutations and are denied by read-only scopes. Existing composite client/network diagnostics retain their documented command-scope permission model.
 
 `getClientApplicationTraffic` is a clients read command; its fixed DPI/taxonomy reads are dependencies of that selected-client report. Canonical site Bonjour profile reads use network scope for mDNS reference preflight; this does not grant site-template or controller-global profile access. DNS receipt restoration requires `network:rw`, including for the state-reading rollback preview.
+
+Compact mode applies the same restrictions to search, descriptions and dispatch. The new managed backup and SSID/WLAN/policy-route workflows require both read and write permission for their category. See [managed workflows](managed-workflows.md).
+
+PoE schedule operations use `switching` scope. Managed create/update requires `switching:rw,network:r` for schedule/PoE-port and time-range reads; delete and disable-only updates require `switching:rw`. Time-range profile listing uses `network:r`.
