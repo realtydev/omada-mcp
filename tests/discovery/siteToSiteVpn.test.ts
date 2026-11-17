@@ -81,6 +81,8 @@ function setup(
         sent = false;
     const request = {
         request: vi.fn((config, _retry?: boolean) => {
+            if (config.url.endsWith('/client-to-site-vpn-servers') || config.url.endsWith('/client-to-site-vpn-clients'))
+                return { errorCode: 0, result: { data: [], currentPage: 1, totalRows: 0 } };
             if (config.url.endsWith('/sites'))
                 return {
                     errorCode: 0,
@@ -322,7 +324,7 @@ describe('v2 site-to-site VPNs', () => {
     it('does not send a shared VPN delete for an unqualified client-to-site or unsupported target', async () => {
         for (const options of [{}, { rows: [{ ...wg, id: 'client-server', vpnType: 3, siteVpnType: 1 }] }]) {
             const f = setup(options);
-            await expect(f.run('deleteVpnV2', undefined, { vpnId: 'client-server' }, false)).rejects.toThrow('not a qualified site-to-site');
+            await expect(f.run('deleteVpnV2', undefined, { vpnId: 'client-server' }, false)).rejects.toThrow('not a qualified');
             expect(f.writes()).toHaveLength(0);
         }
     });
@@ -441,7 +443,7 @@ describe('v2 site-to-site VPNs', () => {
             for (const path of ['/sites/site/vpn/site-to-site-vpns', '/sites/site/vpn/site-to-site-vpns/auto/id', '/sites/site/vpn/id'])
                 await expect(raw.genericApiCall('DELETE', path, version)).rejects.toThrow('executeApiOperation');
         await expect(f.run('createSiteToSiteVpn', { name: 'Legacy', status: true, siteVpnType: 0, remoteSite: 'remote' }, {}, false)).rejects.toThrow(
-            'site-to-site VPNs use v2'
+            'site-to-site and client-to-site VPNs use v2'
         );
         expect(f.writes()).toHaveLength(0);
     });

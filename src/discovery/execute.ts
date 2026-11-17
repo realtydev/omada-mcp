@@ -9,6 +9,7 @@ import type { DnsChangeReceipt } from '../utils/dns-change-schema.js';
 import { redactForLogs } from '../utils/redact.js';
 import { backupReadSchema, backupSites, executeBackup, isManagedBackup } from './backup.js';
 import type { ApiOperation, ApiParameter, OperationCatalog } from './catalog.js';
+import { clientToSiteRequestSchema } from './clientToSiteVpn.js';
 import { executeLanDnsWrite, isLanDnsWrite, LAN_DNS_PATH, type LanDnsWriteResult } from './lanDns.js';
 import { executeManagedWrite, isManagedResourceWrite, managedResource, validateManagedInput } from './managedResources.js';
 import {
@@ -247,7 +248,7 @@ function validationSchema(operation: ApiOperation, catalog: OperationCatalog): S
                 } else delete result[exclusive];
             }
         }
-        return siteToSiteRequestSchema(operation, result);
+        return clientToSiteRequestSchema(operation, siteToSiteRequestSchema(operation, result));
     };
     const properties: Schema = Object.create(null);
     const required: string[] = [];
@@ -392,7 +393,7 @@ function preferredWriteTool(operation: ApiOperation, body: unknown): string | un
     if (/\/sites\/\{[^}]+\}\/clients\/\{[^}]+\}\/lock-to-ap$/.test(operation.path)) return 'setClientApLock';
     if (/\/sites\/\{[^}]+\}\/clients\/config$/.test(operation.path) && object(body) && Object.hasOwn(body, 'lockToAp')) return 'setClientApLock';
     if (isManagedResourceWrite(operation.method, operation.path) && !managedResource(operation))
-        return 'the canonical managed resource operation through executeApiOperation (site-to-site VPNs use v2)';
+        return 'the canonical managed resource operation through executeApiOperation (site-to-site and client-to-site VPNs use v2)';
     if (operation.method === 'PATCH' && /\/aps\/\{[^}]+\}\/override$/.test(operation.path)) return 'updateApSsidOverride';
     if (/\/aps\/\{[^}]+\}\/radio-config$/.test(operation.path)) return 'setApRadio';
     if (/\/site\/log-notification$/.test(operation.path)) return 'setLogNotifications';

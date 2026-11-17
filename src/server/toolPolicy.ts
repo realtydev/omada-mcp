@@ -177,6 +177,7 @@ export function categoryForPath(path: string): ToolCategory | undefined {
     if (site) route = `/${site[1] ?? ''}`;
     if (site && /^\/profiles\/bonjour-service(?:\/[^/]+)?$/.test(route)) return 'network';
     if (site && /^\/profiles\/groups(?:\/[^/]+)?$/.test(route)) return 'network';
+    if (site && route === '/profiles/ldap') return 'security';
     if (site && route === '/time-range-profiles') return 'network';
     if (/^\/gateways\/[^/]+\/config\/advanced(?:\/|$)/.test(route)) return undefined;
     if (/^\/gateways\/[^/]+\/config\/(?:wlans|radios)(?:\/|$)/.test(route)) return 'wireless';

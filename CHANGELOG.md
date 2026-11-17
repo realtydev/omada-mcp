@@ -6,7 +6,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
-- Guarded nondeprecated v2 site-to-site VPN workflows for manual WireGuard/IPSec and automatic provisioning, reusing discovery with protocol-specific validation, detail readback, capability/reference checks and explicit nested-key/remote-site verification limits. Shared `deleteVpnV2` now requires a qualified site-to-site target; client-to-site deletion through that shared operation is refused.
+- Guarded v2 WireGuard/OpenVPN client-to-site server/client configuration and deletion, reusing shared VPN inventories, WAN/LAN checks and mutation verification. Shared deletion now qualifies all three VPN families and refuses ambiguous IDs or attached users/clients; imported configuration contents remain unverified.
+
+- Guarded nondeprecated v2 site-to-site VPN workflows for manual WireGuard/IPSec and automatic provisioning, reusing discovery with protocol-specific validation, detail readback, capability/reference checks and explicit nested-key/remote-site verification limits.
 
 - Guarded WireGuard interface/peer create, update and delete through existing discovery, with explicit secret handling, reference/conflict checks, bounded readback and raw-call bypass protection for the deprecated v1 endpoints.
 

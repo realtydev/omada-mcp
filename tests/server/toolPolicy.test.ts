@@ -114,6 +114,14 @@ describe('scoped tool policy', () => {
                 expect(() => new ToolAccessPolicy('full', categories).assertTool('rollbackNetworkChange', { resource })).toThrow();
         }
     });
+    it('scopes the site LDAP profile collection as security without broadening template or global routes', () => {
+        expect(categoryForPath(`${PREFIX}/profiles/ldap`)).toBe('security');
+        expect(new ToolAccessPolicy('full', 'security:r').allowsOperation('GET', `${PREFIX}/profiles/ldap`)).toBe(true);
+        expect(new ToolAccessPolicy('full', 'network:r').allowsOperation('GET', `${PREFIX}/profiles/ldap`)).toBe(false);
+        expect(new ToolAccessPolicy('read-only').allowsOperation('POST', `${PREFIX}/profiles/ldap`)).toBe(false);
+        expect(categoryForPath('/openapi/v1/{omadacId}/sitetemplates/{siteTemplateId}/profiles/ldap')).toBeUndefined();
+        expect(categoryForPath('/openapi/v1/{omadacId}/profiles/ldap')).toBeUndefined();
+    });
 
     it.each([
         ['POST', '/multi-devices/start-rolling-upgrade'],

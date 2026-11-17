@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { clientToSiteRequestSchema } from './clientToSiteVpn.js';
 import { siteToSiteRequestSchema } from './siteToSiteVpn.js';
 
 export type ApiDocument = Record<string, unknown>;
@@ -436,9 +437,12 @@ export class OperationCatalog {
                 ? {
                       requestBody: {
                           ...operation.requestBody,
-                          schema: siteToSiteRequestSchema(
+                          schema: clientToSiteRequestSchema(
                               operation,
-                              expandSchema(this.document, operation.requestBody.schema, warnings, new Set(), 0, budget) as ApiDocument
+                              siteToSiteRequestSchema(
+                                  operation,
+                                  expandSchema(this.document, operation.requestBody.schema, warnings, new Set(), 0, budget) as ApiDocument
+                              )
                           ),
                       },
                   }
