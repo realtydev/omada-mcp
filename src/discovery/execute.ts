@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
+import { Ajv } from 'ajv';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import _addFormats, { type FormatsPlugin } from 'ajv-formats';
 
@@ -119,6 +119,23 @@ function resolve(schema: Schema, document: Record<string, unknown>, seen = new S
     seen.add(schema.$ref);
     return resolve(referencedSchema(document, schema.$ref), document, seen);
 }
+
+function compileOperationPattern(pattern: string, flags: string): RegExp {
+    try {
+        return new RegExp(pattern, flags);
+    } catch (error) {
+        if (!flags.includes('u')) throw error;
+        // Hex escapes keep vendor punctuation literal inside and outside character classes.
+        const normalized = pattern.replace(/\\(.)/gs, (sequence, character: string) => {
+            if (character < ' ' || character > '~' || /[a-z0-9]/i.test(character) || '^$\\.*+?()[]{}|/'.includes(character)) return sequence;
+            return `\\x${character.charCodeAt(0).toString(16)}`;
+        });
+        if (normalized === pattern) throw error;
+        return new RegExp(normalized, flags);
+    }
+}
+
+const operationRegExp = Object.assign(compileOperationPattern, { code: `(${compileOperationPattern.toString()})` });
 
 /** Keep local references intact and include only their reachable components. No remote resolution. */
 function validationSchema(operation: ApiOperation, catalog: OperationCatalog): Schema {
@@ -283,14 +300,18 @@ function validate(operation: ApiOperation, catalog: OperationCatalog, input: Rec
     if (!validator) {
         try {
             const schema = validationSchema(operation, catalog);
-            if (/^3\.1(?:\.|$)/.test(String(catalog.document.openapi))) {
-                const ajv = new Ajv2020({ strict: false, allErrors: true, validateFormats: true, validateSchema: true });
-                addFormats(ajv);
-                const compiled = ajv.compile(schema);
-                validator = (value) => ({ valid: compiled(value) === true, errorMessage: ajv.errorsText(compiled.errors) });
-            } else {
-                validator = new AjvJsonSchemaValidator().getValidator(schema);
-            }
+            const dialect31 = /^3\.1(?:\.|$)/.test(String(catalog.document.openapi));
+            const Validator = dialect31 ? Ajv2020 : Ajv;
+            const ajv = new Validator({
+                strict: false,
+                allErrors: true,
+                validateFormats: true,
+                validateSchema: dialect31,
+                code: { regExp: operationRegExp },
+            });
+            addFormats(ajv);
+            const compiled = ajv.compile(schema);
+            validator = (value) => ({ valid: compiled(value) === true, errorMessage: ajv.errorsText(compiled.errors) });
         } catch (error) {
             throw new Error(`Operation cannot be validated safely: ${error instanceof Error ? error.message : 'invalid schema'}`);
         }

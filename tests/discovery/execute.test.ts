@@ -529,6 +529,18 @@ describe('MSP and OpenAPI 3.1 execution', () => {
         await expect(run(null)).rejects.toThrow('Invalid operation input');
         await expect(run('value')).resolves.toMatchObject({ dryRun: true });
     });
+    it('handles redundant punctuation escapes while retaining Unicode pattern semantics', async () => {
+        const { run, request } = modern({ type: 'string', pattern: String.raw`^[\@\=]\,(?:\\@|\d).$` });
+        await expect(run(String.raw`@,\@😀`)).resolves.toMatchObject({ dryRun: true, written: false });
+        await expect(run('=,7😀')).resolves.toMatchObject({ dryRun: true, written: false });
+        await expect(run('=;7😀', { dryRun: false })).rejects.toThrow('Invalid operation input');
+        expect(request.request).not.toHaveBeenCalled();
+    });
+    it.each([String.raw`[\@`, String.raw`[\@\d-a]`, String.raw`[\@]\q`])('refuses the malformed pattern %s before I/O', async (pattern) => {
+        const { run, request } = modern({ type: 'string', pattern });
+        await expect(run('@', { dryRun: false })).rejects.toThrow('Operation cannot be validated safely');
+        expect(request.request).not.toHaveBeenCalled();
+    });
     it('validates 3.1 referenced objects and sibling properties together', async () => {
         const { run } = modern(
             { $ref: '#/components/schemas/Base', properties: { second: { type: 'integer' } }, unevaluatedProperties: false },

@@ -109,11 +109,13 @@ describe('refreshed bundled contracts', () => {
         expect(request.request).toHaveBeenCalledOnce();
     });
 
-    it('refuses an unchanged invalid vendor pattern rather than weakening DHCP validation', async () => {
+    it.each([
+        ['updateSiteEntity', 'name', { name: 'Office', region: 'United States', scenario: 'Office', timeZone: 'America/New_York' }],
+        ['createDhcpReservation', 'description', { mac, netId: 'lan-1', status: false, description: 'Office printer' }],
+    ])('validates the bundled %s pattern during a dry run', async (operationId, field, body) => {
         const { request, run } = setup();
-        await expect(run({ operationId: 'createDhcpReservation', body: { mac, netId: 'lan-1', status: false }, dryRun: false })).rejects.toThrow(
-            'Operation cannot be validated safely'
-        );
+        await expect(run({ operationId, body, dryRun: true })).resolves.toMatchObject({ dryRun: true, written: false });
+        await expect(run({ operationId, body: { ...body, [field]: '@invalid' }, dryRun: false })).rejects.toThrow(`data/body/${field} must match`);
         expect(request.request).not.toHaveBeenCalled();
     });
 
@@ -129,6 +131,7 @@ describe('refreshed bundled contracts', () => {
             { name: 'review-only', downLimitEnable: false, upLimitEnable: false },
             'updateRateLimitProfile',
         ],
+        ['createDhcpReservation', {}, { mac, netId: 'lan-1', status: false }, 'createDhcpReservation'],
         ['reservationFromDhcpUserList', {}, { selectMacs: { selectType: 'all' }, selectIps: [] }, 'createDhcpReservation'],
         ['updateSsidBasicConfig', { wlanId: 'wlan-1', ssidId: 'ssid-1' }, ssidBasicConfig, 'updateSsid'],
         ['updateSsidBasicConfigBySite', { ssidId: 'ssid-1' }, ssidBasicConfig, 'updateSsid'],
