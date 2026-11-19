@@ -12,7 +12,7 @@
 
 </div>
 
-> **Release:** [v0.15.0](https://github.com/realtydev/omada-mcp/releases/tag/v0.15.0) includes 113 tools, an optional four-tool compact catalog, preview-first writes, guarded backups, SSID/policy-route workflows, AP locks, PoE scheduling and VPN configuration. **Migration:** pass `dryRun:false` explicitly to apply writes; restores require explicit `recovery` permission. Use `getServerInfo` to confirm the running build.
+> **Release:** [v0.15.1](https://github.com/realtydev/omada-mcp/releases/tag/v0.15.1) includes 113 tools, an optional four-tool compact catalog, preview-first writes, guarded backups, SSID/policy-route workflows, AP locks, PoE scheduling and VPN configuration. **Migration:** pass `dryRun:false` explicitly to apply writes; restores require explicit `recovery` permission. Use `getServerInfo` to confirm the running build.
 
 ```text
 You:    Why is the guest SSID slow on the upstairs AP?

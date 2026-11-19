@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-11-19
+
+### Fixed
+
+- Discovered OpenAPI operations retry redundant punctuation escapes in Unicode regexes. Valid `updateSiteEntity` and `createDhcpReservation` dry runs now pass, and malformed patterns still fail validation. ([#68](https://github.com/realtydev/omada-mcp/issues/68))
+
 ## [0.15.0] - 2026-11-16
 
 ### Added
