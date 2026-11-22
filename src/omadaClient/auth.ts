@@ -34,7 +34,8 @@ export class AuthManager implements RequestAuthManager {
         private readonly http: AxiosInstance,
         private readonly clientId: string,
         private readonly clientSecret: string,
-        private readonly omadacId: string
+        /** Login principal: OMADA_AUTH_ID (the MSP ID on MSP controllers), otherwise the controller ID. */
+        private readonly authId: string
     ) {}
 
     /**
@@ -139,7 +140,7 @@ export class AuthManager implements RequestAuthManager {
         };
 
         if (grantType === 'client_credentials') {
-            body.omadacId = this.omadacId;
+            body.omadacId = this.authId;
         } else {
             if (!refreshToken) {
                 throw new Error('No refresh token available to refresh the access token');
@@ -205,7 +206,8 @@ export class WebAuthManager implements RequestAuthManager {
         private readonly http: AxiosInstance,
         private readonly username: string,
         private readonly password: string,
-        private readonly omadacId: string
+        /** Login principal: OMADA_AUTH_ID (the MSP ID on MSP controllers), otherwise the controller ID. */
+        private readonly authId: string
     ) {}
 
     public async getAuthHeaders(): Promise<Record<string, string>> {
@@ -259,7 +261,7 @@ export class WebAuthManager implements RequestAuthManager {
     }
 
     private async login(generation: number): Promise<void> {
-        const loginPath = `/${encodeURIComponent(this.omadacId)}/api/v2/login`;
+        const loginPath = `/${encodeURIComponent(this.authId)}/api/v2/login`;
 
         try {
             const response = await this.http.post(loginPath, { username: this.username, password: this.password }, { withCredentials: true });

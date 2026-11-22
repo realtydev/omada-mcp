@@ -79,6 +79,34 @@ import { type GetWifiAuditOptions, WifiAuditOperations, type WifiAuditResult } f
 export type OmadaClientOptions = EnvironmentConfig;
 
 /**
+ * Authentication state that several clients may share. On an MSP controller every
+ * customer is reached with the same MSP-level login and token, so per-customer
+ * clients reuse one HTTP client, one OAuth/web auth manager and one internal session.
+ */
+export interface SharedOmadaSession {
+    http: AxiosInstance;
+    auth: RequestAuthManager;
+    internalAuth?: InternalAuthManager;
+}
+
+/**
+ * Build the authentication state for a configuration. Logins use OMADA_AUTH_ID when set
+ * (the MSP ID on MSP controllers) and the controller ID otherwise; data paths always use
+ * OMADA_OMADAC_ID.
+ */
+export function createSharedOmadaSession(options: OmadaClientOptions): SharedOmadaSession {
+    const http = axios.create(createControllerHttpOptions(options));
+    const authId = options.authId ?? options.omadacId;
+    const auth =
+        options.authMode === 'web'
+            ? new WebAuthManager(http, options.webUsername ?? '', options.webPassword ?? '', authId)
+            : new AuthManager(http, options.clientId ?? '', options.clientSecret ?? '', authId);
+    const internalAuth =
+        options.webUsername && options.webPassword ? new InternalAuthManager(http, options.webUsername, options.webPassword, authId) : undefined;
+    return { http, auth, internalAuth };
+}
+
+/**
  * Main client for interacting with the TP-Link Omada API.
  * Organized by API tag with dedicated operation classes for each domain.
  */
@@ -138,17 +166,14 @@ export class OmadaClient {
 
     private readonly omadacId: string;
 
-    constructor(options: OmadaClientOptions) {
+    constructor(options: OmadaClientOptions, shared: SharedOmadaSession = createSharedOmadaSession(options)) {
         this.omadacId = options.omadacId;
         this.accessPolicy = new ToolAccessPolicy(options.toolProfile, options.toolCategories);
 
-        this.http = axios.create(createControllerHttpOptions(options));
+        this.http = shared.http;
 
         // Initialize operation modules
-        this.auth =
-            options.authMode === 'web'
-                ? new WebAuthManager(this.http, options.webUsername ?? '', options.webPassword ?? '', options.omadacId)
-                : new AuthManager(this.http, options.clientId ?? '', options.clientSecret ?? '', options.authId ?? options.omadacId);
+        this.auth = shared.auth;
         this.request = new RequestHandler(this.http, this.auth);
         this.siteOps = new SiteOperations(this.request, this.buildOmadaPath.bind(this), options.siteId);
         this.deviceOps = new DeviceOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
@@ -192,9 +217,8 @@ export class OmadaClient {
         this.networkDiagnosisOps = new NetworkDiagnosisOperations(this, this.siteOps);
 
         // Initialize internal API support if web credentials are configured
-        if (options.webUsername && options.webPassword) {
-            const internalAuth = new InternalAuthManager(this.http, options.webUsername, options.webPassword, options.omadacId);
-            const internalReq = new InternalRequestHandler(this.http, internalAuth, options.omadacId);
+        if (shared.internalAuth) {
+            const internalReq = new InternalRequestHandler(this.http, shared.internalAuth, options.omadacId, options.authId);
             this.apSsidOverrideOps.setInternalRequest(internalReq);
             this.switchPortReadOps.setInternalRequest(internalReq);
             this.networkOps.setInternalRequest(internalReq);

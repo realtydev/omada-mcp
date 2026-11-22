@@ -143,7 +143,7 @@ const groups: Record<ToolCategory, readonly string[]> = {
 
 const toolCategories = new Map(Object.entries(groups).flatMap(([category, names]) => names.map((name) => [name, category as ToolCategory] as const)));
 const discoveryTools = new Set(['searchApiOperations', 'describeApiOperation', 'executeApiOperation', 'refreshApiCatalog']);
-const statusTools = new Set(['getServerInfo', 'getControllerCapabilities']);
+const statusTools = new Set(['getServerInfo', 'getControllerCapabilities', 'listMspCustomers']);
 const methods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** Category entries override the all: fallback; duplicate/empty entries never broaden access. */

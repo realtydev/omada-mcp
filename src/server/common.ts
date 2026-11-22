@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { EnvironmentConfig } from '../config.js';
 import { PACKAGE_VERSION } from '../generated/buildInfo.js';
 import type { OmadaClient } from '../omadaClient/index.js';
+import { mspCustomerScopeOf } from '../omadaClient/mspCustomers.js';
 import { registerAllTools } from '../tools/index.js';
 import { logger } from '../utils/logger.js';
 import { redactForLogs } from '../utils/redact.js';
@@ -199,7 +200,8 @@ export function createServer(
     const access = configured.intersect(new ToolAccessPolicy(options.toolProfile, options.toolCategories));
     const profile = access.readOnly ? 'read-only' : 'full';
     const catalog: ToolCatalog | undefined = options.catalogMode === 'compact' ? new Map() : undefined;
-    registerAllTools(toolRegistrationServer(server, profile, access, catalog), client, profile, access);
+    const customerScope = mspCustomerScopeOf(client);
+    registerAllTools(toolRegistrationServer(server, profile, access, catalog, customerScope), client, profile, access);
     if (catalog) registerCompactTools(server, catalog);
 
     return server;

@@ -5,17 +5,22 @@ import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
 import type { ToolProfile } from '../config.js';
+import type { MspCustomerScope } from '../omadaClient/mspCustomers.js';
 import { redactForLogs } from '../utils/redact.js';
 import { type ToolExtra, toToolResult } from './common.js';
 import type { ToolCatalog } from './toolCatalog.js';
 import { ToolAccessPolicy } from './toolPolicy.js';
 
 /** Apply exposure policy only while registering tools; the returned MCP server remains untouched. */
+/** Tools that never touch customer data and therefore take no MSP customerId. */
+const customerlessTools = new Set(['listMspCustomers', 'getServerInfo', 'searchApiOperations', 'describeApiOperation', 'refreshApiCatalog']);
+
 export function toolRegistrationServer(
     server: McpServer,
     profile: ToolProfile,
     policy = new ToolAccessPolicy(profile),
-    catalog?: ToolCatalog
+    catalog?: ToolCatalog,
+    customerScope?: MspCustomerScope
 ): McpServer {
     return new Proxy(server, {
         get(target, property) {
@@ -48,11 +53,28 @@ export function toolRegistrationServer(
                         config.inputSchema instanceof z.ZodObject ? config.inputSchema : z.object((config.inputSchema ?? {}) as z.ZodRawShape);
                     const write = config.annotations?.destructiveHint === true && name !== 'executeApiOperation';
                     const nativePreview = Object.hasOwn(original.shape, 'dryRun');
+                    // On MSP controllers every customer-scoped tool can target a customer per call.
+                    const customerScoped =
+                        customerScope !== undefined && !customerlessTools.has(name) && !Object.hasOwn(original.shape, 'customerId');
+                    const scoped = customerScoped
+                        ? original.safeExtend({
+                              customerId: z
+                                  .string()
+                                  .min(1)
+                                  .max(128)
+                                  .optional()
+                                  .describe(
+                                      customerScope.defaultCustomerId
+                                          ? `MSP customer ID or name (see listMspCustomers). Defaults to customer ${customerScope.defaultCustomerId}.`
+                                          : 'MSP customer ID or name (see listMspCustomers). Required: this server has no default customer.'
+                                  ),
+                          })
+                        : original;
                     const inputSchema = write
-                        ? original
+                        ? scoped
                               .safeExtend({ dryRun: z.boolean().default(true).describe('Preview by default; set false explicitly to apply.') })
                               .strict()
-                        : original;
+                        : scoped;
                     const definition = {
                         ...config,
                         inputSchema,
@@ -63,7 +85,7 @@ export function toolRegistrationServer(
                             ? { annotations: { ...config.annotations, readOnlyHint: true, destructiveHint: false } }
                             : {}),
                     };
-                    const invoke = async (args: Record<string, unknown>, extra: ToolExtra) => {
+                    const invokeForCustomer = async (args: Record<string, unknown>, extra: ToolExtra) => {
                         policy.assertTool(name, args, config.annotations?.destructiveHint === true);
                         if (name === 'genericApiCall') {
                             const request = args as { method: string; path: string; version?: string; queryParams?: Record<string, unknown> };
@@ -84,6 +106,15 @@ export function toolRegistrationServer(
                         const forwarded = { ...args };
                         if (write && !nativePreview) delete forwarded.dryRun;
                         return await Reflect.apply(handler, undefined, [forwarded, extra]);
+                    };
+                    const invoke = async (args: Record<string, unknown>, extra: ToolExtra) => {
+                        if (!customerScope || customerlessTools.has(name)) return await invokeForCustomer(args, extra);
+                        const { customerId, ...rest } = args;
+                        // Unknown, ambiguous or non-permitted customers throw before any controller request.
+                        return await customerScope.run(
+                            typeof customerId === 'string' ? customerId : undefined,
+                            async () => await invokeForCustomer(customerScoped ? rest : args, extra)
+                        );
                     };
                     if (catalog) {
                         catalog.set(name, {

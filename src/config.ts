@@ -53,6 +53,7 @@ const envSchema = z
         omadacId: z.string().min(1, 'OMADA_OMADAC_ID is required'),
         mspId: z.string().min(1).optional(),
         authId: z.string().min(1).optional(),
+        mspCustomers: z.string().trim().max(4096).optional(),
         transferDirectory: z.string().refine(isAbsolute, 'OMADA_TRANSFER_DIR must be an absolute directory').optional(),
         maxTransferBytes: boundedIntegerStringSchema(16 * 1024 * 1024, 64 * 1024 * 1024),
         siteId: z.string().min(1).optional(),
@@ -158,6 +159,8 @@ export interface EnvironmentConfig {
     omadacId: string;
     mspId?: string;
     authId?: string;
+    /** MSP customer allowlist (IDs or names). Empty means every customer the credentials can see. */
+    mspCustomers?: string[];
     transferDirectory?: string;
     maxTransferBytes?: number;
     siteId?: string;
@@ -192,6 +195,16 @@ export interface EnvironmentConfig {
     httpMaxSessions?: number;
 }
 
+/** Parse a comma-separated MSP customer allowlist; empty or "all" means unrestricted. */
+function parseCustomerList(value: string | undefined): string[] | undefined {
+    const entries = (value ?? '')
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    if (entries.length === 0 || entries.some((entry) => entry.toLowerCase() === 'all')) return undefined;
+    return entries;
+}
+
 export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): EnvironmentConfig {
     const parsed = envSchema.safeParse({
         // Omada Client Configuration
@@ -202,6 +215,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Environ
         omadacId: env.OMADA_OMADAC_ID,
         mspId: env.OMADA_MSP_ID,
         authId: env.OMADA_AUTH_ID,
+        mspCustomers: env.OMADA_MSP_CUSTOMERS,
         transferDirectory: env.OMADA_TRANSFER_DIR,
         maxTransferBytes: env.OMADA_MAX_TRANSFER_BYTES,
         siteId: env.OMADA_SITE_ID,
@@ -265,6 +279,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Environ
         omadacId: parsed.data.omadacId,
         mspId: parsed.data.mspId,
         authId: parsed.data.authId,
+        mspCustomers: parseCustomerList(parsed.data.mspCustomers),
         transferDirectory: parsed.data.transferDirectory,
         maxTransferBytes: parsed.data.maxTransferBytes,
         siteId: parsed.data.siteId,
