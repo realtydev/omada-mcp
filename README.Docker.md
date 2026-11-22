@@ -94,24 +94,25 @@ The MCP server reads its configuration from environment variables.
 
 ### Omada Controller
 
-| Variable                   | Required   | Default       | Description                                                                |
-| -------------------------- | ---------- | ------------- | -------------------------------------------------------------------------- |
-| `OMADA_BASE_URL`           | Yes        | -             | Omada controller URL                                                       |
-| `OMADA_AUTH_MODE`          | No         | `oauth`       | `oauth` for classic OpenAPI credentials, `web` for Fusion web-session auth |
-| `OMADA_CLIENT_ID`          | OAuth mode | -             | OAuth client ID                                                            |
-| `OMADA_CLIENT_SECRET`      | OAuth mode | -             | OAuth client secret                                                        |
-| `OMADA_OMADAC_ID`          | Yes        | -             | Controller ID (omadacId)                                                   |
-| `OMADA_MSP_ID`             | No         | —             | Explicit MSP context for discovered MSP routes                             |
-| `OMADA_AUTH_ID`            | No         | Controller ID | Optional separate OAuth credential principal                               |
-| `OMADA_SITE_ID`            | No         | -             | Default site ID                                                            |
-| `OMADA_WEB_USERNAME`       | Web mode   | -             | Omada web UI username                                                      |
-| `OMADA_WEB_PASSWORD`       | Web mode   | -             | Omada web UI password                                                      |
-| `OMADA_STRICT_SSL`         | No         | `true`        | SSL certificate and hostname verification                                  |
-| `OMADA_CA_FILE`            | No         | —             | PEM CA bundle path inside the container; requires strict SSL               |
-| `OMADA_API_SPEC`           | No         | `auto`        | API discovery source: `auto`, `live`, or `bundled`                         |
-| `OMADA_TRANSFER_DIR`       | No         | Disabled      | Existing private directory for file transfers                              |
-| `OMADA_MAX_TRANSFER_BYTES` | No         | `16777216`    | Maximum combined upload bytes or download size, up to 64 MiB               |
-| `OMADA_TIMEOUT`            | No         | `30000`       | Request timeout (ms)                                                       |
+| Variable                   | Required   | Default       | Description                                                                       |
+| -------------------------- | ---------- | ------------- | --------------------------------------------------------------------------------- |
+| `OMADA_BASE_URL`           | Yes        | -             | Omada controller URL                                                              |
+| `OMADA_AUTH_MODE`          | No         | `oauth`       | `oauth` for classic OpenAPI credentials, `web` for Fusion web-session auth        |
+| `OMADA_CLIENT_ID`          | OAuth mode | -             | OAuth client ID                                                                   |
+| `OMADA_CLIENT_SECRET`      | OAuth mode | -             | OAuth client secret                                                               |
+| `OMADA_OMADAC_ID`          | Yes        | -             | Controller ID (omadacId)                                                          |
+| `OMADA_MSP_ID`             | No         | —             | MSP ID: enables per-call `customerId` and `listMspCustomers` ([MSP](docs/msp.md)) |
+| `OMADA_AUTH_ID`            | No         | Controller ID | Login principal for OAuth and web logins (the MSP ID on MSP controllers)          |
+| `OMADA_MSP_CUSTOMERS`      | No         | all           | MSP customers tools may act on (names or IDs)                                     |
+| `OMADA_SITE_ID`            | No         | -             | Default site ID                                                                   |
+| `OMADA_WEB_USERNAME`       | Web mode   | -             | Omada web UI username                                                             |
+| `OMADA_WEB_PASSWORD`       | Web mode   | -             | Omada web UI password                                                             |
+| `OMADA_STRICT_SSL`         | No         | `true`        | SSL certificate and hostname verification                                         |
+| `OMADA_CA_FILE`            | No         | —             | PEM CA bundle path inside the container; requires strict SSL                      |
+| `OMADA_API_SPEC`           | No         | `auto`        | API discovery source: `auto`, `live`, or `bundled`                                |
+| `OMADA_TRANSFER_DIR`       | No         | Disabled      | Existing private directory for file transfers                                     |
+| `OMADA_MAX_TRANSFER_BYTES` | No         | `16777216`    | Maximum combined upload bytes or download size, up to 64 MiB                      |
+| `OMADA_TIMEOUT`            | No         | `30000`       | Request timeout (ms)                                                              |
 
 For Fusion gateways that do not expose Platform Integration OAuth credentials, set `OMADA_AUTH_MODE=web` and provide `OMADA_WEB_USERNAME` / `OMADA_WEB_PASSWORD`. The server logs in through `/{omadacId}/api/v2/login` and uses that web session for OpenAPI requests.
 

@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- MSP customer routing: with `OMADA_MSP_ID` set, customer-scoped tools take an optional `customerId` (ID or name), a read-only `listMspCustomers` tool lists customers, and `OMADA_MSP_CUSTOMERS` restricts them. All customers share one MSP login and token. Verified read-only against a v5.15.24.19 MSP controller. See [MSP controllers](docs/msp.md).
+
+### Changed
+
+- Web logins (Fusion web mode and the internal web API) use `OMADA_AUTH_ID` when set, like OAuth token requests. Behaviour is unchanged when it is not set.
+
 ## [0.15.1] - 2026-11-19
 
 ### Fixed
