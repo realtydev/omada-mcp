@@ -171,6 +171,7 @@ For Fusion gateways that do not expose Platform Integration OAuth credentials, s
 | Tool                            | Description                                                                                                                                                         |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `listSites`                     | List all sites on the controller                                                                                                                                    |
+| `listMspCustomers`              | MSP controllers only (`OMADA_MSP_ID` set): list customers; pass a `customerId` to other tools ([MSP](docs/msp.md))                                                  |
 | `listDevices`                   | List devices for a site                                                                                                                                             |
 | `listClients`                   | List active clients for a site                                                                                                                                      |
 | `getDevice`                     | Get details for a specific device                                                                                                                                   |
