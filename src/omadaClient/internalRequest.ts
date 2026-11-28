@@ -53,7 +53,9 @@ export class InternalRequestHandler {
     constructor(
         private readonly http: AxiosInstance,
         private readonly auth: InternalAuthManager,
-        private readonly omadacId: string
+        private readonly omadacId: string,
+        /** Login principal (the MSP ID on MSP controllers); login redirects may name it instead of the controller ID. */
+        private readonly authId: string = omadacId
     ) {}
 
     /**
@@ -259,10 +261,9 @@ export class InternalRequestHandler {
             )
                 return false;
             const path = target.pathname.replace(/\/$/, '');
-            return (
-                path === '/login' ||
-                path === `/${encodeURIComponent(this.omadacId)}/login` ||
-                (api && path === `/${encodeURIComponent(this.omadacId)}/api/v2/login`)
+            return [this.omadacId, this.authId].some(
+                (id) =>
+                    path === '/login' || path === `/${encodeURIComponent(id)}/login` || (api && path === `/${encodeURIComponent(id)}/api/v2/login`)
             );
         } catch {
             return false;

@@ -138,7 +138,7 @@ const groups: Record<ToolCategory, readonly string[]> = {
     ],
     maintenance: ['getFirmwareDetails', 'startFirmwareUpgrade', 'setSiteLed'],
     recovery: [],
-    msp: [],
+    msp: ['listMspCustomers'],
 };
 
 const toolCategories = new Map(Object.entries(groups).flatMap(([category, names]) => names.map((name) => [name, category as ToolCategory] as const)));

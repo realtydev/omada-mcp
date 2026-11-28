@@ -2,6 +2,7 @@ import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
 
 import type { EnvironmentConfig } from '../config.js';
 import { DnsRollbackOperations } from '../discovery/dnsRollback.js';
+import type { CatalogLoader } from '../discovery/load.js';
 import { createClientPolicyProxy, ToolAccessPolicy } from '../server/toolPolicy.js';
 import type {
     ActiveClientInfo,
@@ -56,6 +57,7 @@ import { InternalRequestHandler } from './internalRequest.js';
 import { LogNotificationOperations } from './logNotification.js';
 import { MonitorOperations, type SiteDashboardOptions, type SiteDashboardResult } from './monitor.js';
 import { type ListVpnConnectionsOptions, MonitoringOperations } from './monitoring.js';
+import type { MspCustomerListing, MspCustomerScope } from './mspCustomers.js';
 import { NetworkOperations } from './network.js';
 import { NetworkChangeOperations, type NetworkChangeReceipt } from './networkChange.js';
 import { NetworkDiagnosisOperations, type NetworkDiagnosisOptions } from './networkDiagnosis.js';
@@ -77,6 +79,36 @@ import { SwitchPortReadOperations } from './switchPortRead.js';
 import { type GetWifiAuditOptions, WifiAuditOperations, type WifiAuditResult } from './wifiAudit.js';
 
 export type OmadaClientOptions = EnvironmentConfig;
+
+/**
+ * Authentication state that several clients may share. On an MSP controller every
+ * customer is reached with the same MSP-level login and token, so per-customer
+ * clients reuse one HTTP client, one OAuth/web auth manager and one internal session.
+ */
+export interface SharedOmadaSession {
+    http: AxiosInstance;
+    auth: RequestAuthManager;
+    internalAuth?: InternalAuthManager;
+    catalog?: CatalogLoader;
+    msp?: Pick<MspCustomerScope, 'listCustomers' | 'resolveDiscoveryTarget'>;
+}
+
+/**
+ * Build the authentication state for a configuration. Logins use OMADA_AUTH_ID when set
+ * (the MSP ID on MSP controllers) and the controller ID otherwise; data paths always use
+ * OMADA_OMADAC_ID.
+ */
+export function createSharedOmadaSession(options: OmadaClientOptions): SharedOmadaSession {
+    const http = axios.create(createControllerHttpOptions(options));
+    const authId = options.authId ?? options.omadacId;
+    const auth =
+        options.authMode === 'web'
+            ? new WebAuthManager(http, options.webUsername ?? '', options.webPassword ?? '', authId)
+            : new AuthManager(http, options.clientId ?? '', options.clientSecret ?? '', authId);
+    const internalAuth =
+        options.webUsername && options.webPassword ? new InternalAuthManager(http, options.webUsername, options.webPassword, authId) : undefined;
+    return { http, auth, internalAuth };
+}
 
 /**
  * Main client for interacting with the TP-Link Omada API.
@@ -137,18 +169,17 @@ export class OmadaClient {
     private readonly apRadioOps: ApRadioOperations;
 
     private readonly omadacId: string;
+    private readonly msp?: SharedOmadaSession['msp'];
 
-    constructor(options: OmadaClientOptions) {
+    constructor(options: OmadaClientOptions, shared: SharedOmadaSession = createSharedOmadaSession(options)) {
         this.omadacId = options.omadacId;
+        this.msp = shared.msp;
         this.accessPolicy = new ToolAccessPolicy(options.toolProfile, options.toolCategories);
 
-        this.http = axios.create(createControllerHttpOptions(options));
+        this.http = shared.http;
 
         // Initialize operation modules
-        this.auth =
-            options.authMode === 'web'
-                ? new WebAuthManager(this.http, options.webUsername ?? '', options.webPassword ?? '', options.omadacId)
-                : new AuthManager(this.http, options.clientId ?? '', options.clientSecret ?? '', options.authId ?? options.omadacId);
+        this.auth = shared.auth;
         this.request = new RequestHandler(this.http, this.auth);
         this.siteOps = new SiteOperations(this.request, this.buildOmadaPath.bind(this), options.siteId);
         this.deviceOps = new DeviceOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
@@ -169,7 +200,7 @@ export class OmadaClient {
         this.apRadioOps = new ApRadioOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this), options.omadacId);
         this.actionOps = new ActionOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.genericOps = new GenericOperations(this.request, this.buildOmadaPath.bind(this), this.accessPolicy);
-        this.discoveryOps = new DiscoveryOperations(this.request, this.http, options);
+        this.discoveryOps = new DiscoveryOperations(this.request, this.http, options, shared.catalog);
         this.networkChangeOps = new NetworkChangeOperations(
             options.omadacId,
             this.rateLimitProfileOps,
@@ -192,9 +223,8 @@ export class OmadaClient {
         this.networkDiagnosisOps = new NetworkDiagnosisOperations(this, this.siteOps);
 
         // Initialize internal API support if web credentials are configured
-        if (options.webUsername && options.webPassword) {
-            const internalAuth = new InternalAuthManager(this.http, options.webUsername, options.webPassword, options.omadacId);
-            const internalReq = new InternalRequestHandler(this.http, internalAuth, options.omadacId);
+        if (shared.internalAuth) {
+            const internalReq = new InternalRequestHandler(this.http, shared.internalAuth, options.omadacId, options.authId);
             this.apSsidOverrideOps.setInternalRequest(internalReq);
             this.switchPortReadOps.setInternalRequest(internalReq);
             this.networkOps.setInternalRequest(internalReq);
@@ -228,6 +258,11 @@ export class OmadaClient {
     // Site operations
     public async listSites(): Promise<OmadaSiteSummary[]> {
         return await this.siteOps.listSites();
+    }
+
+    public async listMspCustomers(): Promise<MspCustomerListing> {
+        if (!this.msp) throw new Error('MSP customer routing requires OMADA_MSP_ID.');
+        return await this.msp.listCustomers();
     }
 
     public async getControllerCapabilities(options: GetControllerCapabilitiesOptions = {}): Promise<ControllerCapabilitiesResult> {
@@ -748,7 +783,7 @@ export class OmadaClient {
     }
 
     public async executeApiOperation(options: ExecuteApiOperationOptions, policy: DiscoveryPolicy = {}): Promise<unknown> {
-        return await this.discoveryOps.executeApiOperation(options, policy);
+        return await this.discoveryOps.executeApiOperation(options, policy, this.msp?.resolveDiscoveryTarget.bind(this.msp));
     }
 
     public async genericApiCall(

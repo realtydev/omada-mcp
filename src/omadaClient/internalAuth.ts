@@ -21,7 +21,8 @@ export class InternalAuthManager {
         private readonly http: AxiosInstance,
         private readonly username: string,
         private readonly password: string,
-        private readonly omadacId: string
+        /** Login principal: OMADA_AUTH_ID (the MSP ID on MSP controllers), otherwise the controller ID. */
+        private readonly authId: string
     ) {}
 
     /**
@@ -99,7 +100,7 @@ export class InternalAuthManager {
      * Log in to the internal web UI API and extract session cookie + CSRF token.
      */
     private async login(generation: number): Promise<void> {
-        const loginPath = `/${encodeURIComponent(this.omadacId)}/api/v2/login`;
+        const loginPath = `/${encodeURIComponent(this.authId)}/api/v2/login`;
 
         try {
             const response = await this.http.post(loginPath, { username: this.username, password: this.password }, { withCredentials: true });

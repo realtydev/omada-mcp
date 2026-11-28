@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ToolProfile } from '../config.js';
 import type { OmadaClient } from '../omadaClient/index.js';
+import { mspCustomerScopeOf } from '../omadaClient/mspCustomers.js';
 import { ToolAccessPolicy } from '../server/toolPolicy.js';
 
 import { registerAdoptDeviceTool } from './adoptDevice.js';
@@ -75,6 +76,7 @@ import { registerListFirewallAclsTool } from './listFirewallAcls.js';
 import { registerListIpGroupsTool } from './listIpGroups.js';
 import { registerListLogsTool } from './listLogs.js';
 import { registerListMostActiveClientsTool } from './listMostActiveClients.js';
+import { registerListMspCustomersTool } from './listMspCustomers.js';
 import { registerListRoutesTool } from './listRoutes.js';
 import { registerListSitesTool } from './listSites.js';
 import { registerListSwitchPortsTool } from './listSwitchPorts.js';
@@ -149,6 +151,7 @@ export function registerAllTools(
     registerGetSiteDashboardTool(server, client);
     registerListVpnConnectionsTool(server, client);
     registerGetGatewayWanSpeedTestResultsTool(server, client);
+    if (mspCustomerScopeOf(client)) registerListMspCustomersTool(server, client);
     registerListSitesTool(server, client);
     registerListDevicesTool(server, client);
     registerListClientsTool(server, client);

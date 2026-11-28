@@ -2,6 +2,7 @@
 import './env.js';
 import { loadConfigFromEnv } from './config.js';
 import { OmadaClient } from './omadaClient/index.js';
+import { MspCustomerRouter } from './omadaClient/mspCustomers.js';
 import { startHttpServer } from './server/http.js';
 import { startStdioServer } from './server/stdio.js';
 import { initLogger, logger } from './utils/logger.js';
@@ -18,12 +19,15 @@ async function main(): Promise<void> {
     logger.info('Loaded Omada configuration', {
         baseUrl: config.baseUrl,
         omadacId: config.omadacId,
+        mspId: config.mspId ?? null,
+        authId: config.authId ?? null,
         siteId: config.siteId ?? null,
         strictSsl: config.strictSsl,
         requestTimeout: config.requestTimeout ?? null,
     });
 
-    const client = new OmadaClient(config);
+    // On MSP controllers (OMADA_MSP_ID set) tools can target any permitted customer per call.
+    const client = config.mspId ? new MspCustomerRouter(config).client : new OmadaClient(config);
 
     if (config.useHttp) {
         await startHttpServer(client, config);

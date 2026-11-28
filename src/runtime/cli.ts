@@ -65,7 +65,8 @@ Examples:
   omada-runtime update docker --version latest
   omada-runtime rollback docker
 
-Status verifies getServerInfo; doctor also reads listSites. Stdio checks a fresh
+Status verifies getServerInfo. Doctor also reads listSites or listMspCustomers
+when the server has no default MSP customer. Stdio checks a fresh
 process. Reconnect existing MCP clients after update/rollback and verify their build.
 Docker updates verify readiness and restore the previous image on failure.
 Use setup with --client codex cursor, then reconnect to retry a client refresh.

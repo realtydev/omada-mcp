@@ -16,6 +16,12 @@ describe('tools/index', () => {
     });
 
     describe('registerAllTools', () => {
+        it('registers the MSP customer listing for a routed client', () => {
+            const routed = Object.assign(mockClient, { mspCustomerScope: () => ({}) });
+            registerAllTools(mockServer, routed);
+            expect(mockServer.registerTool).toHaveBeenCalledWith('listMspCustomers', expect.any(Object), expect.any(Function));
+        });
+
         it('should register all tools with the server', () => {
             registerAllTools(mockServer, mockClient);
 

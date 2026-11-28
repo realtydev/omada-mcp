@@ -46,6 +46,17 @@ describe('runtime probes across catalog modes', () => {
         );
         expect(client.close).toHaveBeenCalledOnce();
     });
+    it.each([false, true])('checks the MSP customer list without a default customer with compact=%s', async (compact) => {
+        const mspInfo = { ...info, mspCustomerRequired: true };
+        client.listTools.mockResolvedValue({ tools: [{ name: compact ? 'callTool' : 'getServerInfo' }] });
+        client.callTool.mockResolvedValueOnce({ content: [{ type: 'text', text: JSON.stringify(mspInfo) }] });
+        expect(await probe(state, state.current, true)).toEqual(mspInfo);
+        expect(client.callTool).toHaveBeenLastCalledWith(
+            compact ? { name: 'callTool', arguments: { name: 'listMspCustomers', arguments: {} } } : { name: 'listMspCustomers', arguments: {} },
+            undefined,
+            { timeout: 35_000 }
+        );
+    });
     it('does not hide failed compact calls', async () => {
         client.listTools.mockResolvedValue({ tools: [{ name: 'callTool' }] });
         client.callTool.mockResolvedValue({ isError: true, content: [] });

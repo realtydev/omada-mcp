@@ -1,7 +1,7 @@
 import type { AxiosInstance } from 'axios';
 import type { EnvironmentConfig } from '../config.js';
-import type { OperationCatalog } from '../discovery/catalog.js';
-import { executeDiscoveredOperation } from '../discovery/execute.js';
+import type { ApiOperation, OperationCatalog } from '../discovery/catalog.js';
+import { type DiscoveryTarget, executeDiscoveredOperation } from '../discovery/execute.js';
 import { CatalogLoadError, CatalogLoader, catalogSnapshot, documentationPath } from '../discovery/load.js';
 import { ToolAccessPolicy } from '../server/toolPolicy.js';
 import type { RequestHandler } from './request.js';
@@ -18,11 +18,26 @@ export interface SearchApiOperationsOptions {
 }
 export interface ExecuteApiOperationOptions {
     operationId: string;
+    customerId?: string;
     params?: Record<string, unknown>;
     body?: unknown;
     dryRun?: boolean;
     files?: Record<string, string | string[]>;
     downloadFile?: string;
+}
+
+export type ResolveDiscoveryTarget = (operation: ApiOperation, options: ExecuteApiOperationOptions) => Promise<DiscoveryTarget>;
+
+export function createDiscoveryCatalog(http: AxiosInstance, config: Pick<EnvironmentConfig, 'apiSpec' | 'requestTimeout'>): CatalogLoader {
+    return new CatalogLoader(async (path) => {
+        const response = await http.get<unknown>(documentationPath(path), {
+            // Same controller/TLS agent, no redirects or external references. No token is sent to documentation endpoints.
+            maxRedirects: 0,
+            maxContentLength: 16 * 1024 * 1024,
+            timeout: Math.min(config.requestTimeout ?? 10_000, 10_000),
+        });
+        return response.data;
+    }, config.apiSpec ?? 'auto');
 }
 
 /** Discovery stays lazy so existing tools and offline stdio initialization retain their behavior. */
@@ -45,17 +60,7 @@ export class DiscoveryOperations {
         >,
         loader?: CatalogLoader
     ) {
-        this.loader =
-            loader ??
-            new CatalogLoader(async (path) => {
-                const response = await http.get<unknown>(documentationPath(path), {
-                    // Same controller/TLS agent, no redirects or external references. No token is sent to documentation endpoints.
-                    maxRedirects: 0,
-                    maxContentLength: 16 * 1024 * 1024,
-                    timeout: Math.min(config.requestTimeout ?? 10_000, 10_000),
-                });
-                return response.data;
-            }, config.apiSpec ?? 'auto');
+        this.loader = loader ?? createDiscoveryCatalog(http, config);
     }
 
     private readOnly(policy: DiscoveryPolicy): boolean {
@@ -120,7 +125,12 @@ export class DiscoveryOperations {
         }
     }
 
-    public async executeApiOperation(options: ExecuteApiOperationOptions, policy: DiscoveryPolicy = {}): Promise<unknown> {
+    public async executeApiOperation(
+        options: ExecuteApiOperationOptions,
+        policy: DiscoveryPolicy = {},
+        resolveTarget?: ResolveDiscoveryTarget
+    ): Promise<unknown> {
+        if (options.customerId !== undefined && !resolveTarget) throw new Error('customerId requires MSP customer routing.');
         const catalogue: OperationCatalog = await this.loader.get();
         return await executeDiscoveredOperation(catalogue, this.request, options, {
             omadacId: this.config.omadacId,
@@ -130,6 +140,7 @@ export class DiscoveryOperations {
             siteId: this.config.siteId,
             readOnly: this.readOnly(policy),
             accessPolicy: this.accessPolicy(policy),
+            ...(resolveTarget ? { resolveTarget: (operation) => resolveTarget(operation, options) } : {}),
         });
     }
 }
