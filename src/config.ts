@@ -201,7 +201,7 @@ function parseCustomerList(value: string | undefined): string[] | undefined {
         .split(',')
         .map((entry) => entry.trim())
         .filter(Boolean);
-    if (entries.length === 0 || entries.some((entry) => entry.toLowerCase() === 'all')) return undefined;
+    if (entries.length === 0 || (entries.length === 1 && entries[0].toLowerCase() === 'all')) return undefined;
     return entries;
 }
 

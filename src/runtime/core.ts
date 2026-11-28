@@ -14,6 +14,7 @@ export interface BuildInfo {
     packageVersion: string;
     gitCommit: string;
     buildTime: string;
+    mspCustomerRequired?: true;
 }
 export interface Selection {
     version: string;
@@ -137,6 +138,7 @@ export function localUrl(value: string): string {
 export async function probe(state: RuntimeState, selection = state.current, doctor = false): Promise<BuildInfo> {
     const client = new Client({ name: 'omada-runtime', version: '1.0.0' });
     let transport: StdioClientTransport | StreamableHTTPClientTransport | undefined;
+    let controllerTool = 'listSites';
     try {
         if (state.mode === 'stdio') {
             const envFile = state.envFile;
@@ -168,17 +170,18 @@ export async function probe(state: RuntimeState, selection = state.current, doct
         const info = JSON.parse(part.text) as BuildInfo;
         verifyBuild(info, selection);
         if (doctor) {
-            const sites = await client.callTool(
-                compact ? { name: 'callTool', arguments: { name: 'listSites', arguments: {} } } : { name: 'listSites', arguments: {} },
+            if (info.mspCustomerRequired === true) controllerTool = 'listMspCustomers';
+            const read = await client.callTool(
+                compact ? { name: 'callTool', arguments: { name: controllerTool, arguments: {} } } : { name: controllerTool, arguments: {} },
                 undefined,
                 { timeout: 35_000 }
             );
-            if (sites.isError) throw new Error();
+            if (read.isError) throw new Error();
         }
         return info;
     } catch {
         throw new Error(
-            `Cannot verify ${selection.version} via getServerInfo${doctor ? ' and controller listSites' : ''}. Check credentials, endpoint and runtime availability; no private response was printed.`
+            `Cannot verify ${selection.version} via getServerInfo${doctor ? ` and controller ${controllerTool}` : ''}. Check credentials, endpoint and runtime availability; no private response was printed.`
         );
     } finally {
         await client.close().catch(() => undefined);

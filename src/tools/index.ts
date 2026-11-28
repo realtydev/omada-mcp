@@ -151,8 +151,7 @@ export function registerAllTools(
     registerGetSiteDashboardTool(server, client);
     registerListVpnConnectionsTool(server, client);
     registerGetGatewayWanSpeedTestResultsTool(server, client);
-    const customerScope = mspCustomerScopeOf(client);
-    if (customerScope) registerListMspCustomersTool(server, customerScope);
+    if (mspCustomerScopeOf(client)) registerListMspCustomersTool(server, client);
     registerListSitesTool(server, client);
     registerListDevicesTool(server, client);
     registerListClientsTool(server, client);

@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { BUILD_TIME, GIT_COMMIT, PACKAGE_VERSION } from '../generated/buildInfo.js';
 import type { OmadaClient } from '../omadaClient/index.js';
+import { mspCustomerScopeOf } from '../omadaClient/mspCustomers.js';
 import { toToolResult, wrapToolHandler } from '../server/common.js';
 
 const getServerInfoSchema = z.object({}).strict();
@@ -17,7 +18,8 @@ const getServerInfoSchema = z.object({}).strict();
  * changed tool's behavior (especially anything billed as dry-run or safe-by-default), call this
  * first and compare `gitCommit` against the commit you expect to be running.
  */
-export function registerGetServerInfoTool(server: McpServer, _client: OmadaClient): void {
+export function registerGetServerInfoTool(server: McpServer, client: OmadaClient): void {
+    const scope = mspCustomerScopeOf(client);
     server.registerTool(
         'getServerInfo',
         {
@@ -28,7 +30,14 @@ export function registerGetServerInfoTool(server: McpServer, _client: OmadaClien
             inputSchema: getServerInfoSchema,
         },
         wrapToolHandler('getServerInfo', () =>
-            Promise.resolve(toToolResult({ packageVersion: PACKAGE_VERSION, gitCommit: GIT_COMMIT, buildTime: BUILD_TIME }))
+            Promise.resolve(
+                toToolResult({
+                    packageVersion: PACKAGE_VERSION,
+                    gitCommit: GIT_COMMIT,
+                    buildTime: BUILD_TIME,
+                    ...(scope && !scope.defaultCustomerId ? { mspCustomerRequired: true } : {}),
+                })
+            )
         )
     );
 }

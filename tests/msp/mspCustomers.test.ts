@@ -4,6 +4,7 @@ import axios, { type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { loadConfigFromEnv } from '../../src/config.js';
+import type { ApiDocument } from '../../src/discovery/catalog.js';
 import { createSharedOmadaSession, OmadaClient } from '../../src/omadaClient/index.js';
 import { MspCustomerRouter } from '../../src/omadaClient/mspCustomers.js';
 import { createServer } from '../../src/server/common.js';
@@ -47,10 +48,14 @@ function page(config: InternalAxiosRequestConfig, rows: unknown[]) {
 
 function fakeMspController() {
     const requests: InternalAxiosRequestConfig[] = [];
+    const siteOverrides = new Map<string, (typeof customers)[number]['sites']>();
+    let failSiteLookup = false;
+    let apiDocument: ApiDocument | undefined;
     let tokens = 0;
     axios.defaults.adapter = ((config) => {
         requests.push(config);
         const url = config.url ?? '';
+        if (apiDocument && url.startsWith('/v3/api-docs')) return envelope(config, apiDocument);
         if (url === '/openapi/authorize/token') {
             const body = JSON.parse(String(config.data)) as { omadacId?: string };
             if (body.omadacId !== MSP) return envelope(config, { errorCode: -44106, msg: 'The Client Id Or Client Secret is Invalid.' });
@@ -71,18 +76,39 @@ function fakeMspController() {
                 customers.map(({ customerId, customerName }) => ({ customerId, customerName }))
             );
         }
+        if (url === `/openapi/v1/msp/${MSP}/sites`)
+            return page(
+                config,
+                customers.flatMap((customer) => customer.sites)
+            );
+        const mspCustomer = customers.find(({ customerId }) => url === `/openapi/v1/msp/${MSP}/customers/${customerId}`);
+        if (mspCustomer) return envelope(config, { errorCode: 0, result: { customerId: mspCustomer.customerId } });
         const scoped = /^\/openapi\/v1\/([^/]+)\/(.*)$/.exec(url);
         const customer = customers.find((entry) => entry.customerId === scoped?.[1]);
         if (!scoped || !customer) return envelope(config, { errorCode: -1005, msg: 'Operation forbidden.' });
-        if (scoped[2] === 'sites') return page(config, customer.sites);
+        const sites = siteOverrides.get(customer.customerId) ?? customer.sites;
+        if (scoped[2] === 'sites') {
+            if (failSiteLookup) {
+                failSiteLookup = false;
+                return envelope(config, { errorCode: -1005, msg: 'Site inventory temporarily unavailable.' });
+            }
+            return page(config, sites);
+        }
         const site = /^sites\/([^/]+)\/devices$/.exec(scoped[2]);
-        if (site && customer.sites.some((entry) => entry.siteId === site[1])) {
+        if (site && sites.some((entry) => entry.siteId === site[1])) {
             return page(config, [{ mac: `AA-BB-CC-00-00-0${customer.sites.length}`, name: `${customer.customerName} AP`, type: 'ap' }]);
         }
         return envelope(config, { errorCode: -1005, msg: 'Operation forbidden.' });
     }) as AxiosAdapter;
     return {
         requests,
+        siteOverrides,
+        failNextSiteLookup: () => {
+            failSiteLookup = true;
+        },
+        setApiDocument: (document: ApiDocument) => {
+            apiDocument = document;
+        },
         tokenCount: () => tokens,
         dataPaths: () =>
             requests.map((entry) => entry.url ?? '').filter((url) => url.startsWith('/openapi/v1/') && !url.startsWith('/openapi/v1/msp/')),
@@ -100,8 +126,9 @@ const baseEnv = {
 };
 
 async function connect(env: Record<string, string>) {
-    const router = new MspCustomerRouter(loadConfigFromEnv({ ...baseEnv, ...env }));
-    const server = createServer(router.client);
+    const config = loadConfigFromEnv({ ...baseEnv, ...env });
+    const router = new MspCustomerRouter(config);
+    const server = createServer(router.client, config);
     const client = new Client({ name: 'msp-fixture', version: '1' });
     const [a, b] = InMemoryTransport.createLinkedPair();
     closers.push(
@@ -112,10 +139,28 @@ async function connect(env: Record<string, string>) {
     return client;
 }
 
-async function callJson(client: Client, name: string, args: Record<string, unknown> = {}) {
-    const result = await client.callTool({ name, arguments: args });
+async function callJson(client: Client, name: string, args: Record<string, unknown> = {}, compact = false) {
+    const result = await client.callTool(compact ? { name: 'callTool', arguments: { name, arguments: args } } : { name, arguments: args });
     const text = (result.content as { type: string; text: string }[])[0]?.text ?? '';
     return { isError: result.isError === true, text, json: result.isError ? undefined : (JSON.parse(text) as unknown) };
+}
+
+function discoveryDocument(listSitesId = 'fixtureListSites'): ApiDocument {
+    const get = (operationId: string, pathParams: string[]) => ({
+        get: {
+            operationId,
+            parameters: pathParams.map((name) => ({ name, in: 'path', required: true, schema: { type: 'string' } })),
+            responses: { '200': { description: 'OK' } },
+        },
+    });
+    return {
+        openapi: '3.0.3',
+        paths: {
+            '/openapi/v1/{omadacId}/sites': get(listSitesId, ['omadacId']),
+            '/openapi/v1/msp/{mspId}/sites': get('fixtureMspSites', ['mspId']),
+            '/openapi/v1/msp/{mspId}/customers/{customerId}': get('fixtureCustomer', ['mspId', 'customerId']),
+        },
+    };
 }
 
 describe('MSP customer routing', () => {
@@ -139,7 +184,7 @@ describe('MSP customer routing', () => {
         const defaultSites = await callJson(client, 'listSites');
         expect(defaultSites.json).toEqual(customers[0].sites);
 
-        expect(fake.dataPaths()).toEqual(expect.arrayContaining(['/openapi/v1/cust-b/sites', '/openapi/v1/cust-a/sites']));
+        expect(fake.dataPaths()).toEqual(['/openapi/v1/cust-b/sites', '/openapi/v1/cust-a/sites']);
         expect(fake.dataPaths().some((url) => url.includes(`/${MSP}/`))).toBe(false);
         const tokenRequests = fake.requests.filter((entry) => entry.url === '/openapi/authorize/token');
         expect(tokenRequests.every((entry) => JSON.parse(String(entry.data)).omadacId === MSP)).toBe(true);
@@ -180,11 +225,12 @@ describe('MSP customer routing', () => {
 
         expect((await callJson(client, 'listSites', { customerId: 'cust-a' })).json).toEqual(customers[0].sites);
         expect((await callJson(client, 'listMspCustomers')).json).toMatchObject({ defaultCustomerId: null });
+        expect((await callJson(client, 'getServerInfo')).json).toMatchObject({ mspCustomerRequired: true });
     });
 
     it('refuses unknown and non-permitted customers before any data request', async () => {
         const fake = fakeMspController();
-        const client = await connect({ OMADA_MSP_CUSTOMERS: 'Alpha Corp' });
+        const client = await connect({ OMADA_MSP_CUSTOMERS: 'Alpha Corp', MCP_TOOL_CATEGORIES: 'system:r,msp:r' });
 
         const blocked = await callJson(client, 'listSites', { customerId: 'cust-b' });
         expect(blocked.isError).toBe(true);
@@ -192,9 +238,71 @@ describe('MSP customer routing', () => {
         const unknown = await callJson(client, 'listSites', { customerId: 'nobody' });
         expect(unknown.isError).toBe(true);
         expect(fake.dataPaths()).toEqual([]);
+        expect(fake.requests.filter(({ url }) => url === `/openapi/v1/msp/${MSP}/customers`)).toHaveLength(1);
 
         const listing = await callJson(client, 'listMspCustomers');
         expect(listing.json).toMatchObject({ restricted: true, customers: [{ customerId: 'cust-a' }] });
+    });
+
+    it.each(['standard', 'compact'])('enforces listing policy and preserves offline previews in %s mode', async (mode) => {
+        const fake = fakeMspController();
+        const compact = mode === 'compact';
+        const client = await connect({ MCP_CATALOG_MODE: mode, MCP_TOOL_CATEGORIES: 'system:r,devices:w' });
+        const denied = await callJson(client, 'listMspCustomers', {}, compact);
+        expect(denied.isError).toBe(true);
+        const preview = await callJson(client, 'rebootDevice', { customerId: 'Beta Ltd', deviceMac: 'AA-BB-CC-DD-EE-FF' }, compact);
+        expect(preview.json).toMatchObject({ dryRun: true, written: false, arguments: { customerId: 'Beta Ltd' } });
+        expect(fake.requests).toEqual([]);
+    });
+
+    it('retries implicit site lookup and requires a site when the customer adds one', async () => {
+        const fake = fakeMspController();
+        const client = await connect({ OMADA_OMADAC_ID: MSP });
+        fake.failNextSiteLookup();
+        expect((await callJson(client, 'listDevices', { customerId: 'cust-a' })).isError).toBe(true);
+        expect((await callJson(client, 'listDevices', { customerId: 'cust-a' })).isError).toBe(false);
+        fake.siteOverrides.set('cust-a', [...customers[0].sites, { siteId: 'site-a2', name: 'Branch' }]);
+        expect((await callJson(client, 'listDevices', { customerId: 'cust-a' })).isError).toBe(true);
+        expect((await callJson(client, 'listDevices', { customerId: 'cust-a', siteId: 'site-a2' })).isError).toBe(false);
+        expect(fake.dataPaths().filter((path) => path.endsWith('/devices'))).toEqual([
+            '/openapi/v1/cust-a/sites/site-a1/devices',
+            '/openapi/v1/cust-a/sites/site-a2/devices',
+        ]);
+    });
+
+    it('runs MSP-wide discovery without a default and uses the refreshed catalog for customer execution', async () => {
+        const fake = fakeMspController();
+        fake.setApiDocument(discoveryDocument());
+        const client = await connect({ OMADA_OMADAC_ID: MSP, OMADA_API_SPEC: 'live', MCP_TOOL_CATEGORIES: 'msp:r,system:r' });
+        const execute = (operationId: string, args = {}) => callJson(client, 'executeApiOperation', { operationId, ...args });
+        expect((await execute('fixtureMspSites')).json).toMatchObject({ request: { path: `/openapi/v1/msp/${MSP}/sites` } });
+        expect((await execute('fixtureListSites', { customerId: 'Beta Ltd' })).json).toMatchObject({ request: { path: '/openapi/v1/cust-b/sites' } });
+        fake.setApiDocument(discoveryDocument('fixtureRefreshedSites'));
+        expect((await callJson(client, 'refreshApiCatalog')).json).toMatchObject({ status: 'refreshed', changed: true });
+        expect((await execute('fixtureRefreshedSites', { customerId: 'cust-b' })).isError).toBe(false);
+        expect((await execute('fixtureListSites', { customerId: 'cust-b' })).isError).toBe(true);
+        expect(fake.requests.filter(({ url }) => url?.startsWith('/v3/api-docs'))).toHaveLength(2);
+    });
+
+    it('binds discovered customer reads to an authorized ID and restricts MSP-wide discovery when allowlisted', async () => {
+        const fake = fakeMspController();
+        fake.setApiDocument(discoveryDocument());
+        const client = await connect({
+            OMADA_OMADAC_ID: MSP,
+            OMADA_API_SPEC: 'live',
+            OMADA_MSP_CUSTOMERS: 'Alpha Corp',
+            MCP_TOOL_CATEGORIES: 'msp:r',
+        });
+        const execute = (operationId: string, args = {}) => callJson(client, 'executeApiOperation', { operationId, ...args });
+        expect((await execute('fixtureCustomer', { customerId: 'Alpha Corp' })).json).toMatchObject({
+            request: { path: `/openapi/v1/msp/${MSP}/customers/cust-a` },
+            result: { customerId: 'cust-a' },
+        });
+        expect((await execute('fixtureCustomer', { params: { customerId: 'cust-a' } })).isError).toBe(false);
+        const requestCount = fake.requests.length;
+        expect((await execute('fixtureCustomer', { customerId: 'Alpha Corp', params: { customerId: 'different-id' } })).isError).toBe(true);
+        expect((await execute('fixtureMspSites')).isError).toBe(true);
+        expect(fake.requests).toHaveLength(requestCount);
     });
 });
 
@@ -240,6 +348,7 @@ describe('OMADA_MSP_CUSTOMERS parsing', () => {
         expect(parse()).toBeUndefined();
         expect(parse('')).toBeUndefined();
         expect(parse('ALL')).toBeUndefined();
+        expect(parse('Alpha Corp,ALL')).toEqual(['Alpha Corp', 'ALL']);
         expect(parse(' Alpha Corp , cust-b ,, ')).toEqual(['Alpha Corp', 'cust-b']);
     });
 });

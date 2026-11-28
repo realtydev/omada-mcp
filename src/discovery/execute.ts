@@ -45,7 +45,10 @@ export interface DiscoveryExecutionContext {
     siteId?: string;
     readOnly: boolean;
     accessPolicy?: ToolAccessPolicy;
+    resolveTarget?: (operation: ApiOperation) => Promise<DiscoveryTarget>;
 }
+
+export type DiscoveryTarget = Pick<Partial<DiscoveryExecutionContext>, 'omadacId' | 'siteId'> & { customerId?: string };
 
 export interface DiscoveredExecutionResult {
     operationId: string;
@@ -537,6 +540,12 @@ export async function executeDiscoveredOperation(
     for (const name of Object.keys(params)) {
         if (controllerParameters.has(name)) throw new Error('Controller identifiers are supplied by server configuration and cannot be overridden.');
         if (!permitted.has(name)) throw new Error(`Unknown operation parameter: ${name}.`);
+    }
+    if (context.resolveTarget) {
+        const { customerId, ...target } = await context.resolveTarget(operation);
+        // Managed workflow reads reuse this validated controller and site context.
+        context = { ...context, ...target, resolveTarget: undefined };
+        if (customerId !== undefined) params.customerId = customerId;
     }
     for (const parameter of operation.parameters) {
         if (parameter.name === 'mspId') {

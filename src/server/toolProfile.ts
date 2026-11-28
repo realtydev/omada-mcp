@@ -5,16 +5,16 @@ import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
 import type { ToolProfile } from '../config.js';
-import type { MspCustomerScope } from '../omadaClient/mspCustomers.js';
+import { MISSING_MSP_CUSTOMER, type MspCustomerScope } from '../omadaClient/mspCustomers.js';
 import { redactForLogs } from '../utils/redact.js';
 import { type ToolExtra, toToolResult } from './common.js';
 import type { ToolCatalog } from './toolCatalog.js';
 import { ToolAccessPolicy } from './toolPolicy.js';
 
-/** Apply exposure policy only while registering tools; the returned MCP server remains untouched. */
 /** Tools that never touch customer data and therefore take no MSP customerId. */
 const customerlessTools = new Set(['listMspCustomers', 'getServerInfo', 'searchApiOperations', 'describeApiOperation', 'refreshApiCatalog']);
 
+/** Apply exposure policy only while registering tools; the returned MCP server remains untouched. */
 export function toolRegistrationServer(
     server: McpServer,
     profile: ToolProfile,
@@ -53,21 +53,21 @@ export function toolRegistrationServer(
                         config.inputSchema instanceof z.ZodObject ? config.inputSchema : z.object((config.inputSchema ?? {}) as z.ZodRawShape);
                     const write = config.annotations?.destructiveHint === true && name !== 'executeApiOperation';
                     const nativePreview = Object.hasOwn(original.shape, 'dryRun');
-                    // On MSP controllers every customer-scoped tool can target a customer per call.
-                    const customerScoped =
-                        customerScope !== undefined && !customerlessTools.has(name) && !Object.hasOwn(original.shape, 'customerId');
+                    const discoveryExecution = name === 'executeApiOperation';
+                    const customerScoped = customerScope !== undefined && !customerlessTools.has(name);
+                    const customerId = z
+                        .string({ error: MISSING_MSP_CUSTOMER })
+                        .trim()
+                        .min(1)
+                        .max(128)
+                        .describe(
+                            discoveryExecution
+                                ? 'MSP customer ID or name for customer-scoped operations. MSP-wide operations omit this argument.'
+                                : 'MSP customer ID or exact name. When omitted, use the configured default customer.'
+                        );
                     const scoped = customerScoped
                         ? original.safeExtend({
-                              customerId: z
-                                  .string()
-                                  .min(1)
-                                  .max(128)
-                                  .optional()
-                                  .describe(
-                                      customerScope.defaultCustomerId
-                                          ? `MSP customer ID or name (see listMspCustomers). Defaults to customer ${customerScope.defaultCustomerId}.`
-                                          : 'MSP customer ID or name (see listMspCustomers). Required: this server has no default customer.'
-                                  ),
+                              customerId: discoveryExecution || customerScope.defaultCustomerId ? customerId.optional() : customerId,
                           })
                         : original;
                     const inputSchema = write
@@ -85,7 +85,7 @@ export function toolRegistrationServer(
                             ? { annotations: { ...config.annotations, readOnlyHint: true, destructiveHint: false } }
                             : {}),
                     };
-                    const invokeForCustomer = async (args: Record<string, unknown>, extra: ToolExtra) => {
+                    const invoke = async (args: Record<string, unknown>, extra: ToolExtra) => {
                         policy.assertTool(name, args, config.annotations?.destructiveHint === true);
                         if (name === 'genericApiCall') {
                             const request = args as { method: string; path: string; version?: string; queryParams?: Record<string, unknown> };
@@ -105,15 +105,13 @@ export function toolRegistrationServer(
                         }
                         const forwarded = { ...args };
                         if (write && !nativePreview) delete forwarded.dryRun;
-                        return await Reflect.apply(handler, undefined, [forwarded, extra]);
-                    };
-                    const invoke = async (args: Record<string, unknown>, extra: ToolExtra) => {
-                        if (!customerScope || customerlessTools.has(name)) return await invokeForCustomer(args, extra);
-                        const { customerId, ...rest } = args;
-                        // Unknown, ambiguous or non-permitted customers throw before any controller request.
+                        const invokeHandler = async () => await Reflect.apply(handler, undefined, [forwarded, extra]);
+                        if (!customerScoped || discoveryExecution) return await invokeHandler();
+                        delete forwarded.customerId;
                         return await customerScope.run(
-                            typeof customerId === 'string' ? customerId : undefined,
-                            async () => await invokeForCustomer(customerScoped ? rest : args, extra)
+                            typeof args.customerId === 'string' ? args.customerId : undefined,
+                            invokeHandler,
+                            Object.hasOwn(original.shape, 'siteId') && !args.siteId
                         );
                     };
                     if (catalog) {

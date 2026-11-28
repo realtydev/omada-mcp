@@ -2,6 +2,7 @@ import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
 
 import type { EnvironmentConfig } from '../config.js';
 import { DnsRollbackOperations } from '../discovery/dnsRollback.js';
+import type { CatalogLoader } from '../discovery/load.js';
 import { createClientPolicyProxy, ToolAccessPolicy } from '../server/toolPolicy.js';
 import type {
     ActiveClientInfo,
@@ -56,6 +57,7 @@ import { InternalRequestHandler } from './internalRequest.js';
 import { LogNotificationOperations } from './logNotification.js';
 import { MonitorOperations, type SiteDashboardOptions, type SiteDashboardResult } from './monitor.js';
 import { type ListVpnConnectionsOptions, MonitoringOperations } from './monitoring.js';
+import type { MspCustomerListing, MspCustomerScope } from './mspCustomers.js';
 import { NetworkOperations } from './network.js';
 import { NetworkChangeOperations, type NetworkChangeReceipt } from './networkChange.js';
 import { NetworkDiagnosisOperations, type NetworkDiagnosisOptions } from './networkDiagnosis.js';
@@ -87,6 +89,8 @@ export interface SharedOmadaSession {
     http: AxiosInstance;
     auth: RequestAuthManager;
     internalAuth?: InternalAuthManager;
+    catalog?: CatalogLoader;
+    msp?: Pick<MspCustomerScope, 'listCustomers' | 'resolveDiscoveryTarget'>;
 }
 
 /**
@@ -165,9 +169,11 @@ export class OmadaClient {
     private readonly apRadioOps: ApRadioOperations;
 
     private readonly omadacId: string;
+    private readonly msp?: SharedOmadaSession['msp'];
 
     constructor(options: OmadaClientOptions, shared: SharedOmadaSession = createSharedOmadaSession(options)) {
         this.omadacId = options.omadacId;
+        this.msp = shared.msp;
         this.accessPolicy = new ToolAccessPolicy(options.toolProfile, options.toolCategories);
 
         this.http = shared.http;
@@ -194,7 +200,7 @@ export class OmadaClient {
         this.apRadioOps = new ApRadioOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this), options.omadacId);
         this.actionOps = new ActionOperations(this.request, this.siteOps, this.buildOmadaPath.bind(this));
         this.genericOps = new GenericOperations(this.request, this.buildOmadaPath.bind(this), this.accessPolicy);
-        this.discoveryOps = new DiscoveryOperations(this.request, this.http, options);
+        this.discoveryOps = new DiscoveryOperations(this.request, this.http, options, shared.catalog);
         this.networkChangeOps = new NetworkChangeOperations(
             options.omadacId,
             this.rateLimitProfileOps,
@@ -252,6 +258,11 @@ export class OmadaClient {
     // Site operations
     public async listSites(): Promise<OmadaSiteSummary[]> {
         return await this.siteOps.listSites();
+    }
+
+    public async listMspCustomers(): Promise<MspCustomerListing> {
+        if (!this.msp) throw new Error('MSP customer routing requires OMADA_MSP_ID.');
+        return await this.msp.listCustomers();
     }
 
     public async getControllerCapabilities(options: GetControllerCapabilitiesOptions = {}): Promise<ControllerCapabilitiesResult> {
@@ -772,7 +783,7 @@ export class OmadaClient {
     }
 
     public async executeApiOperation(options: ExecuteApiOperationOptions, policy: DiscoveryPolicy = {}): Promise<unknown> {
-        return await this.discoveryOps.executeApiOperation(options, policy);
+        return await this.discoveryOps.executeApiOperation(options, policy, this.msp?.resolveDiscoveryTarget.bind(this.msp));
     }
 
     public async genericApiCall(

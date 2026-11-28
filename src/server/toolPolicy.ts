@@ -138,12 +138,12 @@ const groups: Record<ToolCategory, readonly string[]> = {
     ],
     maintenance: ['getFirmwareDetails', 'startFirmwareUpgrade', 'setSiteLed'],
     recovery: [],
-    msp: [],
+    msp: ['listMspCustomers'],
 };
 
 const toolCategories = new Map(Object.entries(groups).flatMap(([category, names]) => names.map((name) => [name, category as ToolCategory] as const)));
 const discoveryTools = new Set(['searchApiOperations', 'describeApiOperation', 'executeApiOperation', 'refreshApiCatalog']);
-const statusTools = new Set(['getServerInfo', 'getControllerCapabilities', 'listMspCustomers']);
+const statusTools = new Set(['getServerInfo', 'getControllerCapabilities']);
 const methods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** Category entries override the all: fallback; duplicate/empty entries never broaden access. */
